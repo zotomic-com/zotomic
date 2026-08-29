@@ -12,6 +12,15 @@ const num = (v: FormDataEntryValue | null) => {
   return v === null || v === "" || Number.isNaN(n) ? null : n;
 };
 
+function parseImages(v: FormDataEntryValue | null): string[] {
+  try {
+    const arr = JSON.parse(String(v ?? "[]"));
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === "string").slice(0, 10) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function createProduct(formData: FormData) {
   const { businessId, user, db } = await requireBusiness();
   const name = String(formData.get("name") ?? "").trim();
@@ -38,6 +47,7 @@ export async function createProduct(formData: FormData) {
       buying_price: num(formData.get("buying_price")),
       marketing_cost: num(formData.get("marketing_cost")) ?? 0,
       stock_qty: num(formData.get("stock_qty")) ?? 0,
+      image_urls: parseImages(formData.get("image_urls")),
     })
     .select("id")
     .single();
@@ -57,7 +67,7 @@ export async function updateProduct(id: string, formData: FormData) {
 
   const { data: before } = await db
     .from("products")
-    .select("id, name, price, buying_price, marketing_cost, stock_qty, status, category")
+    .select("id, name, price, buying_price, marketing_cost, stock_qty, status, category, image_urls")
     .eq("business_id", businessId)
     .eq("id", id)
     .maybeSingle();
@@ -71,6 +81,7 @@ export async function updateProduct(id: string, formData: FormData) {
     buying_price: num(formData.get("buying_price")),
     marketing_cost: num(formData.get("marketing_cost")) ?? 0,
     stock_qty: num(formData.get("stock_qty")) ?? before.stock_qty,
+    image_urls: parseImages(formData.get("image_urls")),
   };
 
   const { error } = await db.from("products").update(patch).eq("business_id", businessId).eq("id", id);

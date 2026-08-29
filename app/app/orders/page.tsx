@@ -71,7 +71,15 @@ export default async function OrdersPage({
   const weekReturns = week.filter((o) => o.status === "returned").length;
 
   const cols: Column<Row>[] = [
-    { key: "number", header: "Order", render: (r) => <span className="font-medium text-fg">#{r.number}</span> },
+    {
+      key: "number",
+      header: "Order",
+      render: (r) => (
+        <Link href={`/app/orders/${r.id}`} className="font-medium text-primary">
+          #{r.number}
+        </Link>
+      ),
+    },
     { key: "customer", header: "Customer", render: (r) => r.customer },
     { key: "placed", header: "Date", render: (r) => r.placed },
     { key: "payment", header: "Payment", render: (r) => (r.payment === "cod" ? "COD" : r.payment) },

@@ -14,11 +14,14 @@ export default async function ProductsPage() {
   const db = getAdminSupabase();
   const { data } = await db
     .from("products")
-    .select("id, name, category, status, price, buying_price, marketing_cost, stock_qty")
+    .select("id, name, category, status, price, buying_price, marketing_cost, stock_qty, image_urls")
     .eq("business_id", tenant.businessId)
     .order("created_at", { ascending: true });
 
-  const products = (data ?? []) as ProductRow[];
+  const products = (data ?? []).map((p) => ({
+    ...p,
+    image_urls: Array.isArray(p.image_urls) ? p.image_urls : [],
+  })) as ProductRow[];
 
   return (
     <div className="space-y-5">

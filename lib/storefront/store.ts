@@ -96,3 +96,39 @@ export async function getStoreProduct(businessId: string, handle: string): Promi
     .maybeSingle();
   return data ? mapProduct(data) : null;
 }
+
+export interface StoreReview {
+  id: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  reviewerName: string;
+  createdAt: string;
+}
+
+export async function getProductReviews(
+  businessId: string,
+  productId: string,
+): Promise<{ reviews: StoreReview[]; average: number; count: number }> {
+  const db = getAdminSupabase();
+  const { data } = await db
+    .from("product_reviews")
+    .select("id, rating, title, body, reviewer_name, created_at")
+    .eq("business_id", businessId)
+    .eq("product_id", productId)
+    .eq("status", "approved")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const reviews = (data ?? []).map((r) => ({
+    id: r.id as string,
+    rating: Number(r.rating),
+    title: (r.title as string) ?? null,
+    body: (r.body as string) ?? null,
+    reviewerName: (r.reviewer_name as string) ?? "Verified buyer",
+    createdAt: r.created_at as string,
+  }));
+  const count = reviews.length;
+  const average = count ? reviews.reduce((s, r) => s + r.rating, 0) / count : 0;
+  return { reviews, average, count };
+}

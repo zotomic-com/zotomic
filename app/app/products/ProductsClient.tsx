@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
+import { ImageUploader } from "@/components/app/ImageUploader";
 import { money } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -22,6 +23,7 @@ export interface ProductRow {
   buying_price: number | null;
   marketing_cost: number;
   stock_qty: number;
+  image_urls: string[];
 }
 
 const STATUS_TONE = { active: "success", draft: "neutral", archived: "warning" } as const;
@@ -143,11 +145,18 @@ function ProductForm({
   pending: boolean;
   onSubmit: (fd: FormData) => void;
 }) {
+  const [images, setImages] = useState<string[]>(product?.image_urls ?? []);
   return (
     <form
-      action={onSubmit}
+      action={(fd) => {
+        fd.set("image_urls", JSON.stringify(images));
+        onSubmit(fd);
+      }}
       className="space-y-3"
     >
+      <Field label="Images">
+        <ImageUploader value={images} onChange={setImages} />
+      </Field>
       <Field label="Name">
         <Input name="name" required defaultValue={product?.name} placeholder="Classic T-Shirt" />
       </Field>

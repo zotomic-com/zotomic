@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getStoreBySlug, getStoreProduct, getStoreProducts } from "@/lib/storefront/store";
+import { Star } from "lucide-react";
+import {
+  getProductReviews,
+  getStoreBySlug,
+  getStoreProduct,
+  getStoreProducts,
+} from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { money } from "@/lib/money";
 import { ProductCard } from "@/components/storefront/ProductCard";
@@ -45,6 +51,8 @@ export default async function StoreProductPage({
     .filter((p) => p.id !== product.id && p.category === product.category)
     .slice(0, 4);
 
+  const { reviews, average, count } = await getProductReviews(store.businessId, product.id);
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -57,6 +65,21 @@ export default async function StoreProductPage({
       priceCurrency: store.currency,
       availability: soldOut ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
     },
+    ...(count
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: average.toFixed(1),
+            reviewCount: count,
+          },
+          review: reviews.slice(0, 5).map((r) => ({
+            "@type": "Review",
+            reviewRating: { "@type": "Rating", ratingValue: r.rating },
+            author: { "@type": "Person", name: r.reviewerName },
+            ...(r.body ? { reviewBody: r.body } : {}),
+          })),
+        }
+      : {}),
   };
 
   return (
@@ -134,6 +157,38 @@ export default async function StoreProductPage({
           </div>
         </div>
       </div>
+
+      {count > 0 && (
+        <div className="mt-16">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-extrabold tracking-tight">Reviews</h2>
+            <span className="flex items-center gap-1 text-sm text-[var(--sf-muted)]">
+              <Star className="h-4 w-4 text-[var(--sf-accent)]" fill="currentColor" />
+              {average.toFixed(1)} ({count})
+            </span>
+          </div>
+          <ul className="mt-4 space-y-4">
+            {reviews.map((r) => (
+              <li key={r.id} className="border-b border-[var(--sf-line)] pb-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        className="h-3.5 w-3.5 text-[var(--sf-accent)]"
+                        fill={r.rating >= n ? "currentColor" : "none"}
+                      />
+                    ))}
+                  </span>
+                  <span className="text-xs font-semibold">{r.reviewerName}</span>
+                </div>
+                {r.title && <p className="mt-1.5 text-sm font-semibold">{r.title}</p>}
+                {r.body && <p className="mt-1 text-sm text-[var(--sf-muted)]">{r.body}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {related.length > 0 && (
         <div className="mt-16">
