@@ -228,7 +228,8 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [ ] i18n — English-only; strings not yet extracted for Bengali
 - [x] Per-store Meta Pixel + GA4 available on every plan (moved into `/app/integrations` "Tracking & pixels"; Conversions API token stored encrypted)
 - [x] `/admin/integrations` built (was a dead nav link) — Hermes gateway + n8n + Meta app-secret credential entry (`platform_settings`), per-tenant connection overview
-- [x] Store-owner invoices (paid) — branded printable `/app/billing/invoice/[id]` with store logo, Print/Save-as-PDF, email invoice
+- [x] Subscription invoices (Zotomic → owner, paid) — branded printable `/app/billing/invoice/[id]` with store logo, Print/Save-as-PDF, email invoice
+- [x] **Customer order invoices** (store → buyer) — `lib/order-invoice{,-pdf}.ts` (`pdf-lib`, real PDF). `/app/orders/[id]/invoice` printable + Download PDF + Email-to-customer (PDF attached). "Download invoice (PDF)" on the storefront confirmation page + attached to the confirmation email. `branded_invoice` entitlement: paid = own logo/address, no Zotomic mention; free = no logo + "Powered by Zotomic".
 - [ ] Real Hermes VPS client (`hermes_base_url` now enterable in `/admin/integrations`; `runAgent` still the local Gemini loop until wired)
 - [ ] n8n live calls (`n8n_base_url` / `n8n_api_key` enterable in `/admin/integrations`; not yet consumed)
 - [ ] Admin: tenant CSV export, richer system-health history
