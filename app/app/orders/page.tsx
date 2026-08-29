@@ -5,6 +5,8 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { money } from "@/lib/money";
 import { PageHeader } from "@/components/app/PageHeader";
 import { OrderStatusBadge } from "@/components/app/OrderStatusBadge";
+import { Button } from "@/components/ui/button";
+import { OrderImport } from "./OrderImport";
 import { Card } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { StatCard } from "@/components/ui/stat-card";
@@ -89,7 +91,18 @@ export default async function OrdersPage({
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Orders" subtitle={`${total ?? 0} total`} />
+      <PageHeader
+        title="Orders"
+        subtitle={`${total ?? 0} total`}
+        action={
+          <div className="flex items-center gap-2">
+            <OrderImport />
+            <Button href="/app/orders/new" size="sm">
+              New order
+            </Button>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <StatCard label="Revenue · 7 days" value={money(weekRevenue, currency)} />

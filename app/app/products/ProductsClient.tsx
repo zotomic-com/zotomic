@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { ImageUploader } from "@/components/app/ImageUploader";
+import { ProductImport } from "./ProductImport";
 import { money } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -94,6 +95,7 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
             className="pl-9"
           />
         </div>
+        <ProductImport />
         <Button onClick={() => setCreating(true)}>
           <Plus className="h-4 w-4" /> Add product
         </Button>
@@ -133,9 +135,9 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
               onClick={() =>
                 start(async () => {
                   const res = await deleteProduct(editing.id);
-                  if ("error" in res && res.error) toast(res.error, "error");
+                  if ("error" in res) toast(res.error, "error");
                   else {
-                    toast(res.archived ? "Archived (product has orders)" : "Product deleted", "success");
+                    toast("archived" in res ? "Archived (product has orders)" : "Product deleted", "success");
                     setEditing(null);
                     router.refresh();
                   }

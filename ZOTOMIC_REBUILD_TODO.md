@@ -88,7 +88,7 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [x] Notify: dashboard notification row on report ready
 - [x] `/app/intelligence` shows AI summary banner + report insights; `/app/reports` + intelligence have "Generate / Refresh report" button
 - [x] E2E verified: generated a real report — Gemini `gemini-3.6-flash` summary using only provided figures ("revenue rose 54% to ৳140,390 … profit grew 45% to ৳59,120 … concentrated in a single item"), 4 metrics + 3 insights + 2 recommendations + 1 notification persisted
-- [ ] Ingestion: CSV import + manual order entry + Facebook Page connect — NOT built (dashboard/reports currently run on seeded/storefront orders; manual+CSV ingestion is its own sub-phase)
+- [x] Ingestion: CSV import (products + orders) + manual order entry (`/app/orders/new`) — shared `lib/orders/create.ts` (`createOrder`, server-side price validation, customer upsert, stock decrement, rollups), `lib/csv.ts` parser + column auto-map, `ProductImport`/`OrderImport` modals with mapping UI. Facebook Page connect still NOT built (deferred).
 - [ ] Email (Brevo) + WhatsApp push on report ready — only in-app notification so far
 - [ ] Admin view of failed report jobs — Phase 5
 
@@ -180,9 +180,9 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 
 ## GAPS AUDIT (2026-08-29) — remaining work, no numbered phases
 
-**Ingestion (not built):**
-- [ ] CSV import (products + orders) with column mapping + preview → `/app/products` and `/app/orders`
-- [ ] Manual order entry form (`/app/orders/new`)
+**Ingestion:**
+- [x] CSV import (products + orders) with column mapping + preview → `/app/products` and `/app/orders` (`ProductImport`/`OrderImport`, `lib/csv.ts`)
+- [x] Manual order entry form (`/app/orders/new`) — `NewOrderClient` + `createManualOrder` → shared `lib/orders/create.ts`
 - [ ] Facebook Page connect + order/message pull (onboarding option is a UI stub)
 - [ ] Messenger/WhatsApp inbound webhooks (deleted in Phase 0, not rebuilt)
 
@@ -192,27 +192,29 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [ ] Telegram bot token, Meta Pixel ID, GA4 creds — enter in `/admin/settings`
 
 **Storefront / commerce:**
-- [ ] Storefront events beyond purchase into `storefront_events` table (only client pixel fires page_view/product_view/add_to_cart; nothing writes to the DB table → intelligence doesn't see traffic yet)
-- [ ] Cart-count badge in storefront header
-- [ ] `next/image` on product images (currently plain `<img>` + Cloudinary `optimized()` helper unused)
-- [ ] Wishlist (`config` + `/wishlist` page + `add_to_wishlist` event) — spec'd, not built
+- [x] Storefront events into `storefront_events` table (`StorefrontTracker` / `storefrontEvent` → `/api/storefront/events`; intelligence reads it via `lib/traffic.ts`)
+- [x] Cart-count badge in storefront header (`HeaderActions` — cart + wishlist counts, event-driven)
+- [x] `next/image`-grade optimization on product images (`cldUrl()` transforms + width/height)
+- [x] Wishlist (device localStorage, `/s/[slug]/wishlist` page, `WishlistHeart`, `add_to_wishlist` event)
+- [x] Shipment status sync cron (`/api/cron/shipments` + `20260829210000_shipment_cron.sql`, every 6h)
 - [ ] Product variants / inventory (P1 stubs) · promo codes · abandoned-cart
-- [ ] Shipment status sync cron (`getStatus` per provider)
 - [ ] Nagad / SSLCommerz / Pathao / RedX real implementations
 - [ ] Custom domain: DNS verify → SSL → GSC unlock (paid tier)
 - [ ] Google server-side tracking per paid store (isolated container) — only the platform site has it
 
 **App polish:**
-- [ ] `/forgot-password` real email reset flow (placeholder)
-- [ ] `/app` client layout blocks with a spinner before server pages render — move auth gate so RSC content shows immediately
-- [ ] Assistant: conversation list + "new chat", streaming responses, tool-error → structured message (currently thrown)
-- [ ] Legal pages (`/privacy-policy` `/terms` `/refund-policy`) still have agency-era copy
+- [x] `/forgot-password` real email reset flow (`password_reset_tokens`, `/api/auth/forgot` + `/reset`, `/reset-password` page)
+- [x] `/app` + `/admin` layouts render shell immediately (no spinner gate); topbar fills in async
+- [x] Assistant: conversation list + "new chat" switcher, auto-title from first message
+- [x] Legal pages rewritten with BI-SaaS copy (tenant isolation, AI disclaimer, billing locks, merchant-of-record)
+- [x] Notifications: mark-all-read + per-notification read (`/app/notifications`, unread badge in topbar)
+- [x] Lighthouse CI GitHub Action (`.github/workflows/lighthouse.yml`)
+- [x] Admin report-job retry button (`/admin/reports` per-row Retry for failed/queued)
+- [ ] Assistant: streaming responses, tool-error → structured message (currently thrown)
 - [ ] `/app/marketing` + `/admin/{content-library,marketing}` — placeholders (P2 growth modules / Outreach Agent)
 - [ ] i18n — English-only; strings not yet extracted for Bengali
 - [ ] Real Hermes VPS client (HERMES_BASE_URL) — `runAgent` is the local Gemini loop
-- [ ] Notifications: mark-as-read, per-notification actions
-- [ ] Lighthouse CI actually run in a GitHub Action (config committed, not wired to CI)
-- [ ] Admin: report-job retry button, tenant CSV export, richer system-health history
+- [ ] Admin: tenant CSV export, richer system-health history
 
 **Data model P1 stubs not yet created:** `ProductVariant`, `Inventory`, `Return`, `Domain` (folded into integrations for now)
 
