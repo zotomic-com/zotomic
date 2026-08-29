@@ -15,7 +15,11 @@ export function OrderStatusControl({ orderId, status }: { orderId: string; statu
 
   const change = (next: string) =>
     start(async () => {
-      const res = await setOrderStatus(orderId, next);
+      const reason =
+        next === "cancelled"
+          ? window.prompt("Reason for cancelling this order? (optional — helps the assistant)") ?? ""
+          : undefined;
+      const res = await setOrderStatus(orderId, next, reason);
       if (res.error) toast(res.error, "error");
       else {
         toast(

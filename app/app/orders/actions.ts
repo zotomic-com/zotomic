@@ -7,7 +7,7 @@ import { courierProvider, loadIntegration } from "@/lib/adapters/registry";
 
 const STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "returned", "cancelled"];
 
-export async function setOrderStatus(orderId: string, status: string) {
+export async function setOrderStatus(orderId: string, status: string, reason?: string) {
   if (!STATUSES.includes(status)) return { error: "Invalid status" };
   const { businessId, user, db } = await requireBusiness();
 
@@ -22,6 +22,10 @@ export async function setOrderStatus(orderId: string, status: string) {
   const patch: Record<string, unknown> = { status };
   if (status === "delivered") patch.delivered_at = new Date().toISOString();
   if (status === "delivered" && before.status !== "delivered") patch.payment_status = "paid";
+  if (status === "cancelled") {
+    patch.cancelled_at = new Date().toISOString();
+    if (reason && reason.trim()) patch.cancel_reason = reason.trim().slice(0, 500);
+  }
 
   const { error } = await db.from("orders").update(patch).eq("business_id", businessId).eq("id", orderId);
   if (error) return { error: "Could not update" };

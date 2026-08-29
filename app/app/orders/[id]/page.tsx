@@ -23,7 +23,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const { data: order } = await db
     .from("orders")
     .select(
-      "id, order_number, status, payment_method, payment_status, subtotal, shipping, total, currency, placed_at, address, customers(name, phone, email, city), order_items(name, qty, unit_price, line_total)",
+      "id, order_number, status, payment_method, payment_status, subtotal, shipping, total, currency, placed_at, address, cancel_reason, cancelled_at, customers(name, phone, email, city), order_items(name, qty, unit_price, line_total)",
     )
     .eq("business_id", tenant.businessId)
     .eq("id", id)
@@ -64,6 +64,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         subtitle={new Date(order.placed_at as string).toLocaleString("en-US")}
         action={<OrderStatusControl orderId={order.id as string} status={order.status as string} />}
       />
+
+      {order.status === "cancelled" && (
+        <div className="rounded-sm border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
+          Cancelled{order.cancelled_at ? ` on ${new Date(order.cancelled_at as string).toLocaleDateString("en-US")}` : ""}
+          {order.cancel_reason ? ` — ${order.cancel_reason}` : " — no reason recorded"}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

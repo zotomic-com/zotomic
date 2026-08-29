@@ -391,6 +391,419 @@ const list_tasks: ToolDef = {
   },
 };
 
+const get_order_details: ToolDef = {
+  name: "get_order_details",
+  description:
+    "Full detail for ONE order: line items (with variant), amounts, status, payment, dates, the customer, the shipping/delivery address, any courier shipment, any linked return, and the cancellation reason if cancelled. Look up by order number (e.g. ZF-AB12CD) or order id.",
+  risk: "read",
+  creditCost: 0,
+  parameters: {
+    type: "object",
+    properties: {
+      orderNumber: { type: "string", description: "the human order number, e.g. ZF-AB12CD" },
+      orderId: { type: "string", description: "the internal order id (uuid)" },
+    },
+  },
+  async handler(ctx, a) {
+    const num = s(a.orderNumber)?.trim();
+    const id = s(a.orderId)?.trim();
+    if (!num && !id) return { error: "Provide orderNumber or orderId" };
+
+    let q = ctx.db
+      .from("orders")
+      .select(
+        "id, order_number, status, channel, payment_method, payment_status, subtotal, shipping, discount, total, currency, placed_at, delivered_at, cancelled_at, cancel_reason, address, notes, customers(name, phone, email, city), order_items(name, qty, unit_price, line_total, variant_label)",
+      )
+      .eq("business_id", ctx.businessId)
+      .limit(1);
+    q = num ? q.eq("order_number", num) : q.eq("id", id!);
+    const { data: o } = await q.maybeSingle();
+    if (!o) return { error: "Order not found" };
+
+    const [{ data: shipment }, { data: ret }] = await Promise.all([
+      ctx.db
+        .from("shipments")
+        .select("provider, status, tracking_code, consignment_id, cost, created_at, updated_at")
+        .eq("order_id", o.id)
+        .maybeSingle(),
+      ctx.db
+        .from("returns")
+        .select("return_number, status, reason, refund_amount, restock, created_at")
+        .eq("order_id", o.id)
+        .maybeSingle(),
+    ]);
+
+    const cust = (Array.isArray(o.customers) ? o.customers[0] : o.customers) as
+      | { name?: string; phone?: string; email?: string; city?: string }
+      | null;
+    const addr = (o.address ?? {}) as { line?: string; city?: string; note?: string };
+
+    return {
+      orderNumber: o.order_number,
+      status: o.status,
+      channel: o.channel,
+      placedAt: o.placed_at,
+      deliveredAt: o.delivered_at,
+      cancelledAt: o.cancelled_at,
+      cancelReason: o.status === "cancelled" ? (o.cancel_reason ?? null) : undefined,
+      payment: { method: o.payment_method, status: o.payment_status },
+      amounts: {
+        subtotal: money(Number(o.subtotal), o.currency as string),
+        shipping: money(Number(o.shipping), o.currency as string),
+        discount: money(Number(o.discount ?? 0), o.currency as string),
+        total: money(Number(o.total), o.currency as string),
+      },
+      customer: cust ? { name: cust.name, phone: cust.phone, email: cust.email, city: cust.city } : null,
+      shippingAddress: { line: addr.line ?? null, city: addr.city ?? cust?.city ?? null, note: addr.note ?? null },
+      orderNote: o.notes ?? null,
+      items: ((o.order_items ?? []) as Record<string, unknown>[]).map((i) => ({
+        name: i.name,
+        variant: i.variant_label ?? null,
+        qty: i.qty,
+        unitPrice: money(Number(i.unit_price), o.currency as string),
+        lineTotal: money(Number(i.line_total), o.currency as string),
+      })),
+      shipment: shipment
+        ? {
+            provider: shipment.provider,
+            status: shipment.status,
+            trackingCode: shipment.tracking_code ?? null,
+            consignmentId: shipment.consignment_id ?? null,
+            cost: shipment.cost != null ? money(Number(shipment.cost), o.currency as string) : null,
+          }
+        : null,
+      return: ret
+        ? {
+            returnNumber: ret.return_number,
+            status: ret.status,
+            reason: ret.reason ?? null,
+            refund: money(Number(ret.refund_amount ?? 0), o.currency as string),
+            restock: ret.restock,
+          }
+        : null,
+    };
+  },
+};
+
+const get_shipping_address: ToolDef = {
+  name: "get_shipping_address",
+  description:
+    "The shipping / delivery address for an order (by order number), or a customer's known addresses (by phone or name) — their most recent order address plus any addresses saved in their storefront account. Use this to fill a courier booking or confirm where to deliver.",
+  risk: "read",
+  creditCost: 0,
+  parameters: {
+    type: "object",
+    properties: {
+      orderNumber: { type: "string" },
+      customerPhone: { type: "string" },
+      customerName: { type: "string" },
+    },
+  },
+  async handler(ctx, a) {
+    const orderNumber = s(a.orderNumber)?.trim();
+    if (orderNumber) {
+      const { data: o } = await ctx.db
+        .from("orders")
+        .select("order_number, address, customers(name, phone, city)")
+        .eq("business_id", ctx.businessId)
+        .eq("order_number", orderNumber)
+        .maybeSingle();
+      if (!o) return { error: "Order not found" };
+      const cust = (Array.isArray(o.customers) ? o.customers[0] : o.customers) as
+        | { name?: string; phone?: string; city?: string }
+        | null;
+      const addr = (o.address ?? {}) as { line?: string; city?: string; note?: string };
+      return {
+        source: "order",
+        orderNumber: o.order_number,
+        recipient: cust?.name ?? null,
+        phone: cust?.phone ?? null,
+        address: addr.line ?? null,
+        city: addr.city ?? cust?.city ?? null,
+        note: addr.note ?? null,
+      };
+    }
+
+    const phone = s(a.customerPhone)?.trim();
+    const name = s(a.customerName)?.trim();
+    if (!phone && !name) return { error: "Provide orderNumber, customerPhone or customerName" };
+
+    let cq = ctx.db.from("customers").select("id, name, phone, city").eq("business_id", ctx.businessId).limit(5);
+    cq = phone ? cq.eq("phone", phone) : cq.ilike("name", `%${name}%`);
+    const { data: custs } = await cq;
+    if (!custs?.length) return { error: "No matching customer" };
+    if (custs.length > 1) {
+      return { matches: custs.map((c) => ({ name: c.name, phone: c.phone, city: c.city })), note: "Multiple customers matched — ask which one." };
+    }
+    const c = custs[0];
+
+    const { data: recentOrders } = await ctx.db
+      .from("orders")
+      .select("order_number, address, placed_at")
+      .eq("business_id", ctx.businessId)
+      .eq("customer_id", c.id)
+      .order("placed_at", { ascending: false })
+      .limit(3);
+
+    const { data: accounts } = await ctx.db
+      .from("store_accounts")
+      .select("id")
+      .eq("business_id", ctx.businessId)
+      .eq("customer_id", c.id);
+    const accountIds = (accounts ?? []).map((x) => x.id as string);
+    const { data: saved } = accountIds.length
+      ? await ctx.db
+          .from("store_account_addresses")
+          .select("label, name, phone, address, city, area, is_default")
+          .eq("business_id", ctx.businessId)
+          .in("account_id", accountIds)
+      : { data: [] as Record<string, unknown>[] };
+
+    return {
+      source: "customer",
+      customer: { name: c.name, phone: c.phone, city: c.city },
+      fromOrders: (recentOrders ?? []).map((o) => {
+        const ad = (o.address ?? {}) as { line?: string; city?: string; note?: string };
+        return { orderNumber: o.order_number, address: ad.line ?? null, city: ad.city ?? null, note: ad.note ?? null, placedAt: o.placed_at };
+      }),
+      savedAddresses: (saved ?? []).map((x) => ({
+        label: x.label,
+        name: x.name,
+        phone: x.phone,
+        address: x.address,
+        city: [x.area, x.city].filter(Boolean).join(", "),
+        default: x.is_default,
+      })),
+    };
+  },
+};
+
+const get_customer_details: ToolDef = {
+  name: "get_customer_details",
+  description:
+    "One customer's profile and, unless includeHistory is false, their order history: lifetime totals, recent orders, and counts of cancelled and returned orders. Look up by phone, name, or customer id. If several customers match a name, a short list is returned so you can ask which one.",
+  risk: "read",
+  creditCost: 0,
+  parameters: {
+    type: "object",
+    properties: {
+      phone: { type: "string" },
+      name: { type: "string" },
+      customerId: { type: "string" },
+      includeHistory: { type: "boolean", description: "default true" },
+      historyLimit: { type: "number", description: "recent orders to list, default 10, max 25" },
+    },
+  },
+  async handler(ctx, a) {
+    const phone = s(a.phone)?.trim();
+    const name = s(a.name)?.trim();
+    const cid = s(a.customerId)?.trim();
+    if (!phone && !name && !cid) return { error: "Provide phone, name or customerId" };
+
+    let cq = ctx.db
+      .from("customers")
+      .select("id, name, phone, email, city, notes, total_orders, total_spent, first_order_at, last_order_at")
+      .eq("business_id", ctx.businessId)
+      .limit(6);
+    if (cid) cq = cq.eq("id", cid);
+    else if (phone) cq = cq.eq("phone", phone);
+    else cq = cq.ilike("name", `%${name}%`);
+    const { data: rows } = await cq;
+    if (!rows?.length) return { error: "No matching customer" };
+    if (rows.length > 1) {
+      return {
+        matches: rows.map((c) => ({ name: c.name, phone: c.phone, city: c.city, orders: c.total_orders })),
+        note: "Multiple customers matched — ask which one, then call again with the exact phone.",
+      };
+    }
+    const c = rows[0];
+    const totalOrders = Number(c.total_orders ?? 0);
+    const totalSpent = Number(c.total_spent ?? 0);
+    const profile = {
+      name: c.name,
+      phone: c.phone,
+      email: c.email,
+      city: c.city,
+      notes: c.notes ?? null,
+      lifetime: {
+        orders: totalOrders,
+        spent: money(totalSpent, ctx.currency),
+        averageOrderValue: money(totalOrders ? totalSpent / totalOrders : 0, ctx.currency),
+        firstOrderAt: c.first_order_at,
+        lastOrderAt: c.last_order_at,
+      },
+    };
+
+    if (a.includeHistory === false) return profile;
+
+    const limit = Math.min(n(a.historyLimit) ?? 10, 25);
+    const { data: orders } = await ctx.db
+      .from("orders")
+      .select("order_number, status, total, placed_at, order_items(qty)")
+      .eq("business_id", ctx.businessId)
+      .eq("customer_id", c.id)
+      .order("placed_at", { ascending: false })
+      .limit(limit);
+    const list = orders ?? [];
+
+    return {
+      ...profile,
+      history: list.map((o) => ({
+        orderNumber: o.order_number,
+        date: o.placed_at,
+        status: o.status,
+        total: money(Number(o.total), ctx.currency),
+        items: ((o.order_items ?? []) as { qty: number }[]).reduce((x, i) => x + Number(i.qty), 0),
+      })),
+      cancelledOrders: list.filter((o) => o.status === "cancelled").length,
+      returnedOrders: list.filter((o) => o.status === "returned").length,
+    };
+  },
+};
+
+const get_cancelled_orders: ToolDef = {
+  name: "get_cancelled_orders",
+  description:
+    "Cancelled orders and why. Each row has the recorded cancellation reason, or null when no reason was captured — if the user asks about a cancellation with a null reason, tell them it wasn't recorded and ask them for it. Optionally filter by recency or by customer.",
+  risk: "read",
+  creditCost: 0,
+  parameters: {
+    type: "object",
+    properties: {
+      sinceDays: { type: "number", description: "only orders placed in the last N days" },
+      customerPhone: { type: "string" },
+      customerName: { type: "string" },
+      limit: { type: "number", description: "default 20, max 50" },
+    },
+  },
+  async handler(ctx, a) {
+    let customerId: string | undefined;
+    const phone = s(a.customerPhone)?.trim();
+    const name = s(a.customerName)?.trim();
+    if (phone || name) {
+      let cq = ctx.db.from("customers").select("id").eq("business_id", ctx.businessId).limit(1);
+      cq = phone ? cq.eq("phone", phone) : cq.ilike("name", `%${name}%`);
+      const { data } = await cq.maybeSingle();
+      if (!data) return { error: "No matching customer" };
+      customerId = data.id as string;
+    }
+
+    let q = ctx.db
+      .from("orders")
+      .select("order_number, total, currency, placed_at, cancelled_at, cancel_reason, customers(name, phone)")
+      .eq("business_id", ctx.businessId)
+      .eq("status", "cancelled")
+      .order("cancelled_at", { ascending: false, nullsFirst: false })
+      .limit(Math.min(n(a.limit) ?? 20, 50));
+    if (customerId) q = q.eq("customer_id", customerId);
+    if (n(a.sinceDays)) q = q.gte("placed_at", new Date(Date.now() - n(a.sinceDays)! * DAY).toISOString());
+    const { data } = await q;
+    const rows = data ?? [];
+
+    const totalValue = rows.reduce((x, o) => x + Number(o.total), 0);
+    return {
+      count: rows.length,
+      totalValueCancelled: money(totalValue, ctx.currency),
+      orders: rows.map((o) => {
+        const cust = (Array.isArray(o.customers) ? o.customers[0] : o.customers) as { name?: string; phone?: string } | null;
+        return {
+          orderNumber: o.order_number,
+          customer: cust?.name ?? "Guest",
+          phone: cust?.phone ?? null,
+          total: money(Number(o.total), (o.currency as string) ?? ctx.currency),
+          placedAt: o.placed_at,
+          cancelledAt: o.cancelled_at,
+          reason: o.cancel_reason ?? null,
+        };
+      }),
+    };
+  },
+};
+
+const get_returns: ToolDef = {
+  name: "get_returns",
+  description:
+    "Return / RMA history with the reason each item was returned, refund amount, restock flag, status, and the returned items. Optionally filter by recency, return status, or customer. If a reason is null it wasn't recorded — ask the user.",
+  risk: "read",
+  creditCost: 0,
+  parameters: {
+    type: "object",
+    properties: {
+      sinceDays: { type: "number" },
+      status: {
+        type: "string",
+        enum: ["requested", "approved", "received", "refunded", "rejected", "cancelled"],
+      },
+      customerPhone: { type: "string" },
+      customerName: { type: "string" },
+      limit: { type: "number", description: "default 20, max 50" },
+    },
+  },
+  async handler(ctx, a) {
+    let orderIds: string[] | undefined;
+    const phone = s(a.customerPhone)?.trim();
+    const name = s(a.customerName)?.trim();
+    if (phone || name) {
+      let cq = ctx.db.from("customers").select("id").eq("business_id", ctx.businessId).limit(1);
+      cq = phone ? cq.eq("phone", phone) : cq.ilike("name", `%${name}%`);
+      const { data: c } = await cq.maybeSingle();
+      if (!c) return { error: "No matching customer" };
+      const { data: os } = await ctx.db
+        .from("orders")
+        .select("id")
+        .eq("business_id", ctx.businessId)
+        .eq("customer_id", c.id);
+      orderIds = (os ?? []).map((o) => o.id as string);
+      if (!orderIds.length) return { count: 0, returns: [] };
+    }
+
+    let q = ctx.db
+      .from("returns")
+      .select(
+        "return_number, status, reason, refund_amount, refund_method, restock, created_at, processed_at, orders(order_number, customers(name, phone)), return_items(name, qty, unit_price)",
+      )
+      .eq("business_id", ctx.businessId)
+      .order("created_at", { ascending: false })
+      .limit(Math.min(n(a.limit) ?? 20, 50));
+    if (s(a.status)) q = q.eq("status", s(a.status)!);
+    if (orderIds) q = q.in("order_id", orderIds);
+    if (n(a.sinceDays)) q = q.gte("created_at", new Date(Date.now() - n(a.sinceDays)! * DAY).toISOString());
+    const { data } = await q;
+    const rows = data ?? [];
+
+    const totalRefunded = rows
+      .filter((r) => r.status === "refunded")
+      .reduce((x, r) => x + Number(r.refund_amount ?? 0), 0);
+
+    return {
+      count: rows.length,
+      totalRefunded: money(totalRefunded, ctx.currency),
+      returns: rows.map((r) => {
+        const ord = (Array.isArray(r.orders) ? r.orders[0] : r.orders) as
+          | { order_number?: string; customers?: unknown }
+          | null;
+        const cust = (Array.isArray(ord?.customers) ? ord?.customers[0] : ord?.customers) as
+          | { name?: string; phone?: string }
+          | null;
+        return {
+          returnNumber: r.return_number,
+          orderNumber: ord?.order_number ?? null,
+          customer: cust?.name ?? "Guest",
+          phone: cust?.phone ?? null,
+          status: r.status,
+          reason: r.reason ?? null,
+          refund: money(Number(r.refund_amount ?? 0), ctx.currency),
+          refundMethod: r.refund_method ?? null,
+          restock: r.restock,
+          createdAt: r.created_at,
+          processedAt: r.processed_at,
+          items: ((r.return_items ?? []) as { name: string; qty: number }[]).map((i) => ({ name: i.name, qty: i.qty })),
+        };
+      }),
+    };
+  },
+};
+
 // ── write tools ────────────────────────────────────────────────────────────
 
 const create_task: ToolDef = {
@@ -558,6 +971,11 @@ export const TOOLS: ToolDef[] = [
   get_business_alerts,
   get_latest_report,
   get_report_insights,
+  get_order_details,
+  get_shipping_address,
+  get_customer_details,
+  get_cancelled_orders,
+  get_returns,
   list_tasks,
   create_task,
   send_report_telegram,
