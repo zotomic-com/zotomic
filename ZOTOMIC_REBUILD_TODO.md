@@ -12,7 +12,8 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 ## PHASE 0 — Foundation  ✅ CODE DONE (migration apply pending Supabase keys)
 
 - [~] `git init` — SKIPPED per user decision (proceed without version control)
-- [ ] Supabase access — user to paste real keys into `.env.local`; then run `npx supabase db push` + `db reset` for seed
+- [x] Supabase — keys in `.env.local`; migrations applied to remote (`npx supabase db push`), seed loaded (`--include-seed`). 24 P0 tables live. Auth E2E verified: owner→/app, admin→/admin, /api/auth/me returns user+business.
+- [x] Git — `git init` (main), Phase 0 committed, pushed to `github.com/zotomic-com/zotomic`. `.env.local` + credentials memory confirmed NOT tracked. Deleted stale `.github/workflows/setup-env.yml` (had a hardcoded key).
 - [x] New `globals.css` design tokens (light/dark), removed all purple utilities
 - [x] `tailwind.config.ts` — green/navy palette, radius, shadows, fonts
 - [x] Shared component kit: Button, Card, StatCard, Badge, DataTable, EmptyState, Skeleton, Toast, Tabs, Select, Field/Input/Textarea/Label (`components/ui/*`)  — Modal deferred to first use
@@ -36,21 +37,24 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [x] Build passes clean (`npx next build` — no errors, no edge-runtime warnings)
 - [x] App-route stub pages for every `/app/*` and `/onboarding` + `/admin` (PagePlaceholder, tagged with target phase)
 
-## PHASE 1 — Public site + auth + onboarding
+## PHASE 1 — Public site + auth + onboarding  ✅ MOSTLY DONE
 
-- [ ] Homepage — desktop (image 2) pixel-close
-- [ ] Homepage — mobile (image 1 & 3) pixel-close
-- [ ] `/how-it-works`
-- [ ] `/features`
-- [ ] `/pricing` (config-driven plans)
-- [ ] `/storefront` (marketing)
-- [ ] `/about`, `/contact` (restyled)
-- [ ] `/privacy`, `/terms`, `/refund-policy`, `/data-deletion` (restyled)
-- [ ] `/login`, `/signup`, `/forgot-password` — new design system, full states
-- [ ] Auth API wired (reuse `app/api/auth/*`), business creation on signup
-- [ ] `/onboarding` — business name/type → currency/timezone → data path (FB / manual / CSV, skippable) → readiness check
-- [ ] First Weekly Intelligence report queued on onboarding completion
-- [ ] JSON-LD + metadata + sitemap + robots for public site
+- [x] Marketing shell — left-sidebar desktop nav (Home/Intelligence/Assistant/Storefront/Pricing · About/Contact/Help) + mobile top bar (`components/site/MarketingShell` + `SiteFooter` + `marketing-nav`)
+- [x] Homepage — headline + FlowDiagram (YOUR BUSINESS → Website/Orders/Customers → INTELLIGENCE → Reports/Assistant → ACTION) + SEE/UNDERSTAND/ACT + trust footer. Responsive. JSON-LD.
+- [~] Homepage pixel-polish vs mockup — structure + content match; fine-tuning (exact spacing, connector lines) can revisit
+- [x] `/intelligence`, `/assistant`, `/storefront` — marketing pages
+- [x] `/how-it-works`, `/features` — marketing pages
+- [x] `/pricing` — config-driven from `lib/plans.ts` (Free/Business/Pro)
+- [x] `/about`, `/contact` (new form → `/api/contact`), `/help` (FAQ)
+- [x] `/privacy-policy`, `/terms`, `/refund-policy` — render correctly via CSS var aliases; `/data-deletion` rewritten to new form → `/api/contact`
+- [x] `/login`, `/signup` — design system, error states (done Phase 0). `/forgot-password` — placeholder (real reset flow deferred)
+- [x] Auth API — signup creates `owner` user → `/onboarding`; login role-routes; `/api/auth/me` returns user + businesses
+- [x] `/onboarding` — 3-step (name/type → currency/timezone → data path, skippable) → `POST /api/onboarding` creates business + membership + free subscription + storefront_config + audit log
+- [x] First Weekly Intelligence report row queued (`status='queued'`) on onboarding completion
+- [x] sitemap + robots updated for new routes; per-page metadata
+- [x] E2E verified against live DB: signup → onboarding → business/sub/store/report/audit rows created → `/app` loads
+- [ ] Legal page copy is still old agency wording — needs a content pass (cosmetic, low priority)
+- [ ] `/forgot-password` real email reset flow
 
 ## PHASE 2 — Tenant app (P0)
 
@@ -160,4 +164,6 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 ## LOG
 
 - 2026-08-29 — Plan approved. TODO file created. Phase 0 starting.
-- 2026-08-29 — Phase 0 code complete. ~150 out-of-scope files deleted; new design system, component kit, 3 layout shells, P0 migration + RLS, tenant/auth libs, middleware, seed, Lighthouse config all in. `npx next build` green. BLOCKED on: user pasting real Supabase keys into `.env.local` so the migration can be applied (`npx supabase db push`) before Phase 1 auth/onboarding wiring can be tested end-to-end.
+- 2026-08-29 — Phase 0 code complete. ~150 out-of-scope files deleted; new design system, component kit, 3 layout shells, P0 migration + RLS, tenant/auth libs, middleware, seed, Lighthouse config all in. `npx next build` green.
+- 2026-08-29 — Supabase keys received. Migrations + seed applied to remote (24 tables live). Git initialised + Phase 0 pushed to github.com/zotomic-com/zotomic (branch main). Vercel wiring deferred (CLI unresponsive in this env; will do at Phase 1 checkpoint).
+- 2026-08-29 — Phase 1: marketing shell + homepage + 11 public pages + config-driven pricing + 3-step onboarding + onboarding API. Build green (47 routes). Full signup→onboarding→/app flow verified against live DB. Next: Vercel deploy, then Phase 2 (tenant app).

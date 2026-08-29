@@ -1,10 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import Navbar from "./Navbar";
-import Footer from "./Footer";
+import { MarketingShell } from "./site/MarketingShell";
 
-/** Routes that render their own chrome (no marketing navbar/footer). */
+/** Routes that render their own chrome (no marketing shell). */
 const BARE_PREFIXES = ["/app", "/admin", "/onboarding", "/login", "/signup", "/forgot-password"];
 
 export default function ConditionalLayout({ children }: { children: React.ReactNode }) {
@@ -13,11 +12,5 @@ export default function ConditionalLayout({ children }: { children: React.ReactN
 
   if (bare) return <>{children}</>;
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
-      <main className="flex-1">{children}</main>
-      <Footer />
-    </div>
-  );
+  return <MarketingShell>{children}</MarketingShell>;
 }
