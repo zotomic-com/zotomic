@@ -166,7 +166,7 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 
 ## PHASE 8 — assistant tools, tracking, missing CRUD  ✅ DONE
 
-- [x] Assistant tools **19 total** now — added `send_report_telegram` + `send_report_email` (from `Assistant@zotomic.com`, via `EMAIL_ASSISTANT_FROM`). `lib/reports/deliver.ts` + `report_deliveries` table.
+- [x] Assistant tools **24 total** now — added `send_report_telegram` + `send_report_email` (from `Assistant@zotomic.com`), then `get_order_details`, `get_shipping_address`, `get_customer_details` (+ history), `get_cancelled_orders` (+ `cancel_reason`), `get_returns` (+ reason). `lib/reports/deliver.ts` + `report_deliveries` table; migration `20260830160000` (orders.cancel_reason/cancelled_at).
 - [x] Telegram — `lib/telegram.ts` (platform bot, `verifyBot`); admin sets bot token in `/admin/settings`; owner sets chat ID in `/app/settings`; `lib/platform-settings.ts` (`platform_settings` table, AES for secrets)
 - [x] `/admin/settings` — real: Telegram bot token + Meta Pixel + GA4 (measurement id + api secret) for zotomic.com. Audit-logged.
 - [x] Meta Pixel — **all plans**. Per-store `config.tracking.metaPixelId` + `ga4MeasurementId` in the storefront editor (Tracking panel). `components/tracking/{Pixel,TrackEvent}.tsx`. Fires PageView (StoreShell), ViewContent (product page), AddToCart (button), Purchase (order page).
