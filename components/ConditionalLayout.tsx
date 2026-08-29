@@ -4,7 +4,16 @@ import { usePathname } from "next/navigation";
 import { MarketingShell } from "./site/MarketingShell";
 
 /** Routes that render their own chrome (no marketing shell). */
-const BARE_PREFIXES = ["/app", "/admin", "/onboarding", "/login", "/signup", "/forgot-password"];
+const BARE_PREFIXES = [
+  "/app",
+  "/admin",
+  "/onboarding",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/storefront-preview",
+  "/s",
+];
 
 export default function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

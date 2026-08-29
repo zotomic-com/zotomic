@@ -92,34 +92,31 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [ ] Email (Brevo) + WhatsApp push on report ready — only in-app notification so far
 - [ ] Admin view of failed report jobs — Phase 5
 
-## PHASE 4a — Storefront theme + editor
+## PHASE 4a — Storefront theme + editor  ✅ CORE DONE
 
-- [ ] `packages/storefront-theme` — component library + `StorefrontConfig` types + Zod schema + defaults
-- [ ] Hostname routing: middleware resolves `<slug>.zotomic.store` → business_id → internal rewrite
-- [ ] Public renderer route group — SSR + ISR + per-tenant revalidateTag
-- [ ] Home section catalog: hero, featured products, category grid, product grid, image+text, about, testimonials, FAQ, newsletter, contact/map, logo strip
-- [ ] Pages: Home, Shop (all + collection), Product detail, About, Contact, Policies, Search, 404, Coming-soon
-- [ ] Product detail: rich description, spec table, shipping/returns accordion, related products, reviews block
-- [ ] Wishlist (localStorage) + `/wishlist` page + share link
-- [ ] Configurable footer menu (link columns, newsletter, badges, social)
-- [ ] `/app/storefront` section-form editor + live preview iframe
-- [ ] Draft/published + version history + revert + publish → AuditLog + revalidate
-- [ ] Self-hosted curated fonts via next/font
-- [ ] JSON-LD (Organization, WebSite, BreadcrumbList, Product, ItemList, FAQPage, LocalBusiness)
-- [ ] Per-store `/llms.txt`, sitemap.xml, robots.txt (AI crawlers allowed + opt-out)
-- [ ] Lighthouse: storefront 100/100/100/100 verified
+- [x] `lib/storefront/config.ts` — `StorefrontConfig` type + `makeDefaultConfig` + `normalizeConfig` (deep-merge stored partial onto defaults; no Zod, form-constrained)
+- [x] `lib/storefront/store.ts` — `getStoreBySlug` / `getStoreProducts` / `getStoreProduct` (React `cache()`), draft vs published
+- [x] Hostname routing — `middleware.ts` resolves `<slug>.zotomic.store` (+ `<slug>.localhost` dev) → rewrites to `/s/<slug>/*`, sets `x-sf-root-host` so renderer uses basePath `""`; path access `/s/<slug>` works for preview
+- [x] Public renderer `app/s/[slug]/*` — SSR + `revalidate` + `revalidateTag(site:<id>)` on publish. Coming-soon state when unpublished.
+- [x] Theme `components/storefront/*` — `StoreShell` (scoped accent/font/radius CSS vars, light/dark), `Sections` renderer (hero, featured, product_grid, category_grid, image_text, rich_text, testimonials, faq, newsletter, logo_strip, contact), `ProductCard`
+- [x] Pages: Home (sections), Products (+ category filter), Product detail (gallery, related, JSON-LD Product/Offer), About, Contact, Cart, Checkout, Order confirmation, coming-soon
+- [x] `/app/storefront` editor — `StorefrontEditor` (content/design/settings tabs, brand, announcement, section add/reorder/toggle/delete + per-type field editing, commerce, contact, SEO, About) + debounced autosave + **live preview iframe** (`/storefront-preview` renders draft)
+- [x] Draft/published — `saveDraft` / `publishStorefront` / `unpublishStorefront` server actions; `published_version` bump; AuditLog; `revalidateTag`
+- [x] Per-store `/llms.txt`, `/sitemap.xml`, `/robots.txt` (AI crawlers allowed by default, toggle in editor SEO tab)
+- [x] JSON-LD: Store (layout) + Product/Offer (product page)
+- [x] E2E verified: editor 200, preview renders theme, unpublished → coming-soon, published store → home/products/4 product pages/about/contact/cart/checkout/robots/sitemap/llms all 200
+- [~] Wishlist, review block, spec table, footer-menu editor, curated font @font-face loading, Lighthouse 100 audit — deferred polish
+- [x] Guest checkout `POST /api/storefront/checkout` — server-authoritative pricing, upsert Customer by phone, write Order + OrderItems (channel `storefront`), decrement tracked stock, `storefront_events` purchase, `new_order` notification. **Verified: real order created, all rows correct, feeds intelligence.**
 
-## PHASE 4b — Media + commerce
+## PHASE 4b — Media + review flow + tracking
 
-- [ ] Cloudinary media pipeline: browser compress/validate → upload → URL+metadata in Supabase
-- [ ] `/app/media` — management + cleanup + reference tracking
-- [ ] Cart (drawer + page, server cart id + localStorage)
-- [ ] Guest checkout — contact + address + delivery + payment method
-- [ ] COD order path → upsert Customer + write Order/OrderItem
-- [ ] Order confirmation page + email + optional WhatsApp + tracking link
-- [ ] Storefront events (page_view, product_view, add_to_cart, add_to_wishlist, begin_checkout, purchase) → `storefront_events` + tracking adapter
-- [ ] Verified-buyer review flow: post-delivery email link → submit → owner moderation
+- [ ] Cloudinary media pipeline: browser compress → signed upload → image_urls on products; `/app/media`
+- [ ] Product images in the editor + product form
+- [ ] page_view / product_view / add_to_cart / begin_checkout storefront events (only `purchase` fires so far)
+- [ ] Verified-buyer review flow: post-delivery email link → submit → owner moderation in `/app/products`
+- [ ] Order confirmation email (Brevo) + optional WhatsApp
 - [ ] Meta Pixel (free tier, client-side)
+- [ ] Cart count badge in storefront header
 
 ## PHASE 5 — Admin console
 
