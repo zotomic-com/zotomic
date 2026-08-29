@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Heart, Home, Phone, ShoppingBag, Store } from "lucide-react";
+import { Heart, Home, ShoppingBag, Store, User } from "lucide-react";
 import { cartCount } from "./cart-store";
 import { readWishlist } from "./wishlist-store";
 
@@ -35,7 +35,7 @@ export function MobileNav({ storeSlug, basePath }: { storeSlug: string; basePath
     { href: b("/products"), label: "Shop", icon: Store },
     { href: b("/wishlist"), label: "Saved", icon: Heart, count: wish },
     { href: b("/cart"), label: "Cart", icon: ShoppingBag, count: cart },
-    { href: b("/contact"), label: "Contact", icon: Phone },
+    { href: b("/account"), label: "Account", icon: User },
   ];
 
   return (

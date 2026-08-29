@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getStoreBySlug } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
+import { getStoreAccount } from "@/lib/storefront/account";
 import { StoreShell } from "@/components/storefront/StoreShell";
 
 interface Props {
@@ -31,6 +32,7 @@ export default async function StoreLayout({ children, params }: Props) {
   if (!store) notFound();
 
   const basePath = await storeBasePath(slug);
+  const account = await getStoreAccount(store.businessId);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -47,7 +49,12 @@ export default async function StoreLayout({ children, params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <StoreShell config={store.config} basePath={basePath} storeSlug={store.slug}>
+      <StoreShell
+        config={store.config}
+        basePath={basePath}
+        storeSlug={store.slug}
+        account={account ? { name: account.name } : null}
+      >
         {children}
       </StoreShell>
     </>

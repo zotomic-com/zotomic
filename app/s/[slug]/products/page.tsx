@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getStoreBySlug, getStoreProducts } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { ProductCard } from "@/components/storefront/ProductCard";
+import { StoreSearchBar } from "@/components/storefront/StoreSearchBar";
 
 export const revalidate = 120;
 export const metadata: Metadata = { title: "Products" };
@@ -12,23 +13,33 @@ export default async function StoreProductsPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; q?: string }>;
 }) {
   const { slug } = await params;
-  const { category } = await searchParams;
+  const { category, q } = await searchParams;
   const store = await getStoreBySlug(slug);
   if (!store || !store.published) return null;
 
   const basePath = await storeBasePath(slug);
   const all = await getStoreProducts(store.businessId);
   const categories = [...new Set(all.map((p) => p.category).filter(Boolean))] as string[];
-  const products = category ? all.filter((p) => p.category === category) : all;
+  const term = (q ?? "").trim().toLowerCase();
+  const products = all.filter((p) => {
+    if (category && p.category !== category) return false;
+    if (term) {
+      const hay = `${p.name} ${p.description ?? ""} ${p.category ?? ""}`.toLowerCase();
+      if (!hay.includes(term)) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold tracking-tight">
-        {category ?? "All products"}
+        {term ? `Results for “${q}”` : category ?? "All products"}
       </h1>
+
+      <StoreSearchBar basePath={basePath} initial={q ?? ""} />
 
       {categories.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">

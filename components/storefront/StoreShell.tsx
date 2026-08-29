@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { User } from "lucide-react";
 import { FONT_STACKS, RADIUS_PX, type StorefrontConfig } from "@/lib/storefront/config";
 import { GA4, MetaPixel } from "@/components/tracking/Pixel";
 import { StorefrontTracker } from "./StorefrontTracker";
@@ -11,6 +12,7 @@ export function StoreShell({
   config,
   basePath,
   storeSlug,
+  account,
   children,
 }: {
   config: StorefrontConfig;
@@ -18,6 +20,7 @@ export function StoreShell({
   basePath: string;
   /** omit for the editor preview (no analytics) */
   storeSlug?: string;
+  account?: { name: string } | null;
   children: React.ReactNode;
 }) {
   const { brand, announcement, nav, footer } = config;
@@ -71,13 +74,25 @@ export function StoreShell({
               </Link>
             ))}
           </nav>
-          {storeSlug ? (
-            <HeaderActions storeSlug={storeSlug} basePath={basePath} />
-          ) : (
-            <Link href={href("/cart")} className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-3 py-1.5 text-sm font-medium">
-              Cart
-            </Link>
-          )}
+          <div className="flex items-center gap-1">
+            {storeSlug ? (
+              <Link
+                href={href(account ? "/account" : "/account/login")}
+                className="relative rounded-[var(--sf-radius)] p-2"
+                aria-label={account ? "My account" : "Sign in"}
+                title={account ? account.name || "My account" : "Sign in"}
+              >
+                <User className="h-5 w-5" />
+              </Link>
+            ) : null}
+            {storeSlug ? (
+              <HeaderActions storeSlug={storeSlug} basePath={basePath} />
+            ) : (
+              <Link href={href("/cart")} className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-3 py-1.5 text-sm font-medium">
+                Cart
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 

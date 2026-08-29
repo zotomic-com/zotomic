@@ -13,6 +13,7 @@ export function CheckoutClient({
   shipping,
   freeOver,
   paymentOptions,
+  prefill,
 }: {
   storeSlug: string;
   basePath: string;
@@ -20,10 +21,13 @@ export function CheckoutClient({
   shipping: number;
   freeOver: number | null;
   paymentOptions: { id: string; label: string }[];
+  prefill?: { name: string; phone: string; email: string; address: string; city: string; note: string } | null;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<CartItem[] | null>(null);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", city: "", note: "" });
+  const [form, setForm] = useState(
+    prefill ?? { name: "", phone: "", email: "", address: "", city: "", note: "" },
+  );
   const [method, setMethod] = useState(paymentOptions[0]?.id ?? "cod");
   const [status, setStatus] = useState<"idle" | "placing" | "error">("idle");
   const [error, setError] = useState("");

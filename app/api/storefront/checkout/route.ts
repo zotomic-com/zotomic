@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { getStoreBySlug } from "@/lib/storefront/store";
+import { getStoreAccount } from "@/lib/storefront/account";
 import { revalidatePath } from "next/cache";
 import { sendNewOrderAlert, sendOrderConfirmation } from "@/lib/emails";
 import { loadIntegration, paymentProvider } from "@/lib/adapters/registry";
@@ -120,6 +121,9 @@ export async function POST(req: NextRequest) {
   const shipping = c.freeShippingOver && subtotal >= c.freeShippingOver ? 0 : c.shippingFlatRate;
   const total = subtotal + shipping;
 
+  // Signed-in shopper (optional).
+  const account = await getStoreAccount(store.businessId);
+
   // Upsert customer by phone.
   const { data: existingCust } = await db
     .from("customers")
@@ -149,6 +153,11 @@ export async function POST(req: NextRequest) {
     customerId = newCust?.id as string;
   }
 
+  // keep the shopper account linked to this customer record
+  if (account && customerId && account.customerId !== customerId) {
+    await db.from("store_accounts").update({ customer_id: customerId }).eq("id", account.id);
+  }
+
   const orderNumber = `ZF-${Date.now().toString(36).toUpperCase().slice(-6)}`;
 
   // Resolve a gateway if one was chosen and is actually connected.
@@ -167,6 +176,7 @@ export async function POST(req: NextRequest) {
       business_id: store.businessId,
       order_number: orderNumber,
       customer_id: customerId,
+      store_account_id: account?.id ?? null,
       channel: "storefront",
       status: "pending",
       payment_method: gateway ? gateway.provider : "cod",
