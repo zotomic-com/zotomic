@@ -23,9 +23,8 @@ export default async function StorefrontPage() {
   const published = !!row?.published_at;
   const root = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
   const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
-  // Working link today (path form on the live host); the subdomain becomes live
-  // once the wildcard DNS + domain are set up.
-  const storeUrl = row?.subdomain && site ? `${site}/s/${row.subdomain}` : null;
+  const storeUrl = row?.subdomain && site ? `${site}/${row.subdomain}` : null;
+  // The <slug>.zotomic.com form activates once a wildcard domain is added in Vercel.
   const subdomainUrl = row?.subdomain ? `https://${row.subdomain}.${root}` : null;
 
   return (

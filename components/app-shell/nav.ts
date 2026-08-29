@@ -62,7 +62,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/websites", label: "Websites", icon: Globe },
   { href: "/admin/reports", label: "Reports", icon: BarChart3 },
   { href: "/admin/assistant-activity", label: "Assistant Activity", icon: MessageSquareText },
-  { href: "/admin/content-library", label: "Content Library", icon: ScrollText },
+  { href: "/admin/content-library", label: "Pages & Legal", icon: ScrollText },
   { href: "/admin/integrations", label: "Integrations", icon: Plug },
   { href: "/admin/marketing", label: "Marketing", icon: Megaphone },
   { href: "/admin/users", label: "Users & Roles", icon: Users },

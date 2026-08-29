@@ -26,6 +26,7 @@ const COLS: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "About", href: "/about" },
       { label: "Contact", href: "/contact" },
       { label: "Help", href: "/help" },
+      { label: "FAQ", href: "/faq" },
     ],
   },
   {

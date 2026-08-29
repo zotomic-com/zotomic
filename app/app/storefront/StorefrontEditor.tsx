@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ChevronDown, ChevronUp, Copy, ExternalLink, Eye, Plus, Trash2 } from "lucide-react";
 import {
   SECTION_LABELS,
+  STORE_PAGE_LABELS,
   defaultSection,
   type Section,
   type SectionType,
@@ -34,7 +35,7 @@ export function StorefrontEditor({
   const [saving, startSave] = useTransition();
   const [publishing, startPublish] = useTransition();
   const [previewKey, setPreviewKey] = useState(0);
-  const [tab, setTab] = useState<"content" | "design" | "settings">("content");
+  const [tab, setTab] = useState<"content" | "design" | "pages" | "settings">("content");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const update = useCallback((fn: (c: StorefrontConfig) => StorefrontConfig) => {
@@ -138,15 +139,15 @@ export function StorefrontEditor({
             </div>
             {subdomainUrl && (
               <p className="mt-1.5 text-fg-subtle">
-                Custom address <span className="font-medium">{subdomainUrl.replace("https://", "")}</span> activates once
-                your domain&apos;s DNS is connected.
+                A dedicated address (<span className="font-medium">{subdomainUrl.replace("https://", "")}</span>) can be
+                enabled later.
               </p>
             )}
           </div>
         )}
 
         <div className="flex gap-1 rounded border border-border bg-surface-2 p-1 text-sm">
-          {(["content", "design", "settings"] as const).map((t) => (
+          {(["content", "design", "pages", "settings"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -215,11 +216,85 @@ export function StorefrontEditor({
                 </div>
               </details>
             </Panel>
+          </>
+        )}
+
+        {tab === "pages" && (
+          <>
+            <p className="text-xs text-fg-subtle">
+              These pages appear in your storefront footer. Leave a page hidden to remove its footer link.
+              Separate paragraphs with a blank line.
+            </p>
 
             <Panel title="About page">
               <BoolRow label="Show About page" value={config.pages.about.enabled} onChange={(v) => update((c) => ((c.pages.about.enabled = v), c))} />
               <TextRow label="Title" value={config.pages.about.title} onChange={(v) => update((c) => ((c.pages.about.title = v), c))} />
               <TextareaRow label="Body" value={config.pages.about.body} onChange={(v) => update((c) => ((c.pages.about.body = v), c))} />
+            </Panel>
+
+            {(["privacy", "terms", "refund", "shipping"] as const).map((k) => (
+              <Panel key={k} title={STORE_PAGE_LABELS[k]}>
+                <BoolRow
+                  label={`Show ${STORE_PAGE_LABELS[k]}`}
+                  value={config.pages[k].enabled}
+                  onChange={(v) => update((c) => ((c.pages[k].enabled = v), c))}
+                />
+                <TextRow
+                  label="Title"
+                  value={config.pages[k].title}
+                  onChange={(v) => update((c) => ((c.pages[k].title = v), c))}
+                />
+                <TextareaRow
+                  label="Body"
+                  value={config.pages[k].body}
+                  onChange={(v) => update((c) => ((c.pages[k].body = v), c))}
+                />
+              </Panel>
+            ))}
+
+            <Panel title="FAQ">
+              <BoolRow
+                label="Show FAQ page"
+                value={config.pages.faq.enabled}
+                onChange={(v) => update((c) => ((c.pages.faq.enabled = v), c))}
+              />
+              <TextRow
+                label="Title"
+                value={config.pages.faq.title}
+                onChange={(v) => update((c) => ((c.pages.faq.title = v), c))}
+              />
+              {config.pages.faq.items.map((it, i) => (
+                <div key={i} className="rounded-sm border border-border p-2">
+                  <TextRow
+                    label={`Question ${i + 1}`}
+                    value={it.q}
+                    onChange={(v) =>
+                      update((c) => ((c.pages.faq.items = c.pages.faq.items.map((x, j) => (j === i ? { ...x, q: v } : x))), c))
+                    }
+                  />
+                  <TextareaRow
+                    label="Answer"
+                    value={it.a}
+                    onChange={(v) =>
+                      update((c) => ((c.pages.faq.items = c.pages.faq.items.map((x, j) => (j === i ? { ...x, a: v } : x))), c))
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => update((c) => ((c.pages.faq.items = c.pages.faq.items.filter((_, j) => j !== i)), c))}
+                    className="mt-1 text-xs text-danger hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => update((c) => ((c.pages.faq.items = [...c.pages.faq.items, { q: "", a: "" }]), c))}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                + Add question
+              </button>
             </Panel>
           </>
         )}

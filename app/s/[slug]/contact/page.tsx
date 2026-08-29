@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getStoreBySlug } from "@/lib/storefront/store";
+import { ContactForm } from "./ContactForm";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Contact" };
 
 export default async function StoreContactPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -22,7 +23,8 @@ export default async function StoreContactPage({ params }: { params: Promise<{ s
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold tracking-tight">Contact {store.name}</h1>
-      {rows.length ? (
+
+      {rows.length > 0 && (
         <dl className="mt-6 space-y-3">
           {rows.map(([k, v]) => (
             <div key={k} className="flex gap-4 border-b border-[var(--sf-line)] pb-3 text-sm">
@@ -31,13 +33,19 @@ export default async function StoreContactPage({ params }: { params: Promise<{ s
             </div>
           ))}
         </dl>
-      ) : (
-        <p className="mt-4 text-sm text-[var(--sf-muted)]">Contact details coming soon.</p>
       )}
+
+      <h2 className="mt-10 text-sm font-bold uppercase tracking-widest text-[var(--sf-muted)]">
+        Send a message
+      </h2>
+      <div className="mt-4">
+        <ContactForm slug={slug} />
+      </div>
+
       {c.mapEmbedUrl && (
         <iframe
           src={c.mapEmbedUrl}
-          className="mt-6 aspect-video w-full rounded-[var(--sf-radius)] border border-[var(--sf-line)]"
+          className="mt-8 aspect-video w-full rounded-[var(--sf-radius)] border border-[var(--sf-line)]"
           loading="lazy"
           title="Map"
         />

@@ -20,8 +20,8 @@ export default async function AdminWebsitesPage() {
   const rows = (data ?? []).map((s) => ({
     id: s.business_id as string,
     business: ((Array.isArray(s.businesses) ? s.businesses[0] : s.businesses) as { name?: string } | null)?.name ?? "—",
-    url: s.subdomain ? `${s.subdomain}.${ROOT}` : "—",
-    liveUrl: s.subdomain && SITE ? `${SITE}/s/${s.subdomain}` : null,
+    url: s.subdomain ? `${(SITE || `https://${ROOT}`).replace(/^https?:\/\//, "")}/${s.subdomain}` : "—",
+    liveUrl: s.subdomain && SITE ? `${SITE}/${s.subdomain}` : null,
     published: !!s.published_at,
     version: (s.published_version as number) ?? 0,
     at: s.published_at ? new Date(s.published_at as string).toLocaleDateString("en-US") : "—",

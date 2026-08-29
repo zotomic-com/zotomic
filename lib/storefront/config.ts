@@ -74,8 +74,31 @@ export interface StorefrontConfig {
   };
   pages: {
     about: { enabled: boolean; title: string; body: string };
+    privacy: StorePage;
+    terms: StorePage;
+    refund: StorePage;
+    shipping: StorePage;
+    faq: { enabled: boolean; title: string; items: { q: string; a: string }[] };
   };
 }
+
+export interface StorePage {
+  enabled: boolean;
+  title: string;
+  body: string;
+}
+
+/** Slugs handled by the storefront's dynamic info-page route. */
+export const STORE_DOC_PAGES = ["privacy", "terms", "refund", "shipping"] as const;
+export type StoreDocSlug = (typeof STORE_DOC_PAGES)[number];
+
+export const STORE_PAGE_LABELS: Record<StoreDocSlug | "faq", string> = {
+  privacy: "Privacy Policy",
+  terms: "Terms & Conditions",
+  refund: "Refund Policy",
+  shipping: "Shipping & Returns",
+  faq: "FAQ",
+};
 
 export const FONT_STACKS: Record<StorefrontConfig["brand"]["font"], string> = {
   inter: "'Inter', system-ui, sans-serif",
@@ -176,7 +199,22 @@ export function makeDefaultConfig(storeName: string): StorefrontConfig {
     footer: {
       columns: [
         { title: "Shop", links: [{ label: "All products", href: "/products" }] },
-        { title: "Help", links: [{ label: "Contact", href: "/contact" }, { label: "Shipping & returns", href: "/about" }] },
+        {
+          title: "Help",
+          links: [
+            { label: "Contact", href: "/contact" },
+            { label: "Shipping & Returns", href: "/shipping" },
+            { label: "FAQ", href: "/faq" },
+          ],
+        },
+        {
+          title: "Legal",
+          links: [
+            { label: "Privacy Policy", href: "/privacy" },
+            { label: "Terms & Conditions", href: "/terms" },
+            { label: "Refund Policy", href: "/refund" },
+          ],
+        },
       ],
       showPaymentBadges: true,
       note: "",
@@ -191,7 +229,39 @@ export function makeDefaultConfig(storeName: string): StorefrontConfig {
       allowAiCrawlers: true,
     },
     tracking: { metaPixelId: "", ga4MeasurementId: "" },
-    pages: { about: { enabled: true, title: "About us", body: "" } },
+    pages: {
+      about: { enabled: true, title: "About us", body: "" },
+      privacy: {
+        enabled: true,
+        title: "Privacy Policy",
+        body: `We collect only what we need to process your order: your name, phone number, delivery address, and (if given) email.\n\nWe use this information to confirm and deliver your order and to contact you about it. We share your delivery details with our courier partner only. We never sell your data.\n\nTo update or delete your information, contact us using the details on our Contact page.`,
+      },
+      terms: {
+        enabled: true,
+        title: "Terms & Conditions",
+        body: `By placing an order on this store you agree to these terms.\n\nPrices and product availability may change without notice. We may cancel an order if an item is out of stock or a pricing error occurred, and will refund any amount already paid.\n\nOrders are confirmed by phone before dispatch. You are responsible for providing a correct address and phone number.`,
+      },
+      refund: {
+        enabled: true,
+        title: "Refund Policy",
+        body: `If your item is damaged, defective, or not what you ordered, contact us within 3 days of delivery with photos.\n\nApproved returns are refunded to your original payment method, or by bKash/cash for COD orders, within 7 working days of us receiving the item back. Delivery charges are non-refundable unless the fault was ours.\n\nItems must be unused and in original packaging.`,
+      },
+      shipping: {
+        enabled: true,
+        title: "Shipping & Returns",
+        body: `We deliver nationwide. Inside Dhaka: 1–3 working days. Outside Dhaka: 3–5 working days.\n\nDelivery charges are shown at checkout. Cash on delivery is available everywhere; online payment where enabled.\n\nTo return an item, see our Refund Policy or contact us.`,
+      },
+      faq: {
+        enabled: true,
+        title: "Frequently Asked Questions",
+        items: [
+          { q: "How long does delivery take?", a: "1–3 working days inside Dhaka, 3–5 days elsewhere." },
+          { q: "Do you offer cash on delivery?", a: "Yes, cash on delivery is available across the country." },
+          { q: "How do I track my order?", a: "We call to confirm every order, and you can reply to that number for updates." },
+          { q: "Can I return an item?", a: "Yes — see our Refund Policy for details and timelines." },
+        ],
+      },
+    },
   };
 }
 

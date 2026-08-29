@@ -37,7 +37,7 @@ export function StoreShell({
   } as React.CSSProperties;
 
   return (
-    <div style={style} className="min-h-screen bg-[var(--sf-bg)] text-[var(--sf-fg)]">
+    <div style={style} className="flex min-h-screen flex-col bg-[var(--sf-bg)] text-[var(--sf-fg)]">
       <MetaPixel id={config.tracking?.metaPixelId ?? ""} />
       <GA4 id={config.tracking?.ga4MeasurementId ?? ""} />
       {storeSlug ? <StorefrontTracker storeSlug={storeSlug} /> : null}
@@ -85,7 +85,7 @@ export function StoreShell({
         </div>
       </header>
 
-      <main className={storeSlug ? "pb-16 sm:pb-0" : undefined}>{children}</main>
+      <main className={`flex-1 ${storeSlug ? "pb-16 sm:pb-0" : ""}`}>{children}</main>
 
       {storeSlug ? <MobileNav storeSlug={storeSlug} basePath={basePath} /> : null}
 
