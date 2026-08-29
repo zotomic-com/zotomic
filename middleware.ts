@@ -72,9 +72,9 @@ export async function middleware(req: NextRequest) {
     }
     const url = req.nextUrl.clone();
     url.pathname = `/s/${sub}${pathname === "/" ? "" : pathname}`;
-    const res = NextResponse.rewrite(url);
-    res.headers.set("x-sf-root-host", "1"); // renderer basePath = ""
-    return res;
+    const reqHeaders = new Headers(req.headers);
+    reqHeaders.set("x-sf-root-host", "1"); // renderer basePath = ""
+    return NextResponse.rewrite(url, { request: { headers: reqHeaders } });
   }
 
   // ── shared-domain path storefront (zotomic.com/<slug>/…) ─────────────────
@@ -89,9 +89,9 @@ export async function middleware(req: NextRequest) {
   ) {
     const url = req.nextUrl.clone();
     url.pathname = `/s${pathname}`;
-    const res = NextResponse.rewrite(url);
-    res.headers.set("x-sf-path-base", `/${seg}`); // renderer basePath = "/<slug>"
-    return res;
+    const reqHeaders = new Headers(req.headers);
+    reqHeaders.set("x-sf-path-base", `/${seg}`); // renderer basePath = "/<slug>"
+    return NextResponse.rewrite(url, { request: { headers: reqHeaders } });
   }
 
   // ── main app auth/routing ────────────────────────────────────────────────

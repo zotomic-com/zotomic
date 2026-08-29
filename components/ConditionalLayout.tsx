@@ -17,6 +17,30 @@ const BARE_PREFIXES = [
   "/s",
 ];
 
+/**
+ * First path segments the marketing site actually owns. Anything else with a
+ * single slug-like segment is a storefront served from zotomic.com/<slug> and
+ * must NOT get the marketing chrome. Keep in sync with middleware RESERVED_PATHS
+ * and the app/* route folders.
+ */
+const MARKETING_SEGMENTS = new Set([
+  "about",
+  "contact",
+  "help",
+  "faq",
+  "pricing",
+  "features",
+  "how-it-works",
+  "intelligence",
+  "assistant",
+  "storefront",
+  "privacy-policy",
+  "terms",
+  "refund-policy",
+  "data-deletion",
+  "legal",
+]);
+
 export default function ConditionalLayout({
   children,
   tracking,
@@ -25,9 +49,13 @@ export default function ConditionalLayout({
   tracking?: { metaPixelId: string; ga4Id: string };
 }) {
   const pathname = usePathname();
-  const bare = BARE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const seg = pathname.split("/")[1] ?? "";
 
-  if (bare) return <>{children}</>;
+  const bareByPrefix = BARE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  // a non-root, non-marketing single segment → storefront path (zotomic.com/<slug>)
+  const isStorefrontPath = seg !== "" && !MARKETING_SEGMENTS.has(seg) && !bareByPrefix;
+
+  if (bareByPrefix || isStorefrontPath) return <>{children}</>;
 
   return (
     <>
