@@ -119,26 +119,20 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [ ] Meta Pixel (free tier); cart count badge in storefront header
 - [ ] `product.image_urls` used by `next/image` (currently plain `<img>` with lazy loading + Cloudinary f_auto via `optimized()` helper — wire helper into ProductCard)
 
-## PHASE 5 — Admin console
+## PHASE 5 — Admin console + billing  ✅ CORE DONE
 
-- [ ] `/admin` overview — pixel-close to image 3
-- [ ] `/admin/tenants` — list, detail, suspend/impersonate (audit-logged)
-- [ ] `/admin/subscriptions` — pending-confirmation queue + one-click "mark paid" + lock state machine
-- [ ] `/admin/financials` — MRR, revenue, invoices
-- [ ] `/admin/usage` — AI credits, storage, bandwidth per tenant
-- [ ] `/admin/websites` — published storefronts + domains
-- [ ] `/admin/reports` — report/job monitoring, failed jobs surfaced
-- [ ] `/admin/assistant-activity` — Hermes tool-call logs, usage, errors
-- [ ] `/admin/integrations` — platform-level provider config
-- [ ] `/admin/content-library`, `/admin/marketing` — placeholders (Outreach Agent later)
-- [ ] `/admin/users` — roles/permissions
-- [ ] `/admin/audit-logs` — subscription/credential/admin-on-customer-data actions
-- [ ] `/admin/system-health` — uptime/latency, background-job health
-- [ ] `/admin/settings` — platform config, plan/limit definitions
-- [ ] Billing automation: invoice generation + payment reference code
-- [ ] Reminders: 3 days before due / on due date / mid-grace
-- [ ] Grace (7d) → soft-lock (day 8, dashboard read-only, storefront live) → hard-lock (day 30, storefront offline)
-- [ ] Instant reactivation on admin "mark paid"
+- [x] Billing state machine — migration `20260829160000`: `app.tick_subscription` / `app.billing_sweep` (active → grace 0–7d → soft_lock day 8 → hard_lock day 30; free never locks). Daily pg_cron `billing-sweep` @ 02:00 UTC.
+- [x] `lib/billing.ts` — `deriveBilling`, `submitPayment` (owner→invoice), `confirmInvoice` (admin→paid + period +30d + unlock + owner email)
+- [x] Enforcement — `getTenant()`/`requireBusiness()` carry billing state; writes blocked when read-only; app layout redirects hard-lock → `/app/billing`, shows grace/soft-lock banner; `getStoreBySlug()` marks hard-locked stores offline (soft-lock keeps storefront LIVE)
+- [x] `/app/billing` — plan card + status, bKash payment form (reference + txn id), invoice history, upgrade cards
+- [x] `/admin` overview — matches mockup img 3: 4 stat cards (Total/Active Businesses, MRR, Reports), Business Growth bar, Subscription Mix donut, Recent Signups, Top Businesses by Revenue, Activity Feed, pending-confirmation alert
+- [x] `/admin/subscriptions` — pending-confirmation queue + one-click "Mark as paid" + void; all-subscriptions table with lock status
+- [x] `/admin/tenants` (businesses + owner + plan + revenue), `/admin/financials` (MRR/collected/outstanding + invoices), `/admin/websites` (storefronts), `/admin/users`, `/admin/audit-logs`, `/admin/reports` (job monitoring, failed count), `/admin/system-health` (live Supabase/Gemini/Cloudinary/Email checks)
+- [x] `/api/cron/billing` — reminder emails (3d before / on due / mid-grace), dedup via `last_reminder_on`
+- [x] `lib/admin-server.ts` `requireAdmin()` guard
+- [x] Verified E2E: overdue → soft_lock + invoice; owner read-only + payment form; payment submitted → admin queue → confirm → active + period +30d
+- [~] `/admin/{usage,assistant-activity,content-library,marketing,settings}` — stubs (usage/assistant = Phase 6; content/marketing = P2; settings = plan-config later)
+- [ ] Tenant suspend / impersonate actions; credential-change audit events
 
 ## PHASE 6 — Assistant + Hermes tool layer
 
