@@ -108,15 +108,16 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [~] Wishlist, review block, spec table, footer-menu editor, curated font @font-face loading, Lighthouse 100 audit — deferred polish
 - [x] Guest checkout `POST /api/storefront/checkout` — server-authoritative pricing, upsert Customer by phone, write Order + OrderItems (channel `storefront`), decrement tracked stock, `storefront_events` purchase, `new_order` notification. **Verified: real order created, all rows correct, feeds intelligence.**
 
-## PHASE 4b — Media + review flow + tracking
+## PHASE 4b — Media + review flow + tracking  ✅ CORE DONE
 
-- [ ] Cloudinary media pipeline: browser compress → signed upload → image_urls on products; `/app/media`
-- [ ] Product images in the editor + product form
-- [ ] page_view / product_view / add_to_cart / begin_checkout storefront events (only `purchase` fires so far)
-- [ ] Verified-buyer review flow: post-delivery email link → submit → owner moderation in `/app/products`
-- [ ] Order confirmation email (Brevo) + optional WhatsApp
-- [ ] Meta Pixel (free tier, client-side)
-- [ ] Cart count badge in storefront header
+- [x] Cloudinary pipeline — `lib/cloudinary.ts` (server-side SHA1 signing, secret never exposed), `/api/app/media/sign` + `/api/app/media` (POST record / GET list / DELETE with product-reference check). `media_assets` table (migration `20260829150000`). Browser canvas compression (max 1600px, JPEG q0.82) before upload. **Verified: real signed upload to Cloudinary succeeds.**
+- [x] `ImageUploader` component → wired into product add/edit form (`image_urls`) + `/app/media` gallery page
+- [x] Verified-buyer reviews — `review_tokens` table; `issueReviewTokens()` on order → delivered; `/app/orders/[id]` order detail + `OrderStatusControl`; public `/s/[slug]/review/[token]` form → `/api/storefront/review` (creates `pending` row, marks token used); `/app/reviews` moderation (approve/hide, tabs); storefront product page renders approved reviews + `AggregateRating`/`Review` JSON-LD. **Verified: submission creates pending row.**
+- [x] Nav: added Media + Reviews
+- [ ] page_view / product_view / add_to_cart / begin_checkout events (only `purchase` fires)
+- [ ] Order confirmation email (Brevo) + WhatsApp; post-delivery review-invite email
+- [ ] Meta Pixel (free tier); cart count badge in storefront header
+- [ ] `product.image_urls` used by `next/image` (currently plain `<img>` with lazy loading + Cloudinary f_auto via `optimized()` helper — wire helper into ProductCard)
 
 ## PHASE 5 — Admin console
 
