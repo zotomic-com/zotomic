@@ -7,6 +7,7 @@ import { getDashboardData } from "@/lib/metrics";
 import { buildObservations } from "@/lib/observations";
 import { money } from "@/lib/money";
 import { PageHeader } from "@/components/app/PageHeader";
+import { GenerateReportButton } from "@/components/app/GenerateReportButton";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -23,17 +24,25 @@ export default async function IntelligencePage() {
 
   const currency = tenant.business.currency ?? "BDT";
   const data = await getDashboardData(tenant.businessId);
-  const observations = buildObservations(data, currency);
+  const observations = buildObservations(data.current, data.previous, data.topProducts, currency);
   const db = getAdminSupabase();
 
-  const [{ data: latestReport }, { data: recs }] = await Promise.all([
-    db
-      .from("reports")
-      .select("id, status, period_start, period_end, summary, generated_at")
-      .eq("business_id", tenant.businessId)
-      .order("period_end", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+  const { data: latestReport } = await db
+    .from("reports")
+    .select("id, status, period_start, period_end, summary, model, generated_at")
+    .eq("business_id", tenant.businessId)
+    .order("period_end", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const [{ data: reportInsights }, { data: recs }] = await Promise.all([
+    latestReport?.status === "ready"
+      ? db
+          .from("insights")
+          .select("id, severity, title, body")
+          .eq("report_id", latestReport.id)
+          .order("severity", { ascending: false })
+      : Promise.resolve({ data: null }),
     db
       .from("recommendations")
       .select("id, title, detail, effort, impact, status")
@@ -50,11 +59,24 @@ export default async function IntelligencePage() {
         title="Weekly Intelligence"
         subtitle="Trailing 7 days vs the 7 before. See what happened, understand why, act on it."
         action={
-          <Link href="/app/reports" className="text-sm font-semibold text-primary">
-            All reports →
-          </Link>
+          <div className="flex items-center gap-3">
+            <GenerateReportButton label="Refresh report" />
+            <Link href="/app/reports" className="text-sm font-semibold text-primary">
+              All reports →
+            </Link>
+          </div>
         }
       />
+
+      {latestReport?.status === "ready" && latestReport.summary && (
+        <div className="rounded border border-primary-soft bg-primary-soft p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-primary">
+            This week&apos;s summary
+            {latestReport.model ? " · AI narrative" : ""}
+          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-fg">{latestReport.summary}</p>
+        </div>
+      )}
 
       {/* SEE */}
       <section>
@@ -96,10 +118,24 @@ export default async function IntelligencePage() {
                 title="Not enough data yet"
                 description="Once orders start flowing in, Zotomic explains what changed and why."
               />
+            ) : reportInsights && reportInsights.length ? (
+              <ul className="space-y-3">
+                {reportInsights.map((o) => (
+                  <li key={o.id as string} className="flex items-start gap-3">
+                    <Badge tone={SEV_TONE[(o.severity as keyof typeof SEV_TONE) ?? "info"]}>
+                      {o.severity as string}
+                    </Badge>
+                    <span className="text-sm text-fg-muted">
+                      <span className="font-medium text-fg">{o.title as string}</span>
+                      {o.body ? ` — ${o.body as string}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ) : (
               <ul className="space-y-3">
-                {observations.map((o, i) => (
-                  <li key={i} className="flex items-start gap-3">
+                {observations.map((o) => (
+                  <li key={o.key} className="flex items-start gap-3">
                     <Badge tone={SEV_TONE[o.severity]}>{o.severity}</Badge>
                     <span className="text-sm text-fg-muted">{o.text}</span>
                   </li>

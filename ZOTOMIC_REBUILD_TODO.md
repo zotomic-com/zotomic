@@ -77,19 +77,20 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [ ] Business switcher (multi-business) — deferred (v1 = one business per owner)
 - [ ] App layout still shows a brief full-screen spinner before rendering server content — minor UX polish TODO
 
-## PHASE 3 — Weekly Intelligence engine
+## PHASE 3 — Weekly Intelligence engine  ✅ CORE DONE
 
-- [ ] Ingestion: manual entry + CSV import
-- [ ] Ingestion: Facebook Page connect (data pull)
-- [ ] Normalize layer
-- [ ] Supabase Edge Function: report generation pipeline
-- [ ] pg_cron schedule + "businesses due" selector
-- [ ] Gemini narrative adapter (2.5-flash → 2.0-flash → 2.0-flash-lite fallback)
-- [ ] Structured output: type / severity / evidence / recommendation / confidence
-- [ ] Persist Report + ReportMetric + Insight + Recommendation
-- [ ] Notify: dashboard + email (Brevo) + optional WhatsApp
-- [ ] Cold-start handling (states what's missing, never guesses)
-- [ ] Admin surfacing of failed report jobs
+- [x] Report generation pipeline `lib/reports/generate.ts` — period = last full week vs the week before; deterministic metrics via SQL RPC → `report_metrics` rows (value + previous + change_pct + direction + availability); rule-based observations → `insights`; Gemini structured JSON narrative → summary + `insights` + `recommendations`
+- [x] Gemini adapter `lib/ai/gemini.ts` — server-only, key never exposed/logged, fallback chain `gemini-3.6-flash → gemini-flash-lite-latest → gemini-2.5-flash-lite` (2.5-flash retired for new keys in 2026), strict "use only provided numbers" system prompt, JSON response mode
+- [x] Cold-start handling — 0 orders in both periods → report explicitly says what's missing, no Gemini call
+- [x] Deterministic fallback summary when Gemini unavailable/fails (AI is optional narrative polish)
+- [x] pg_cron + pg_net (migration `20260829140000`) — `app.trigger_weekly_reports()` reads URL+secret from private `app.config`, POSTs to `/api/cron/weekly-reports` Mondays 03:00 UTC. Job active on remote.
+- [x] `/api/cron/weekly-reports` (x-cron-secret) — iterates active non-hard-locked businesses; `/api/app/reports/generate` (tenant-auth) — on-demand "refresh report"
+- [x] Notify: dashboard notification row on report ready
+- [x] `/app/intelligence` shows AI summary banner + report insights; `/app/reports` + intelligence have "Generate / Refresh report" button
+- [x] E2E verified: generated a real report — Gemini `gemini-3.6-flash` summary using only provided figures ("revenue rose 54% to ৳140,390 … profit grew 45% to ৳59,120 … concentrated in a single item"), 4 metrics + 3 insights + 2 recommendations + 1 notification persisted
+- [ ] Ingestion: CSV import + manual order entry + Facebook Page connect — NOT built (dashboard/reports currently run on seeded/storefront orders; manual+CSV ingestion is its own sub-phase)
+- [ ] Email (Brevo) + WhatsApp push on report ready — only in-app notification so far
+- [ ] Admin view of failed report jobs — Phase 5
 
 ## PHASE 4a — Storefront theme + editor
 

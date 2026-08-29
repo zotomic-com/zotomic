@@ -80,6 +80,39 @@ export interface DashboardData {
 
 const DAY = 86_400_000;
 
+const numOrNull = (v: unknown) => (v == null ? null : Number(v));
+
+export function rowToSummary(row: Record<string, unknown> | undefined): Summary {
+  const empty: Summary = {
+    revenue: 0, orders_count: 0, returned_count: 0, units: 0, cogs: 0,
+    marketing: 0, costs_complete: true, estimated_profit: 0, aov: 0, new_customers: 0,
+  };
+  if (!row) return empty;
+  return {
+    revenue: Number(row.revenue ?? 0),
+    orders_count: Number(row.orders_count ?? 0),
+    returned_count: Number(row.returned_count ?? 0),
+    units: Number(row.units ?? 0),
+    cogs: Number(row.cogs ?? 0),
+    marketing: Number(row.marketing ?? 0),
+    costs_complete: Boolean(row.costs_complete),
+    estimated_profit: numOrNull(row.estimated_profit),
+    aov: Number(row.aov ?? 0),
+    new_customers: Number(row.new_customers ?? 0),
+  };
+}
+
+/** Deterministic summary for an explicit period. */
+export async function getSummary(businessId: string, start: Date, end: Date): Promise<Summary> {
+  const db = getAdminSupabase();
+  const { data } = await db.rpc("metrics_summary", {
+    p_business: businessId,
+    p_start: start.toISOString(),
+    p_end: end.toISOString(),
+  });
+  return rowToSummary((data as Record<string, unknown>[] | null)?.[0]);
+}
+
 /** Deterministic dashboard metrics for the trailing 7 days vs the 7 before. */
 export async function getDashboardData(businessId: string): Promise<DashboardData> {
   const db = getAdminSupabase();
@@ -97,30 +130,8 @@ export async function getDashboardData(businessId: string): Promise<DashboardDat
     db.rpc("metrics_top_products", { p_business: businessId, p_start: iso(curStart), p_end: iso(end), p_limit: 5 }),
   ]);
 
-  const empty: Summary = {
-    revenue: 0, orders_count: 0, returned_count: 0, units: 0, cogs: 0,
-    marketing: 0, costs_complete: true, estimated_profit: 0, aov: 0, new_customers: 0,
-  };
-
-  const num = (v: unknown) => (v == null ? null : Number(v));
-  const toSummary = (row: Record<string, unknown> | undefined): Summary =>
-    row
-      ? {
-          revenue: Number(row.revenue ?? 0),
-          orders_count: Number(row.orders_count ?? 0),
-          returned_count: Number(row.returned_count ?? 0),
-          units: Number(row.units ?? 0),
-          cogs: Number(row.cogs ?? 0),
-          marketing: Number(row.marketing ?? 0),
-          costs_complete: Boolean(row.costs_complete),
-          estimated_profit: num(row.estimated_profit),
-          aov: Number(row.aov ?? 0),
-          new_customers: Number(row.new_customers ?? 0),
-        }
-      : empty;
-
-  const current = toSummary((curRes.data as Record<string, unknown>[] | null)?.[0]);
-  const previous = toSummary((prevRes.data as Record<string, unknown>[] | null)?.[0]);
+  const current = rowToSummary((curRes.data as Record<string, unknown>[] | null)?.[0]);
+  const previous = rowToSummary((prevRes.data as Record<string, unknown>[] | null)?.[0]);
 
   const dailyRevenue = ((dailyRes.data as Record<string, unknown>[] | null) ?? []).map((r) => ({
     day: new Date(r.day as string).toLocaleDateString("en-US", { weekday: "short" }),

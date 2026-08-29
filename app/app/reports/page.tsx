@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { PageHeader } from "@/components/app/PageHeader";
+import { GenerateReportButton } from "@/components/app/GenerateReportButton";
 import { Card } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +55,11 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Reports" subtitle="Every weekly report, with the metrics and insights behind it." />
+      <PageHeader
+        title="Reports"
+        subtitle="Every weekly report, with the metrics and insights behind it."
+        action={<GenerateReportButton />}
+      />
       <Card>
         <DataTable
           columns={cols}
