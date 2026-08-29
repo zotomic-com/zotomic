@@ -4,6 +4,7 @@ import { buildObservations, type Observation } from "@/lib/observations";
 import { geminiGenerate, geminiConfigured, parseJsonResponse } from "@/lib/ai/gemini";
 import { money, pctChange } from "@/lib/money";
 import { sendReportReady } from "@/lib/emails";
+import { getTrafficSummary } from "@/lib/traffic";
 
 const DAY = 86_400_000;
 
@@ -135,6 +136,26 @@ export async function generateReport(
 
     const lines = buildMetricLines(cur, prev);
     const observations = buildObservations(cur, prev, top, currency);
+
+    // storefront traffic funnel
+    const traffic = await getTrafficSummary(businessId, periodStart, periodEnd);
+    if (traffic.hasData && traffic.visitors >= 10) {
+      if (traffic.conversionRate != null) {
+        observations.push({
+          key: "conversion",
+          severity: traffic.conversionRate < 1 ? "medium" : "info",
+          text: `Storefront: ${traffic.visitors} visitors, ${traffic.purchases} purchases — ${traffic.conversionRate.toFixed(1)}% conversion.`,
+        });
+      }
+      if (traffic.addToCart > 0 && traffic.purchases / traffic.addToCart < 0.4) {
+        observations.push({
+          key: "cart-abandon",
+          severity: "medium",
+          text: `${traffic.addToCart} add-to-cart events but only ${traffic.purchases} purchases — carts are being abandoned.`,
+        });
+      }
+    }
+
     const coldStart = cur.orders_count === 0 && prev.orders_count === 0;
 
     // ── deterministic metrics rows ──────────────────────────────────────────

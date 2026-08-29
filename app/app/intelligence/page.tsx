@@ -5,6 +5,7 @@ import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { getDashboardData } from "@/lib/metrics";
 import { buildObservations } from "@/lib/observations";
+import { getTrafficSummary } from "@/lib/traffic";
 import { money } from "@/lib/money";
 import { PageHeader } from "@/components/app/PageHeader";
 import { GenerateReportButton } from "@/components/app/GenerateReportButton";
@@ -25,6 +26,7 @@ export default async function IntelligencePage() {
   const currency = tenant.business.currency ?? "BDT";
   const data = await getDashboardData(tenant.businessId);
   const observations = buildObservations(data.current, data.previous, data.topProducts, currency);
+  const traffic = await getTrafficSummary(tenant.businessId, data.periodStart, data.periodEnd);
   const db = getAdminSupabase();
 
   const { data: latestReport } = await db
@@ -105,6 +107,27 @@ export default async function IntelligencePage() {
           ))}
         </div>
       </section>
+
+      {/* STOREFRONT TRAFFIC */}
+      {traffic.hasData && (
+        <section>
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-navy">
+            <Eye className="h-4 w-4 text-primary" /> Storefront traffic
+          </h2>
+          <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            <StatCard label="Visitors" value={traffic.visitors.toLocaleString("en-US")} />
+            <StatCard label="Product views" value={traffic.productViews.toLocaleString("en-US")} />
+            <StatCard label="Added to cart" value={traffic.addToCart.toLocaleString("en-US")} />
+            <StatCard label="Checkouts started" value={traffic.beginCheckout.toLocaleString("en-US")} />
+            <StatCard label="Purchases" value={traffic.purchases.toLocaleString("en-US")} />
+            <StatCard
+              label="Conversion"
+              value={traffic.conversionRate != null ? `${traffic.conversionRate.toFixed(1)}%` : "—"}
+              unavailableReason={traffic.conversionRate == null ? "No visitors yet" : undefined}
+            />
+          </div>
+        </section>
+      )}
 
       {/* UNDERSTAND */}
       <section>
