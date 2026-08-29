@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LogOut, Lock, TriangleAlert } from "lucide-react";
+import { Lock, LogOut, TriangleAlert } from "lucide-react";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { APP_NAV } from "@/components/app-shell/nav";
@@ -22,7 +22,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [businesses, setBusinesses] = useState<AppBusiness[]>([]);
   const [billing, setBilling] = useState<Billing | null>(null);
-  const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const onBilling = pathname === "/app/billing";
@@ -42,8 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           router.replace("/onboarding");
         }
       })
-      .catch(() => router.replace("/login"))
-      .finally(() => setLoading(false));
+      .catch(() => router.replace("/login"));
   }, [router]);
 
   useEffect(() => {
@@ -56,14 +54,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   const business = businesses[0] ?? null;
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-app">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
 
   return (
     <AppContext.Provider value={{ user, business, businesses, logout }}>
@@ -96,11 +86,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           right={
             <div className="flex items-center gap-2">
               <div className="hidden text-right sm:block">
-                <p className="text-xs font-semibold text-fg">{user?.name}</p>
-                <p className="text-[11px] text-fg-subtle">{business?.name ?? "No business"}</p>
+                <p className="text-xs font-semibold text-fg">{user?.name ?? "…"}</p>
+                <p className="text-[11px] text-fg-subtle">{business?.name ?? ""}</p>
               </div>
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-fg">
-                {user?.name?.[0]?.toUpperCase() ?? "?"}
+                {user?.name?.[0]?.toUpperCase() ?? ""}
               </div>
               <button
                 onClick={logout}

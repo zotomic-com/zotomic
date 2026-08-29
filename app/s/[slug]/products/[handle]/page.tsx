@@ -10,8 +10,10 @@ import {
 } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { money } from "@/lib/money";
+import { cldUrl } from "@/lib/cloudinary";
 import { ProductCard } from "@/components/storefront/ProductCard";
 import { AddToCartButton } from "@/components/storefront/AddToCartButton";
+import { WishlistHeart } from "@/components/storefront/WishlistHeart";
 import { TrackEvent } from "@/components/tracking/TrackEvent";
 import { StorefrontEvent } from "@/components/storefront/StorefrontTracker";
 
@@ -104,7 +106,14 @@ export default async function StoreProductPage({
           <div className="aspect-square overflow-hidden rounded-[var(--sf-radius)] bg-[var(--sf-card)]">
             {product.imageUrls[0] ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={product.imageUrls[0]} alt={product.name} className="h-full w-full object-cover" />
+              <img
+                src={cldUrl(product.imageUrls[0], 900)}
+                alt={product.name}
+                width={900}
+                height={900}
+                className="h-full w-full object-cover"
+                decoding="async"
+              />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-[var(--sf-muted)]">
                 No image
@@ -122,7 +131,21 @@ export default async function StoreProductPage({
         </div>
 
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">{product.name}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-extrabold tracking-tight">{product.name}</h1>
+            <WishlistHeart
+              storeSlug={store.slug}
+              item={{
+                id: product.id,
+                name: product.name,
+                price: onSale ? product.salePrice! : product.price,
+                image: product.imageUrls[0] ?? null,
+                slug: product.slug,
+              }}
+              size={22}
+              className="mt-1 shrink-0 rounded-full border border-[var(--sf-line)] p-2"
+            />
+          </div>
           <p className="mt-2 text-xl">
             {onSale ? (
               <>
@@ -202,7 +225,7 @@ export default async function StoreProductPage({
           <h2 className="mb-6 text-xl font-extrabold tracking-tight">You might also like</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {related.map((p) => (
-              <ProductCard key={p.id} product={p} currency={store.currency} basePath={basePath} />
+              <ProductCard key={p.id} product={p} currency={store.currency} basePath={basePath} storeSlug={store.slug} />
             ))}
           </div>
         </div>

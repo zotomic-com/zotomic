@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FONT_STACKS, RADIUS_PX, type StorefrontConfig } from "@/lib/storefront/config";
 import { GA4, MetaPixel } from "@/components/tracking/Pixel";
 import { StorefrontTracker } from "./StorefrontTracker";
+import { HeaderActions } from "./HeaderActions";
 
 /** Storefront chrome. Scopes accent/font/radius via CSS vars so it never
  *  collides with the Zotomic app styles. */
@@ -69,12 +70,13 @@ export function StoreShell({
               </Link>
             ))}
           </nav>
-          <Link
-            href={href("/cart")}
-            className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-3 py-1.5 text-sm font-medium"
-          >
-            Cart
-          </Link>
+          {storeSlug ? (
+            <HeaderActions storeSlug={storeSlug} basePath={basePath} />
+          ) : (
+            <Link href={href("/cart")} className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-3 py-1.5 text-sm font-medium">
+              Cart
+            </Link>
+          )}
         </div>
       </header>
 

@@ -57,7 +57,7 @@ export default async function StoreProductsPage({
       {products.length ? (
         <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {products.map((p) => (
-            <ProductCard key={p.id} product={p} currency={store.currency} basePath={basePath} />
+            <ProductCard key={p.id} product={p} currency={store.currency} basePath={basePath} storeSlug={store.slug} />
           ))}
         </div>
       ) : (

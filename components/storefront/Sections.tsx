@@ -7,6 +7,7 @@ interface Ctx {
   products: StoreProduct[];
   currency: string;
   basePath: string;
+  storeSlug: string;
 }
 
 const Wrap = ({ children }: { children: React.ReactNode }) => (
@@ -23,7 +24,13 @@ function Grid({ products, ...ctx }: { products: StoreProduct[] } & Omit<Ctx, "pr
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
       {products.map((p) => (
-        <ProductCard key={p.id} product={p} currency={ctx.currency} basePath={ctx.basePath} />
+        <ProductCard
+          key={p.id}
+          product={p}
+          currency={ctx.currency}
+          basePath={ctx.basePath}
+          storeSlug={ctx.storeSlug}
+        />
       ))}
     </div>
   );
@@ -66,7 +73,7 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
       return (
         <Wrap>
           <H>{s(d, "heading", "Featured")}</H>
-          <Grid products={ctx.products.slice(0, limit)} currency={ctx.currency} basePath={ctx.basePath} />
+          <Grid products={ctx.products.slice(0, limit)} currency={ctx.currency} basePath={ctx.basePath} storeSlug={ctx.storeSlug} />
         </Wrap>
       );
     }
@@ -75,7 +82,7 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
       return (
         <Wrap>
           <H>{s(d, "heading", "All products")}</H>
-          <Grid products={ctx.products} currency={ctx.currency} basePath={ctx.basePath} />
+          <Grid products={ctx.products} currency={ctx.currency} basePath={ctx.basePath} storeSlug={ctx.storeSlug} />
         </Wrap>
       );
 

@@ -22,7 +22,7 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
   }
 
   const products = await getStoreProducts(store.businessId);
-  const ctx = { products, currency: store.currency, basePath };
+  const ctx = { products, currency: store.currency, basePath, storeSlug: store.slug };
 
   return (
     <>

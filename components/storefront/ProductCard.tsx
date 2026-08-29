@@ -1,18 +1,23 @@
 import Link from "next/link";
 import { money } from "@/lib/money";
+import { cldUrl } from "@/lib/cloudinary";
 import type { StoreProduct } from "@/lib/storefront/store";
+import { WishlistHeart } from "./WishlistHeart";
 
 export function ProductCard({
   product,
   currency,
   basePath,
+  storeSlug,
 }: {
   product: StoreProduct;
   currency: string;
   basePath: string;
+  storeSlug?: string;
 }) {
   const onSale = product.salePrice != null && product.salePrice < product.price;
   const soldOut = product.trackInventory && product.stockQty <= 0;
+  const price = onSale ? product.salePrice! : product.price;
 
   return (
     <Link
@@ -23,15 +28,16 @@ export function ProductCard({
         {product.imageUrls[0] ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={product.imageUrls[0]}
+            src={cldUrl(product.imageUrls[0], 600)}
             alt={product.name}
+            width={600}
+            height={600}
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
             loading="lazy"
+            decoding="async"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-[var(--sf-muted)]">
-            No image
-          </div>
+          <div className="flex h-full items-center justify-center text-xs text-[var(--sf-muted)]">No image</div>
         )}
         {soldOut && (
           <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-xs font-semibold text-white">
@@ -42,6 +48,14 @@ export function ProductCard({
           <span className="absolute left-2 top-2 rounded-full bg-[var(--sf-accent)] px-2 py-0.5 text-xs font-semibold text-white">
             Sale
           </span>
+        )}
+        {storeSlug && (
+          <WishlistHeart
+            storeSlug={storeSlug}
+            item={{ id: product.id, name: product.name, price, image: product.imageUrls[0] ?? null, slug: product.slug }}
+            size={18}
+            className="absolute right-2 top-2 rounded-full bg-[var(--sf-bg)]/80 p-1.5 text-[var(--sf-fg)] backdrop-blur"
+          />
         )}
       </div>
       <div className="p-3">

@@ -9,15 +9,13 @@ import { ADMIN_NAV } from "@/components/app-shell/nav";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d?.user?.role === "admin") setReady(true);
-        else router.replace(d?.user ? "/app" : "/login");
+        if (d?.user?.role !== "admin") router.replace(d?.user ? "/app" : "/login");
       })
       .catch(() => router.replace("/login"));
   }, [router]);
@@ -26,14 +24,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     await fetch("/api/auth/logout", { method: "POST" });
     router.replace("/login");
   };
-
-  if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-app">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
 
   return (
     <>

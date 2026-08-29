@@ -25,7 +25,7 @@ export default async function StorefrontPreviewPage() {
 
   const config = normalizeConfig(row?.draft_json, tenant.business.name);
   const products = await getStoreProducts(tenant.businessId);
-  const ctx = { products, currency: tenant.business.currency ?? "BDT", basePath: "/storefront-preview" };
+  const ctx = { products, currency: tenant.business.currency ?? "BDT", basePath: "/storefront-preview", storeSlug: "" };
 
   return (
     <StoreShell config={config} basePath="/storefront-preview">

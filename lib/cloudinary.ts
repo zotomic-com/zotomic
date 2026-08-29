@@ -65,3 +65,15 @@ export async function destroyAsset(publicId: string): Promise<DestroyResult> {
 export function optimized(publicId: string, w = 800): string {
   return `https://res.cloudinary.com/${CLOUD}/image/upload/f_auto,q_auto,w_${w},c_limit/${publicId}`;
 }
+
+/** Insert responsive transforms into an existing Cloudinary URL; pass others through. */
+export function cldUrl(url: string | null | undefined, w = 800): string {
+  if (!url) return "";
+  const marker = "/image/upload/";
+  const i = url.indexOf(marker);
+  if (i === -1 || !url.includes("res.cloudinary.com")) return url;
+  const after = url.slice(i + marker.length);
+  // don't double-transform
+  if (/^(f_auto|q_auto|w_\d|c_)/.test(after)) return url;
+  return `${url.slice(0, i + marker.length)}f_auto,q_auto,w_${w},c_limit/${after}`;
+}
