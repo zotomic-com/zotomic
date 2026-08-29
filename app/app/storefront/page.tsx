@@ -22,7 +22,11 @@ export default async function StorefrontPage() {
   const config = normalizeConfig(row?.draft_json, tenant.business.name);
   const published = !!row?.published_at;
   const root = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
-  const storeUrl = row?.subdomain ? `https://${row.subdomain}.${root}` : null;
+  const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
+  // Working link today (path form on the live host); the subdomain becomes live
+  // once the wildcard DNS + domain are set up.
+  const storeUrl = row?.subdomain && site ? `${site}/s/${row.subdomain}` : null;
+  const subdomainUrl = row?.subdomain ? `https://${row.subdomain}.${root}` : null;
 
   return (
     <div className="space-y-5">
@@ -30,7 +34,12 @@ export default async function StorefrontPage() {
         title="Storefront"
         subtitle="One universal theme — configure it, preview it, publish it."
       />
-      <StorefrontEditor initialConfig={config} published={published} storeUrl={storeUrl} />
+      <StorefrontEditor
+        initialConfig={config}
+        published={published}
+        storeUrl={storeUrl}
+        subdomainUrl={subdomainUrl}
+      />
     </div>
   );
 }

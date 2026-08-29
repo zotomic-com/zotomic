@@ -3,6 +3,7 @@ import { FONT_STACKS, RADIUS_PX, type StorefrontConfig } from "@/lib/storefront/
 import { GA4, MetaPixel } from "@/components/tracking/Pixel";
 import { StorefrontTracker } from "./StorefrontTracker";
 import { HeaderActions } from "./HeaderActions";
+import { MobileNav } from "./MobileNav";
 
 /** Storefront chrome. Scopes accent/font/radius via CSS vars so it never
  *  collides with the Zotomic app styles. */
@@ -80,7 +81,9 @@ export function StoreShell({
         </div>
       </header>
 
-      <main>{children}</main>
+      <main className={storeSlug ? "pb-16 sm:pb-0" : undefined}>{children}</main>
+
+      {storeSlug ? <MobileNav storeSlug={storeSlug} basePath={basePath} /> : null}
 
       <footer className="mt-16 border-t border-[var(--sf-line)] bg-[var(--sf-card)]">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">

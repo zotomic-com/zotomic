@@ -13,6 +13,7 @@ export interface StoreProduct {
   imageUrls: string[];
   stockQty: number;
   trackInventory: boolean;
+  hasVariants: boolean;
 }
 
 export interface StoreVariant {
@@ -84,6 +85,7 @@ function mapProduct(r: Record<string, unknown>): StoreProduct {
     imageUrls: imgs,
     stockQty: Number(r.stock_qty ?? 0),
     trackInventory: Boolean(r.track_inventory),
+    hasVariants: Boolean(r.has_variants),
   };
 }
 
@@ -133,7 +135,7 @@ export const getStoreProducts = cache(async function getStoreProducts(
   const db = getAdminSupabase();
   const { data } = await db
     .from("products")
-    .select("id, name, slug, description, price, sale_price, category, image_urls, stock_qty, track_inventory")
+    .select("id, name, slug, description, price, sale_price, category, image_urls, stock_qty, track_inventory, has_variants")
     .eq("business_id", businessId)
     .eq("status", "active")
     .eq("visible", true)
@@ -170,7 +172,7 @@ export async function getStoreProduct(businessId: string, handle: string): Promi
   const db = getAdminSupabase();
   const { data } = await db
     .from("products")
-    .select("id, name, slug, description, price, sale_price, category, image_urls, stock_qty, track_inventory")
+    .select("id, name, slug, description, price, sale_price, category, image_urls, stock_qty, track_inventory, has_variants")
     .eq("business_id", businessId)
     .eq("slug", handle)
     .eq("status", "active")

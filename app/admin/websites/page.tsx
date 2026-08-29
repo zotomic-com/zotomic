@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 export const dynamic = "force-dynamic";
 
 const ROOT = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
 
 export default async function AdminWebsitesPage() {
   await requireAdmin();
@@ -20,6 +21,7 @@ export default async function AdminWebsitesPage() {
     id: s.business_id as string,
     business: ((Array.isArray(s.businesses) ? s.businesses[0] : s.businesses) as { name?: string } | null)?.name ?? "—",
     url: s.subdomain ? `${s.subdomain}.${ROOT}` : "—",
+    liveUrl: s.subdomain && SITE ? `${SITE}/s/${s.subdomain}` : null,
     published: !!s.published_at,
     version: (s.published_version as number) ?? 0,
     at: s.published_at ? new Date(s.published_at as string).toLocaleDateString("en-US") : "—",
@@ -27,7 +29,18 @@ export default async function AdminWebsitesPage() {
 
   const cols: Column<(typeof rows)[number]>[] = [
     { key: "business", header: "Business", render: (r) => <span className="font-medium text-fg">{r.business}</span> },
-    { key: "url", header: "Address", render: (r) => <span className="font-mono text-xs">{r.url}</span> },
+    {
+      key: "url",
+      header: "Address",
+      render: (r) =>
+        r.liveUrl ? (
+          <a href={r.liveUrl} target="_blank" rel="noreferrer" className="font-mono text-xs text-primary hover:underline">
+            {r.url}
+          </a>
+        ) : (
+          <span className="font-mono text-xs">{r.url}</span>
+        ),
+    },
     {
       key: "published",
       header: "Status",

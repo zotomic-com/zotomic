@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ChevronDown, ChevronUp, ExternalLink, Eye, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, ExternalLink, Eye, Plus, Trash2 } from "lucide-react";
 import {
   SECTION_LABELS,
   defaultSection,
@@ -21,10 +21,12 @@ export function StorefrontEditor({
   initialConfig,
   published,
   storeUrl,
+  subdomainUrl,
 }: {
   initialConfig: StorefrontConfig;
   published: boolean;
   storeUrl: string | null;
+  subdomainUrl?: string | null;
 }) {
   const { toast } = useToast();
   const [config, setConfig] = useState<StorefrontConfig>(initialConfig);
@@ -112,6 +114,36 @@ export function StorefrontEditor({
             </Button>
           </div>
         </div>
+
+        {published && storeUrl && (
+          <div className="rounded border border-border bg-surface p-3 text-xs">
+            <p className="font-semibold text-fg-muted">Your store is live at</p>
+            <div className="mt-1 flex items-center gap-2">
+              <a href={storeUrl} target="_blank" rel="noreferrer" className="flex-1 truncate font-medium text-primary">
+                {storeUrl}
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(storeUrl);
+                  toast("Link copied", "info");
+                }}
+                className="text-fg-subtle hover:text-fg"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <a href={storeUrl} target="_blank" rel="noreferrer" className="text-fg-subtle hover:text-fg">
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+            {subdomainUrl && (
+              <p className="mt-1.5 text-fg-subtle">
+                Custom address <span className="font-medium">{subdomainUrl.replace("https://", "")}</span> activates once
+                your domain&apos;s DNS is connected.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex gap-1 rounded border border-border bg-surface-2 p-1 text-sm">
           {(["content", "design", "settings"] as const).map((t) => (
