@@ -176,3 +176,14 @@
   border: 3px solid var(--bg);
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--fg-subtle); }
+
+/* Print — used by the store-owner invoice page */
+@media print {
+  aside,
+  header,
+  .no-print { display: none !important; }
+  main { max-width: none !important; padding: 0 !important; }
+  .lg\:pl-64 { padding-left: 0 !important; }
+  body { background: #fff !important; }
+  .print-sheet { box-shadow: none !important; border: none !important; }
+}

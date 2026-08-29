@@ -6,7 +6,7 @@ import { createOrder } from "@/lib/orders/create";
 
 export async function createManualOrder(payload: {
   customer: { name: string; phone: string; email?: string; city?: string; address?: string; note?: string };
-  items: { productId: string; qty: number }[];
+  items: { productId: string; qty: number; variantId?: string | null }[];
   shipping: number;
   discount: number;
   paymentMethod: "cod" | "bkash" | "other";

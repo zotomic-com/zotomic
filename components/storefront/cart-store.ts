@@ -1,7 +1,11 @@
 "use client";
 
 export interface CartItem {
+  /** unique cart line key — variant id when a variant is chosen, else product id */
   id: string;
+  productId: string;
+  variantId?: string;
+  variantLabel?: string;
   name: string;
   price: number;
   image: string | null;
@@ -15,7 +19,9 @@ export function readCart(storeSlug: string): CartItem[] {
   try {
     const raw = localStorage.getItem(key(storeSlug));
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // backfill productId for carts saved before variants existed
+    return parsed.map((i: CartItem) => ({ ...i, productId: i.productId ?? i.id }));
   } catch {
     return [];
   }
@@ -30,11 +36,15 @@ export function writeCart(storeSlug: string, items: CartItem[]) {
   }
 }
 
-export function addToCart(storeSlug: string, item: Omit<CartItem, "qty">, qty = 1) {
+export function addToCart(
+  storeSlug: string,
+  item: Omit<CartItem, "qty" | "productId"> & { productId?: string },
+  qty = 1,
+) {
   const items = readCart(storeSlug);
   const existing = items.find((i) => i.id === item.id);
   if (existing) existing.qty += qty;
-  else items.push({ ...item, qty });
+  else items.push({ ...item, productId: item.productId ?? item.id, qty });
   writeCart(storeSlug, items);
 }
 

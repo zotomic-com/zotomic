@@ -15,6 +15,52 @@ export interface StoreProduct {
   trackInventory: boolean;
 }
 
+export interface StoreVariant {
+  id: string;
+  name: string;
+  options: Record<string, string>;
+  price: number;
+  salePrice: number | null;
+  stockQty: number;
+  soldOut: boolean;
+}
+
+export async function getStoreProductVariants(
+  businessId: string,
+  productId: string,
+  fallbackPrice: number,
+): Promise<{ options: { name: string; values: string[] }[]; variants: StoreVariant[] }> {
+  const db = getAdminSupabase();
+  const [{ data: prod }, { data: rows }] = await Promise.all([
+    db.from("products").select("options, has_variants").eq("id", productId).maybeSingle(),
+    db
+      .from("product_variants")
+      .select("id, name, options, price, sale_price, stock_qty, active")
+      .eq("business_id", businessId)
+      .eq("product_id", productId)
+      .eq("active", true)
+      .order("position"),
+  ]);
+  if (!prod?.has_variants) return { options: [], variants: [] };
+  const options = Array.isArray(prod.options)
+    ? (prod.options as { name: string; values: string[] }[])
+    : [];
+  const variants: StoreVariant[] = (rows ?? []).map((v) => {
+    const price = v.price == null ? fallbackPrice : Number(v.price);
+    const salePrice = v.sale_price == null ? null : Number(v.sale_price);
+    return {
+      id: v.id as string,
+      name: v.name as string,
+      options: (v.options as Record<string, string>) ?? {},
+      price,
+      salePrice: salePrice != null && salePrice < price ? salePrice : null,
+      stockQty: Number(v.stock_qty),
+      soldOut: Number(v.stock_qty) <= 0,
+    };
+  });
+  return { options, variants };
+}
+
 export interface Store {
   businessId: string;
   name: string;

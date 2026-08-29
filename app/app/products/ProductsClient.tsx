@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { ImageUploader } from "@/components/app/ImageUploader";
 import { ProductImport } from "./ProductImport";
+import { ProductVariantsModal, type VariantRow } from "./ProductVariantsModal";
+import { InventoryAdjust } from "./InventoryAdjust";
 import { money } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -25,6 +27,9 @@ export interface ProductRow {
   marketing_cost: number;
   stock_qty: number;
   image_urls: string[];
+  options: { name: string; values: string[] }[];
+  has_variants: boolean;
+  variants: VariantRow[];
 }
 
 const STATUS_TONE = { active: "success", draft: "neutral", archived: "warning" } as const;
@@ -36,6 +41,7 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<ProductRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [variantsFor, setVariantsFor] = useState<ProductRow | null>(null);
 
   const filtered = products.filter(
     (p) =>
@@ -72,7 +78,19 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
           money(p.buying_price, currency)
         ),
     },
-    { key: "stock", header: "Stock", align: "right", render: (p) => p.stock_qty.toLocaleString("en-US") },
+    {
+      key: "stock",
+      header: "Stock",
+      align: "right",
+      render: (p) =>
+        p.has_variants ? (
+          <span className="text-fg-muted">
+            {p.stock_qty.toLocaleString("en-US")} · {p.variants.filter((v) => v.active).length} variants
+          </span>
+        ) : (
+          p.stock_qty.toLocaleString("en-US")
+        ),
+    },
     {
       key: "status",
       header: "Status",
@@ -131,6 +149,34 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
               pending={pending}
               onSubmit={(fd) => submit(() => updateProduct(editing.id, fd))}
             />
+
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-fg">Variants</p>
+                  <p className="text-xs text-fg-subtle">
+                    {editing.has_variants
+                      ? `${editing.variants.filter((v) => v.active).length} active variant(s)`
+                      : "Sizes, colours, etc. — optional"}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setVariantsFor(editing)}>
+                  {editing.has_variants ? "Edit variants" : "Add variants"}
+                </Button>
+              </div>
+
+              {!editing.has_variants && (
+                <InventoryAdjust
+                  productId={editing.id}
+                  currentStock={editing.stock_qty}
+                  onDone={() => {
+                    setEditing(null);
+                    router.refresh();
+                  }}
+                />
+              )}
+            </div>
+
             <button
               onClick={() =>
                 start(async () => {
@@ -150,6 +196,18 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
           </>
         )}
       </Modal>
+
+      {variantsFor && (
+        <ProductVariantsModal
+          open={!!variantsFor}
+          onClose={() => setVariantsFor(null)}
+          productId={variantsFor.id}
+          productName={variantsFor.name}
+          currency={currency}
+          initialOptions={variantsFor.options ?? []}
+          initialVariants={variantsFor.variants ?? []}
+        />
+      )}
     </>
   );
 }

@@ -7,7 +7,7 @@ import { loadIntegration, paymentProvider } from "@/lib/adapters/registry";
 
 interface Body {
   storeSlug: string;
-  items: { id: string; qty: number }[];
+  items: { id: string; qty: number; productId?: string; variantId?: string }[];
   customer: { name: string; phone: string; email?: string; address: string; city?: string; note?: string };
   paymentMethod?: string;
 }
@@ -38,19 +38,34 @@ export async function POST(req: NextRequest) {
   }
 
   const db = getAdminSupabase();
-  const ids = [...new Set(body.items.map((i) => String(i.id)))].slice(0, 50);
+  const productIds = [
+    ...new Set(body.items.map((i) => String(i.productId || i.id))),
+  ].slice(0, 50);
+  const variantIds = [...new Set(body.items.map((i) => i.variantId).filter(Boolean) as string[])];
 
   // Server-authoritative prices — never trust the client.
-  const { data: products } = await db
-    .from("products")
-    .select("id, name, price, sale_price, buying_price, marketing_cost, stock_qty, track_inventory")
-    .eq("business_id", store.businessId)
-    .in("id", ids)
-    .eq("status", "active");
+  const [{ data: products }, { data: variantRows }] = await Promise.all([
+    db
+      .from("products")
+      .select("id, name, price, sale_price, buying_price, marketing_cost, stock_qty, track_inventory")
+      .eq("business_id", store.businessId)
+      .in("id", productIds)
+      .eq("status", "active"),
+    variantIds.length
+      ? db
+          .from("product_variants")
+          .select("id, product_id, name, price, sale_price, buying_price, stock_qty, active")
+          .eq("business_id", store.businessId)
+          .in("id", variantIds)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+  ]);
 
   const priceMap = new Map((products ?? []).map((p) => [p.id as string, p]));
+  const variantMap = new Map((variantRows ?? []).map((v) => [v.id as string, v]));
   const lineItems: {
     product_id: string;
+    variant_id: string | null;
+    variant_label: string | null;
     name: string;
     qty: number;
     unit_price: number;
@@ -59,19 +74,36 @@ export async function POST(req: NextRequest) {
   }[] = [];
 
   for (const item of body.items) {
-    const p = priceMap.get(String(item.id));
+    const p = priceMap.get(String(item.productId || item.id));
     if (!p) continue;
     const qty = Math.max(1, Math.min(99, Math.floor(Number(item.qty) || 1)));
-    if (p.track_inventory && Number(p.stock_qty) < qty) {
+    const v = item.variantId ? variantMap.get(item.variantId) : undefined;
+    if (item.variantId && (!v || v.active === false)) {
+      return NextResponse.json({ error: `${p.name} option is unavailable.` }, { status: 409 });
+    }
+    if (v) {
+      if (Number(v.stock_qty) < qty) {
+        return NextResponse.json({ error: `${p.name} (${v.name}) is out of stock.` }, { status: 409 });
+      }
+    } else if (p.track_inventory && Number(p.stock_qty) < qty) {
       return NextResponse.json({ error: `${p.name} is out of stock.` }, { status: 409 });
     }
-    const unit = p.sale_price != null && Number(p.sale_price) < Number(p.price) ? Number(p.sale_price) : Number(p.price);
+    const basePrice = v && v.price != null ? Number(v.price) : Number(p.price);
+    const salePrice = v ? (v.sale_price == null ? null : Number(v.sale_price)) : Number(p.sale_price);
+    const unit = salePrice != null && salePrice < basePrice ? salePrice : basePrice;
     lineItems.push({
       product_id: p.id as string,
-      name: p.name as string,
+      variant_id: v ? (v.id as string) : null,
+      variant_label: v ? (v.name as string) : null,
+      name: v ? `${p.name} — ${v.name}` : (p.name as string),
       qty,
       unit_price: unit,
-      buying_price: p.buying_price == null ? null : Number(p.buying_price),
+      buying_price:
+        v && v.buying_price != null
+          ? Number(v.buying_price)
+          : p.buying_price == null
+            ? null
+            : Number(p.buying_price),
       line_total: unit * qty,
     });
   }
@@ -159,15 +191,39 @@ export async function POST(req: NextRequest) {
     lineItems.map((li) => ({ ...li, order_id: order.id, business_id: store.businessId })),
   );
 
-  // Decrement tracked stock.
+  // Decrement tracked stock (variant stock when a variant was chosen).
+  const touchedProducts = new Set<string>();
   for (const li of lineItems) {
-    const p = priceMap.get(li.product_id);
-    if (p?.track_inventory) {
-      await db
-        .from("products")
-        .update({ stock_qty: Math.max(0, Number(p.stock_qty) - li.qty) })
-        .eq("id", li.product_id);
+    if (li.variant_id) {
+      const v = variantMap.get(li.variant_id);
+      if (v) {
+        await db
+          .from("product_variants")
+          .update({ stock_qty: Math.max(0, Number(v.stock_qty) - li.qty) })
+          .eq("id", li.variant_id);
+        touchedProducts.add(li.product_id);
+      }
+    } else {
+      const p = priceMap.get(li.product_id);
+      if (p?.track_inventory) {
+        await db
+          .from("products")
+          .update({ stock_qty: Math.max(0, Number(p.stock_qty) - li.qty) })
+          .eq("id", li.product_id);
+      }
     }
+  }
+  for (const pid of touchedProducts) {
+    const { data: sib } = await db
+      .from("product_variants")
+      .select("stock_qty")
+      .eq("business_id", store.businessId)
+      .eq("product_id", pid)
+      .eq("active", true);
+    await db
+      .from("products")
+      .update({ stock_qty: (sib ?? []).reduce((s, r) => s + Number(r.stock_qty), 0) })
+      .eq("id", pid);
   }
 
   // Bump customer rollups (full recompute happens in the weekly report).

@@ -6,6 +6,7 @@ import {
   getProductReviews,
   getStoreBySlug,
   getStoreProduct,
+  getStoreProductVariants,
   getStoreProducts,
 } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
@@ -49,8 +50,15 @@ export default async function StoreProductPage({
   const product = await getStoreProduct(store.businessId, handle);
   if (!product) notFound();
 
+  const { options: variantOptions, variants } = await getStoreProductVariants(
+    store.businessId,
+    product.id,
+    product.price,
+  );
   const onSale = product.salePrice != null && product.salePrice < product.price;
-  const soldOut = product.trackInventory && product.stockQty <= 0;
+  const soldOut = variants.length
+    ? variants.every((v) => v.soldOut)
+    : product.trackInventory && product.stockQty <= 0;
   const related = (await getStoreProducts(store.businessId))
     .filter((p) => p.id !== product.id && p.category === product.category)
     .slice(0, 4);
@@ -173,6 +181,8 @@ export default async function StoreProductPage({
               soldOut={soldOut}
               currency={store.currency}
               storeSlug={store.slug}
+              options={variantOptions}
+              variants={variants}
             />
           </div>
 

@@ -67,7 +67,15 @@ export default async function BillingPage() {
   }));
 
   const invCols: Column<(typeof invRows)[number]>[] = [
-    { key: "number", header: "Invoice", render: (r) => <span className="font-medium text-fg">{r.number}</span> },
+    {
+      key: "number",
+      header: "Invoice",
+      render: (r) => (
+        <Link href={`/app/billing/invoice/${r.id}`} className="font-medium text-primary hover:underline">
+          {r.number}
+        </Link>
+      ),
+    },
     { key: "amount", header: "Amount", render: (r) => r.amount },
     { key: "date", header: "Date", render: (r) => r.date },
     {

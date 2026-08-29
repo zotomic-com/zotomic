@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/admin-server";
-import { getPlatformSettings, PLATFORM_KEYS, type PlatformKey } from "@/lib/platform-settings";
+import { getPlatformSettings, PLATFORM_KEYS, PLATFORM_KEY_GROUPS } from "@/lib/platform-settings";
 import { PageHeader } from "@/components/app/PageHeader";
 import { PlatformSettingsForm } from "./SettingsForm";
 
@@ -9,7 +9,7 @@ export default async function AdminSettingsPage() {
   await requireAdmin();
   const stored = await getPlatformSettings();
 
-  const fields = (Object.keys(PLATFORM_KEYS) as PlatformKey[]).map((key) => ({
+  const fields = PLATFORM_KEY_GROUPS.settings.map((key) => ({
     key,
     label: PLATFORM_KEYS[key].label,
     secret: PLATFORM_KEYS[key].secret,

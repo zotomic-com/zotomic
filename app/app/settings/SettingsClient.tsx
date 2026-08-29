@@ -19,6 +19,10 @@ export interface BusinessSettings {
   timezone: string;
   description: string | null;
   telegram_chat_id: string | null;
+  logo_url: string | null;
+  invoice_address: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
 }
 
 export function SettingsClient({
@@ -81,6 +85,28 @@ export function SettingsClient({
             >
               <Input name="telegram_chat_id" defaultValue={business.telegram_chat_id ?? ""} placeholder="123456789" />
             </Field>
+
+            <div className="border-t border-border pt-4">
+              <p className="text-sm font-semibold text-fg">Invoice &amp; branding</p>
+              <p className="mb-3 text-xs text-fg-subtle">Shown on the invoices you download or email from Billing.</p>
+              <div className="space-y-4">
+                <Field label="Logo URL" hint="Upload in Media, then paste the image link here.">
+                  <Input name="logo_url" defaultValue={business.logo_url ?? ""} placeholder="https://res.cloudinary.com/…" />
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Contact email">
+                    <Input name="contact_email" type="email" defaultValue={business.contact_email ?? ""} />
+                  </Field>
+                  <Field label="Contact phone">
+                    <Input name="contact_phone" defaultValue={business.contact_phone ?? ""} />
+                  </Field>
+                </div>
+                <Field label="Billing address">
+                  <Textarea name="invoice_address" defaultValue={business.invoice_address ?? ""} />
+                </Field>
+              </div>
+            </div>
+
             <Button type="submit" disabled={pending}>
               {pending ? "Saving…" : "Save changes"}
             </Button>

@@ -12,15 +12,29 @@ export default async function ProductsPage() {
   if (!tenant.businessId || !tenant.business) redirect("/onboarding");
 
   const db = getAdminSupabase();
-  const { data } = await db
-    .from("products")
-    .select("id, name, category, status, price, buying_price, marketing_cost, stock_qty, image_urls")
-    .eq("business_id", tenant.businessId)
-    .order("created_at", { ascending: true });
+  const [{ data }, { data: variants }] = await Promise.all([
+    db
+      .from("products")
+      .select("id, name, category, status, price, buying_price, marketing_cost, stock_qty, image_urls, options, has_variants")
+      .eq("business_id", tenant.businessId)
+      .order("created_at", { ascending: true }),
+    db
+      .from("product_variants")
+      .select("id, product_id, name, options, sku, price, sale_price, buying_price, stock_qty, active, position")
+      .eq("business_id", tenant.businessId)
+      .order("position"),
+  ]);
+
+  const variantsByProduct: Record<string, unknown[]> = {};
+  for (const v of variants ?? []) {
+    (variantsByProduct[v.product_id as string] ??= []).push(v);
+  }
 
   const products = (data ?? []).map((p) => ({
     ...p,
     image_urls: Array.isArray(p.image_urls) ? p.image_urls : [],
+    options: Array.isArray(p.options) ? p.options : [],
+    variants: variantsByProduct[p.id as string] ?? [],
   })) as ProductRow[];
 
   return (

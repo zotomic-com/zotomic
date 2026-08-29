@@ -16,10 +16,12 @@ import {
   Settings,
   ShieldCheck,
   ShoppingCart,
+  RotateCcw,
   Star,
   Store,
   Users,
   Wallet,
+  Warehouse,
 } from "lucide-react";
 
 export interface NavItem {
@@ -34,8 +36,11 @@ export const APP_NAV: NavItem[] = [
   { href: "/app/intelligence", label: "Weekly Report", icon: BarChart3 },
   { href: "/app/assistant", label: "Zotomic Assistant", icon: MessageSquareText },
   { href: "/app/products", label: "Products", icon: Boxes },
+  { href: "/app/inventory", label: "Inventory", icon: Warehouse },
   { href: "/app/orders", label: "Orders", icon: ShoppingCart },
+  { href: "/app/returns", label: "Returns", icon: RotateCcw },
   { href: "/app/customers", label: "Customers", icon: Users },
+  { href: "/app/messages", label: "Messages", icon: MessageSquareText },
   { href: "/app/reviews", label: "Reviews", icon: Star },
   { href: "/app/storefront", label: "Storefront", icon: Store },
   { href: "/app/media", label: "Media", icon: ImageIcon },

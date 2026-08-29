@@ -14,7 +14,7 @@ export default async function SettingsPage() {
   const db = getAdminSupabase();
   const { data } = await db
     .from("businesses")
-    .select("name, type, currency, timezone, description, telegram_chat_id")
+    .select("name, type, currency, timezone, description, telegram_chat_id, logo_url, invoice_address, contact_email, contact_phone")
     .eq("id", tenant.businessId)
     .single();
 

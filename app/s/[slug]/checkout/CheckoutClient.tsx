@@ -53,7 +53,12 @@ export function CheckoutClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storeSlug,
-          items: items.map((i) => ({ id: i.id, qty: i.qty })),
+          items: items.map((i) => ({
+            id: i.id,
+            qty: i.qty,
+            productId: i.productId ?? i.id,
+            variantId: i.variantId,
+          })),
           customer: form,
           paymentMethod: method,
         }),

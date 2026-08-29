@@ -8,9 +8,23 @@ export const PLATFORM_KEYS = {
   meta_pixel_id: { secret: false, label: "Meta Pixel ID (zotomic.com)" },
   ga4_measurement_id: { secret: false, label: "GA4 Measurement ID (zotomic.com)" },
   ga4_api_secret: { secret: true, label: "GA4 API Secret (server-side)" },
+  // Automation / agent gateway — entered here, wired to live calls later
+  hermes_base_url: { secret: false, label: "Hermes gateway base URL" },
+  hermes_shared_secret: { secret: true, label: "Hermes shared secret" },
+  n8n_base_url: { secret: false, label: "n8n base URL" },
+  n8n_api_key: { secret: true, label: "n8n API key" },
+  n8n_webhook_url: { secret: false, label: "n8n inbound webhook URL" },
+  // Optional platform-wide fallback for verifying Meta webhook signatures
+  meta_app_secret: { secret: true, label: "Meta app secret (webhook fallback)" },
 } as const;
 
 export type PlatformKey = keyof typeof PLATFORM_KEYS;
+
+/** Which admin screen owns each key. */
+export const PLATFORM_KEY_GROUPS = {
+  settings: ["telegram_bot_token", "meta_pixel_id", "ga4_measurement_id", "ga4_api_secret"],
+  integrations: ["hermes_base_url", "hermes_shared_secret", "n8n_base_url", "n8n_api_key", "n8n_webhook_url", "meta_app_secret"],
+} as const satisfies Record<string, readonly PlatformKey[]>;
 
 export async function getPlatformSetting(key: PlatformKey): Promise<string | null> {
   const db = getAdminSupabase();
