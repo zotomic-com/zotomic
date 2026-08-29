@@ -171,7 +171,10 @@ async function saveTurn(
     { conversation_id: conversationId, business_id: businessId, role: "user", content: userText },
     { conversation_id: conversationId, business_id: businessId, role: "assistant", content: assistantText, model },
   ]);
-  await db.from("assistant_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const { data: conv } = await db.from("assistant_conversations").select("title").eq("id", conversationId).single();
+  if (!conv?.title && userText) patch.title = userText.slice(0, 60);
+  await db.from("assistant_conversations").update(patch).eq("id", conversationId);
 }
 
 async function recordUsage(

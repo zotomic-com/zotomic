@@ -1,11 +1,8 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Bell } from "lucide-react";
 import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { PageHeader } from "@/components/app/PageHeader";
-import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
+import { NotificationsClient, type NotifRow } from "./NotificationsClient";
 
 export const dynamic = "force-dynamic";
 
@@ -20,35 +17,21 @@ export default async function NotificationsPage() {
     .select("id, type, title, body, href, read_at, created_at")
     .eq("business_id", tenant.businessId)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(100);
 
-  const rows = data ?? [];
+  const rows: NotifRow[] = (data ?? []).map((n) => ({
+    id: n.id as string,
+    title: n.title as string,
+    body: (n.body as string) ?? null,
+    href: (n.href as string) ?? null,
+    read: !!n.read_at,
+    createdAt: n.created_at as string,
+  }));
 
   return (
     <div className="space-y-5">
       <PageHeader title="Notifications" subtitle="Report deliveries, alerts, and system messages." />
-      {rows.length === 0 ? (
-        <EmptyState icon={Bell} title="You're all caught up" description="New notifications will show here." />
-      ) : (
-        <Card className="divide-y divide-border">
-          {rows.map((n) => (
-            <div key={n.id as string} className={`px-4 py-3 ${n.read_at ? "opacity-60" : ""}`}>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-fg">{n.title as string}</p>
-                <span className="text-xs text-fg-subtle">
-                  {new Date(n.created_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </span>
-              </div>
-              {n.body && <p className="mt-0.5 text-sm text-fg-muted">{n.body as string}</p>}
-              {n.href && (
-                <Link href={n.href as string} className="mt-1 inline-block text-xs font-semibold text-primary">
-                  Open →
-                </Link>
-              )}
-            </div>
-          ))}
-        </Card>
-      )}
+      <NotificationsClient notifications={rows} />
     </div>
   );
 }

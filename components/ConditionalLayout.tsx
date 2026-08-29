@@ -12,6 +12,7 @@ const BARE_PREFIXES = [
   "/login",
   "/signup",
   "/forgot-password",
+  "/reset-password",
   "/storefront-preview",
   "/s",
 ];

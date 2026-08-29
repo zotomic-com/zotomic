@@ -22,6 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [businesses, setBusinesses] = useState<AppBusiness[]>([]);
   const [billing, setBilling] = useState<Billing | null>(null);
+  const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const onBilling = pathname === "/app/billing";
@@ -37,6 +38,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         setUser(d.user);
         setBusinesses(d.businesses ?? []);
         setBilling(d.billing ?? null);
+        setUnread(d.unreadNotifications ?? 0);
         if (d.user.role === "owner" && (!d.businesses || d.businesses.length === 0)) {
           router.replace("/onboarding");
         }
@@ -83,6 +85,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Topbar
           onMenuClick={() => setMenuOpen(true)}
           searchPlaceholder="Search anything…"
+          notificationsHref="/app/notifications"
+          unread={unread}
           right={
             <div className="flex items-center gap-2">
               <div className="hidden text-right sm:block">

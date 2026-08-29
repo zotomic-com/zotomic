@@ -30,15 +30,24 @@ export async function GET(req: NextRequest) {
   });
 
   let billing = deriveBilling(null);
+  let unreadNotifications = 0;
   const primary = businesses[0] as { id?: string } | undefined;
   if (primary?.id) {
-    const { data: sub } = await db
-      .from("subscriptions")
-      .select("plan, status, current_period_end, price, currency")
-      .eq("business_id", primary.id)
-      .maybeSingle();
+    const [{ data: sub }, { count }] = await Promise.all([
+      db
+        .from("subscriptions")
+        .select("plan, status, current_period_end, price, currency")
+        .eq("business_id", primary.id)
+        .maybeSingle(),
+      db
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("business_id", primary.id)
+        .is("read_at", null),
+    ]);
     billing = deriveBilling(sub);
+    unreadNotifications = count ?? 0;
   }
 
-  return NextResponse.json({ user, businesses, billing });
+  return NextResponse.json({ user, businesses, billing, unreadNotifications });
 }

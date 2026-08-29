@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { ArrowUp, Check, Sparkles, Wrench, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowUp, Check, MessageSquarePlus, Sparkles, Wrench, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
 
 interface ToolTrace {
   tool: string;
@@ -33,13 +34,16 @@ const SUGGESTIONS = [
 export function AssistantChat({
   initialConversationId,
   initialMessages,
+  conversations = [],
   readOnly,
 }: {
   initialConversationId: string | null;
   initialMessages: Msg[];
+  conversations?: { id: string; title: string; updatedAt: string }[];
   readOnly: boolean;
 }) {
   const params = useSearchParams();
+  const router = useRouter();
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [messages, setMessages] = useState<Msg[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -110,6 +114,29 @@ export function AssistantChat({
         <span className="text-sm font-bold text-fg">Zotomic Assistant</span>
         <Badge tone="primary">Beta</Badge>
         {readOnly && <Badge tone="warning">read-only</Badge>}
+        <div className="ml-auto flex items-center gap-2">
+          {conversations.length > 0 && (
+            <Select
+              value={conversationId ?? ""}
+              onChange={(e) => router.push(`/app/assistant?c=${e.target.value}`)}
+              className="h-8 w-44 text-xs"
+            >
+              {conversations.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title.slice(0, 40)}
+                </option>
+              ))}
+            </Select>
+          )}
+          <button
+            onClick={() => router.push("/app/assistant?c=new")}
+            className="rounded-sm p-1.5 text-fg-subtle hover:bg-surface-2 hover:text-fg"
+            aria-label="New chat"
+            title="New chat"
+          >
+            <MessageSquarePlus className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">

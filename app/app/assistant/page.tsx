@@ -9,7 +9,7 @@ import { AssistantChat } from "./AssistantChat";
 
 export const dynamic = "force-dynamic";
 
-export default async function AssistantPage() {
+export default async function AssistantPage({ searchParams }: { searchParams: Promise<{ c?: string }> }) {
   const tenant = await getTenant();
   if (!tenant) redirect("/login");
   if (!tenant.businessId) redirect("/onboarding");
@@ -28,24 +28,34 @@ export default async function AssistantPage() {
   }
 
   const db = getAdminSupabase();
-  const { data: conv } = await db
+  const { c } = await searchParams;
+
+  const { data: convs } = await db
     .from("assistant_conversations")
-    .select("id")
+    .select("id, title, updated_at")
     .eq("business_id", tenant.businessId)
     .eq("user_id", tenant.user.id)
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(20);
+
+  const conversations = (convs ?? []).map((x) => ({
+    id: x.id as string,
+    title: (x.title as string) || "Conversation",
+    updatedAt: x.updated_at as string,
+  }));
+
+  const activeId =
+    c === "new" ? null : c && conversations.some((x) => x.id === c) ? c : conversations[0]?.id ?? null;
 
   let initialMessages: { role: "user" | "assistant"; content: string }[] = [];
-  if (conv) {
+  if (activeId) {
     const { data: msgs } = await db
       .from("assistant_messages")
       .select("role, content")
-      .eq("conversation_id", conv.id)
+      .eq("conversation_id", activeId)
       .in("role", ["user", "assistant"])
       .order("created_at", { ascending: true })
-      .limit(40);
+      .limit(60);
     initialMessages = (msgs ?? [])
       .filter((m) => m.content)
       .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content as string }));
@@ -59,8 +69,10 @@ export default async function AssistantPage() {
       />
       <Suspense fallback={null}>
         <AssistantChat
-          initialConversationId={conv?.id ?? null}
+          key={activeId ?? "new"}
+          initialConversationId={activeId}
           initialMessages={initialMessages}
+          conversations={conversations}
           readOnly={tenant.billing.readOnly}
         />
       </Suspense>
