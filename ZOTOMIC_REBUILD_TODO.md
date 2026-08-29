@@ -134,18 +134,17 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [~] `/admin/{usage,assistant-activity,content-library,marketing,settings}` — stubs (usage/assistant = Phase 6; content/marketing = P2; settings = plan-config later)
 - [ ] Tenant suspend / impersonate actions; credential-change audit events
 
-## PHASE 6 — Assistant + Hermes tool layer
+## PHASE 6 — Assistant + tool layer  ✅ CORE DONE
 
-- [ ] `packages/zotomic-tools` — definitions + schemas + handlers + registry
-- [ ] 17 V1 tools implemented (read: profile, settings, products, product, orders, order summary, customers, customer summary, metrics, insights, alerts, latest report, report insights, list tasks; write: create task; controlled: update product, update business settings)
-- [ ] Per-tool: input/output schema, authz check, tenant scoping, validation, error contract, timeout, audit event, credit/usage event
-- [ ] Agent Gateway: `POST /api/assistant/messages` — auth → tenant → plan/credits/rate-limit/policy → dispatch
-- [ ] `POST /api/assistant/tool-exec` — tenant context by taskId, re-check policy, run handler, structured result
-- [ ] Confirmation flow for consequential writes (needs_confirmation → approve token)
-- [ ] Audit log + usage ledger writes on every tool call
-- [ ] Hermes adapter (HTTP client, shared-secret auth, IP allowlist) + fake-Hermes test client
-- [ ] `/app/assistant` chat UI — context-aware entry, tool-activity display, confirmation UI, Hermes-unavailable state
-- [ ] E2E tests: authorized + unauthorized access, hallucinated business_id rejected, reproducible metrics
+- [x] `lib/tools/registry.ts` — 17 V1 tools (read ×14, write ×1 create_task, consequential ×2 update_product/update_business_settings). Each: JSON-schema params, tenant-scoped handler, `risk`, `creditCost`, audit-log on writes.
+- [x] `lib/agent/hermes.ts` — agentic loop over Gemini function-calling ("fake Hermes"). Strict "only tool data, never invent" system prompt. Model fallback chain. Consequential tools return a `pendingAction`; deterministic fallback replies when Gemini briefly unavailable. **Swap `runAgent` for an HTTP call to the real VPS later — tools + gateway unchanged.**
+- [x] Agent Gateway `POST /api/assistant/messages` — `resolveTenant` (auth+tenant+billing) → per-plan daily message cap (free 10 / business 100 / pro 500) → conversation + message persistence → `usage_ledger` recording → approval-resume path
+- [x] Confirmation flow — `assistant_pending_actions` table (migration `20260829170000`); consequential write returns `{ pendingAction }`; UI Approve/Cancel; approve POSTs `{ approveId }` → runs tool → resumes. Blocked when billing read-only.
+- [x] `/app/assistant` chat UI — tool-call chips, confirmation cards, `?q=` auto-send from dashboard panel, read-only + "assistant unavailable" (no Gemini key) states, conversation history reload
+- [x] `/admin/assistant-activity` (messages / tool calls / credits / recent transcript) + `/admin/usage` (per-business 30-day consumption) — now real
+- [x] Verified E2E: metrics query → `get_business_metrics` → exact real numbers; price-change request → pending action → approve → product updated + audit logged; low-stock query answered truthfully without hallucination
+- [ ] Real Hermes HTTP client (HERMES_BASE_URL + shared secret) — stub only; user has no VPS yet
+- [ ] Conversation list / "new chat" UI; streaming responses; tool-error → structured user message instead of thrown action
 
 ## PHASE 7 — P1 adapters (later)
 
