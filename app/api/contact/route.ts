@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
-import { sendEmail } from "@/lib/notifications";
+import { sendContactMessage } from "@/lib/emails";
 
 interface ContactBody {
   name?: string;
@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Best-effort persistence — never blocks the response.
     try {
       const db = getAdminSupabase();
       await db.from("contact_messages").insert({
@@ -37,16 +36,14 @@ export async function POST(req: NextRequest) {
       console.error("contact_messages insert failed:", e);
     }
 
-    const notify = process.env.NOTIFICATION_EMAIL;
-    if (notify) {
-      await sendEmail({
-        to: notify,
-        subject: `New contact message from ${body.name}`,
-        html: `<p><strong>${body.name}</strong> &lt;${body.email}&gt;${
-          body.phone ? ` · ${body.phone}` : ""
-        }</p><p>${body.business ?? ""}</p><hr/><p>${body.message.replace(/\n/g, "<br/>")}</p>`,
-      });
-    }
+    await sendContactMessage({
+      name: body.name,
+      email: body.email,
+      phone: body.phone,
+      business: body.business,
+      topic: body.topic,
+      message: body.message,
+    });
 
     return NextResponse.json({ success: true });
   } catch (e) {

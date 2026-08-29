@@ -2,16 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyToken, getRoleRedirect } from "@/lib/jwt";
 
 const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
-const STOREFRONT_ROOT = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.store";
+const STOREFRONT_ROOT = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
 // Hosts that serve the main Zotomic app (never treated as a storefront).
 const APP_HOSTS = new Set(["localhost", "127.0.0.1"]);
+// Subdomains reserved for the platform, not stores.
+const RESERVED = new Set(["www", "app", "api", "admin", "assets", "cdn", "mail", "static", "zotomic-lilac"]);
 
 function storefrontSlug(host: string): string | null {
   const h = host.split(":")[0].toLowerCase();
   if (APP_HOSTS.has(h)) return null;
-  if (h.endsWith(`.${STOREFRONT_ROOT}`)) return h.slice(0, -(STOREFRONT_ROOT.length + 1)) || null;
-  if (h.endsWith(".localhost")) return h.slice(0, -".localhost".length) || null; // dev: shop.localhost
-  return null;
+
+  let sub: string | null = null;
+  if (h.endsWith(`.${STOREFRONT_ROOT}`)) sub = h.slice(0, -(STOREFRONT_ROOT.length + 1));
+  else if (h.endsWith(".localhost")) sub = h.slice(0, -".localhost".length); // dev: shop.localhost
+  else return null;
+
+  if (!sub || sub.includes(".") || RESERVED.has(sub)) return null; // apex, www, multi-level, reserved
+  return sub;
 }
 
 export async function middleware(req: NextRequest) {

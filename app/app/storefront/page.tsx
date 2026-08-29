@@ -21,7 +21,7 @@ export default async function StorefrontPage() {
 
   const config = normalizeConfig(row?.draft_json, tenant.business.name);
   const published = !!row?.published_at;
-  const root = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.store";
+  const root = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
   const storeUrl = row?.subdomain ? `https://${row.subdomain}.${root}` : null;
 
   return (

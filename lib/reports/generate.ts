@@ -3,6 +3,7 @@ import { getSummary, buildMetricLines, type Summary } from "@/lib/metrics";
 import { buildObservations, type Observation } from "@/lib/observations";
 import { geminiGenerate, geminiConfigured, parseJsonResponse } from "@/lib/ai/gemini";
 import { money, pctChange } from "@/lib/money";
+import { sendReportReady } from "@/lib/emails";
 
 const DAY = 86_400_000;
 
@@ -227,6 +228,29 @@ export async function generateReport(
       body: summary.slice(0, 160),
       href: "/app/intelligence",
     });
+
+    try {
+      const { data: bizRow } = await db.from("businesses").select("name").eq("id", businessId).single();
+      const { data: owner } = await db
+        .from("business_members")
+        .select("users(email)")
+        .eq("business_id", businessId)
+        .eq("role", "owner")
+        .maybeSingle();
+      const email =
+        ((Array.isArray(owner?.users) ? owner?.users[0] : owner?.users) as { email?: string } | null)
+          ?.email ?? "";
+      if (email) {
+        await sendReportReady({
+          to: email,
+          businessName: (bizRow?.name as string) ?? "your business",
+          periodLabel: `${ps} to ${pe}`,
+          summary,
+        });
+      }
+    } catch (e) {
+      console.error("report-ready email failed", (e as Error).message);
+    }
 
     return { reportId, status: "ready", aiModel };
   } catch (e) {

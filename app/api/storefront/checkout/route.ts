@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { getStoreBySlug } from "@/lib/storefront/store";
 import { revalidatePath } from "next/cache";
+import { sendNewOrderAlert, sendOrderConfirmation } from "@/lib/emails";
 
 interface Body {
   storeSlug: string;
@@ -198,6 +199,39 @@ export async function POST(req: NextRequest) {
   });
 
   revalidatePath(`/s/${body.storeSlug}`);
+
+  // Emails — best effort, never block the response.
+  const emailItems = lineItems.map((li) => ({ name: li.name, qty: li.qty, lineTotal: li.line_total }));
+  const custEmail = clean(body.customer.email, 200);
+  const { data: owner } = await db
+    .from("business_members")
+    .select("users(email)")
+    .eq("business_id", store.businessId)
+    .eq("role", "owner")
+    .maybeSingle();
+  const ownerEmail =
+    ((Array.isArray(owner?.users) ? owner?.users[0] : owner?.users) as { email?: string } | null)?.email ?? "";
+
+  await Promise.allSettled([
+    custEmail
+      ? sendOrderConfirmation({
+          to: custEmail,
+          storeName: store.name,
+          orderNumber: order.order_number as string,
+          currency: store.currency,
+          items: emailItems,
+          shipping,
+          total,
+        })
+      : Promise.resolve(),
+    sendNewOrderAlert({
+      to: ownerEmail,
+      orderNumber: order.order_number as string,
+      customerName: name,
+      total,
+      currency: store.currency,
+    }),
+  ]);
 
   return NextResponse.json({ ok: true, orderNumber: order.order_number });
 }
