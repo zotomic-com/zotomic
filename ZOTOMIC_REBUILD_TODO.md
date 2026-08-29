@@ -210,7 +210,8 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [x] Notifications: mark-all-read + per-notification read (`/app/notifications`, unread badge in topbar)
 - [x] Lighthouse CI GitHub Action (`.github/workflows/lighthouse.yml`)
 - [x] Admin report-job retry button (`/admin/reports` per-row Retry for failed/queued)
-- [ ] Assistant: streaming responses, tool-error → structured message (currently thrown)
+- [x] Assistant tool-error → structured `{ error }` fed back to the model (not thrown) — `runAgent` catches every handler
+- [ ] Assistant: streaming responses (still a single blocking turn)
 - [ ] `/app/marketing` + `/admin/{content-library,marketing}` — placeholders (P2 growth modules / Outreach Agent)
 - [ ] i18n — English-only; strings not yet extracted for Bengali
 - [ ] Real Hermes VPS client (HERMES_BASE_URL) — `runAgent` is the local Gemini loop
