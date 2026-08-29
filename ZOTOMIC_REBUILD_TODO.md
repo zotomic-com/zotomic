@@ -56,20 +56,26 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [ ] Legal page copy is still old agency wording — needs a content pass (cosmetic, low priority)
 - [ ] `/forgot-password` real email reset flow
 
-## PHASE 2 — Tenant app (P0)
+## PHASE 2 — Tenant app (P0)  ✅ CORE DONE
 
-- [ ] `/app` dashboard — pixel-close to image 4, wired to real metrics
-- [ ] Deterministic metric service (revenue, orders, returns, estimated profit, period-over-period, anomaly/threshold detection)
-- [ ] `/app/intelligence` — SEE / UNDERSTAND / ACT, evidence vs recommendation, cold-start state
-- [ ] `/app/reports` — history, detail, filters, underlying insights
-- [ ] `/app/products` — list/search/filter/detail, buying_price + marketing_cost, controlled edits, review moderation
-- [ ] `/app/orders` — list/search/detail + aggregates, COD/gateway status
-- [ ] `/app/customers` — search + aggregate intelligence, minimal PII
-- [ ] `/app/tasks` — user + assistant-generated tasks, priority
-- [ ] `/app/notifications` — report-ready, alerts, system
-- [ ] `/app/settings` — business, user, security, notification, AI prefs, AI-crawler toggle
-- [ ] `/app/marketing` — design-consistent placeholder (P2)
-- [ ] All screens: loading / empty / insufficient-data / error / permission states
+- [x] `/app` dashboard — matches mockup image 4: greeting, insight banner, 4 KPI cards w/ WoW deltas, revenue trend, sales-by-category donut, Ask Zotomic panel, top products, recent orders, tasks, quick actions. Wired to real metrics.
+- [x] Deterministic metric service — SQL functions `metrics_summary / metrics_daily_revenue / metrics_sales_by_category / metrics_top_products` (migration `20260829130000`) + `lib/metrics.ts` (period-over-period, profit via buying_price+marketing_cost, cost-completeness gating) + `lib/observations.ts` (rule-based anomaly/threshold observations)
+- [x] `/app/intelligence` — SEE (metrics) / UNDERSTAND (deterministic observations w/ severity) / ACT (recommendations from DB, empty-state). Cold-start state.
+- [x] `/app/reports` — history list with status badges
+- [x] `/app/products` — list + search + add/edit via server actions (`actions.ts`), buying_price/marketing_cost fields, "missing cost" warning, audit log
+- [x] `/app/orders` — list + status filter tabs + 7-day aggregates, COD/payment column
+- [x] `/app/customers` — list + repeat-customer/lifetime-revenue aggregates, minimal PII
+- [x] `/app/tasks` — add + check-off via server actions, priority, assistant-source badge
+- [x] `/app/notifications` — list + empty state
+- [x] `/app/settings` — business profile form (server action + audit) + account card
+- [~] `/app/marketing` — still Phase-0 placeholder (fine — P2 feature)
+- [x] Loading/empty/insufficient-data/error states across pages; `force-dynamic` on data pages
+- [x] Seed expanded: 40 customers + 230 orders + 462 order_items for Rahman Fashion (deterministic RNG) so the dashboard renders real numbers
+- [x] `lib/tenant-server.ts` (`getTenant()` for RSC) + `lib/app-actions.ts` (`requireBusiness()` + `writeAudit()`) + `components/ui/modal.tsx` + `components/app/*`
+- [x] Build green (54 routes); all 10 /app pages return 200 against live DB, no runtime errors
+- [ ] Product reviews moderation UI — deferred to Phase 4b (reviews don't exist until storefront)
+- [ ] Business switcher (multi-business) — deferred (v1 = one business per owner)
+- [ ] App layout still shows a brief full-screen spinner before rendering server content — minor UX polish TODO
 
 ## PHASE 3 — Weekly Intelligence engine
 

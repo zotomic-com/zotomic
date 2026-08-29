@@ -9,16 +9,19 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { money } from "@/lib/money";
 
 interface Props {
   data: Record<string, number | string>[];
   xKey: string;
   yKey: string;
   height?: number;
-  formatY?: (v: number) => string;
+  /** when set, y-axis + tooltip values are formatted as money in this currency */
+  currency?: string;
 }
 
-export default function LineChart({ data, xKey, yKey, height = 240, formatY }: Props) {
+export default function LineChart({ data, xKey, yKey, height = 240, currency }: Props) {
+  const fmt = currency ? (v: number) => money(v, currency) : undefined;
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -38,9 +41,9 @@ export default function LineChart({ data, xKey, yKey, height = 240, formatY }: P
         <YAxis
           tickLine={false}
           axisLine={false}
-          width={48}
+          width={currency ? 60 : 44}
           tick={{ fontSize: 12, fill: "var(--fg-subtle)" }}
-          tickFormatter={formatY ? (v) => formatY(Number(v)) : undefined}
+          tickFormatter={fmt ? (v) => fmt(Number(v)) : undefined}
         />
         <Tooltip
           contentStyle={{
@@ -49,7 +52,7 @@ export default function LineChart({ data, xKey, yKey, height = 240, formatY }: P
             borderRadius: 10,
             fontSize: 12,
           }}
-          formatter={formatY ? (v) => formatY(Number(v)) : undefined}
+          formatter={fmt ? (v) => fmt(Number(v)) : undefined}
         />
         <Area
           type="monotone"
