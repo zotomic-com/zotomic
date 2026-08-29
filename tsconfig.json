@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"],
+      "@cc/types": ["./app/admin/new-agent/agents/content-creator/types/index.ts"],
+      "@cc/types/*": ["./app/admin/new-agent/agents/content-creator/types/*"],
+      "@cc/lib/*": ["./app/admin/new-agent/agents/content-creator/lib/*"],
+      "@si/types": ["./app/admin/new-agent/agents/social-intel/types/index.ts"],
+      "@si/types/*": ["./app/admin/new-agent/agents/social-intel/types/*"],
+      "@si/lib/*": ["./app/admin/new-agent/agents/social-intel/lib/*"]
+    },
+    "target": "ES2017"
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

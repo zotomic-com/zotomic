@@ -1,0 +1,38 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="92" y1="256" x2="420" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Left < bracket -->
+  <path d="M163 140 L103 256 L163 372"
+        stroke="url(#g)" stroke-width="52"
+        stroke-linecap="round" stroke-linejoin="round"
+        fill="none"/>
+
+  <!-- Z — top bar -->
+  <path d="M187 140 L328 140"
+        stroke="url(#g)" stroke-width="52"
+        stroke-linecap="round"
+        fill="none"/>
+
+  <!-- Z — diagonal -->
+  <path d="M328 140 L187 372"
+        stroke="url(#g)" stroke-width="52"
+        stroke-linecap="round"
+        fill="none"/>
+
+  <!-- Z — bottom bar -->
+  <path d="M187 372 L328 372"
+        stroke="url(#g)" stroke-width="52"
+        stroke-linecap="round"
+        fill="none"/>
+
+  <!-- Right > bracket -->
+  <path d="M349 140 L409 256 L349 372"
+        stroke="url(#g)" stroke-width="52"
+        stroke-linecap="round" stroke-linejoin="round"
+        fill="none"/>
+</svg>
