@@ -146,16 +146,21 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [ ] Real Hermes HTTP client (HERMES_BASE_URL + shared secret) — stub only; user has no VPS yet
 - [ ] Conversation list / "new chat" UI; streaming responses; tool-error → structured user message instead of thrown action
 
-## PHASE 7 — P1 adapters (later)
+## PHASE 7 — payment & courier adapters + admin store control  ✅ CORE DONE
 
-- [ ] PaymentProvider adapter interface + Integration encryption + Settings → Payments UI
-- [ ] bKash sandbox reference implementation
-- [ ] Nagad / SSLCommerz stubs
-- [ ] CourierProvider adapter interface + Settings → Delivery UI
-- [ ] Pathao / Steadfast / RedX stubs + Shipment sync
-- [ ] Custom domain: DNS verify → SSL provision → active
-- [ ] Google server-side tracking + GSC (paid tier, isolated per-store container)
-- [ ] Richer notifications + richer intelligence
+- [x] `lib/adapters/types.ts` — `PaymentProvider` / `CourierProvider` interfaces
+- [x] `lib/adapters/registry.ts` — provider maps + `loadIntegration` (decrypt) / `saveIntegration` (AES-256 encrypt) / `listIntegrations` / `removeIntegration`
+- [x] bKash (`payment/bkash.ts`) — tokenized checkout, sandbox + live base URLs, token grant → create → execute → status. Credential fields: app_key/app_secret/username/password
+- [x] Steadfast (`courier/steadfast.ts`) — create_order / status_by_cid / get_balance validate
+- [x] Nagad, SSLCommerz, Pathao, RedX — structured stubs (`validate` returns "coming soon"; flow wired)
+- [x] `lib/entitlements.ts` — `deriveEntitlements(plan, overrides)`: payment_gateway/server_tracking/custom_domain = paid plans OR admin override; courier = all plans
+- [x] `/app/integrations` — connect/validate/disconnect modal, sandbox/live mode toggle, payment section plan-gated (locked on free with upgrade prompt), courier always available. `actions.ts` audit-logged.
+- [x] Storefront checkout — `getStorePaymentOptions` = COD + connected gateways; gateway path in `/api/storefront/checkout` creates `payments` row + `provider.init()` → `redirectUrl`; `/api/storefront/payment/callback/[provider]` verifies → marks order paid/confirmed + confirmation email. `ClearCartOnMount` on order page.
+- [x] Order detail — `CourierControl`: pick courier → `bookCourier` action → `provider.createShipment` → `shipments` row + tracking, order → shipped
+- [x] Migration `20260829180000` — `shipments` + `payments` tables, `integrations.mode`, `businesses.feature_overrides`
+- [x] Admin `/admin/tenants/[id]` — edit business (+ suspend), subscription override (plan/status/extend days), per-feature grants (force-enable payment gateway for any store), take storefront offline, delete business (name-confirm). All audit-logged. Tenants list rows link to detail.
+- [ ] bKash sandbox live test — needs a store owner's bKash sandbox creds (entered in UI, not env)
+- [ ] Pathao / RedX real impls · Shipment status sync cron · custom domain flow · Google server-side tracking (deferred)
 
 ---
 
