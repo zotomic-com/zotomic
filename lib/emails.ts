@@ -1,4 +1,4 @@
-import { emailLayout, sendEmail, NOTIFICATION_EMAIL } from "./email";
+import { emailLayout, sendEmail, NOTIFICATION_EMAIL, type EmailAttachment } from "./email";
 import { money } from "./money";
 
 const esc = (s: string) =>
@@ -13,6 +13,7 @@ export async function sendOrderConfirmation(args: {
   items: { name: string; qty: number; lineTotal: number }[];
   shipping: number;
   total: number;
+  attachments?: EmailAttachment[];
 }): Promise<boolean> {
   if (!args.to) return false;
   const rows = args.items
@@ -36,7 +37,9 @@ export async function sendOrderConfirmation(args: {
         <tr><td style="padding:6px 0;font-weight:700">Total</td><td style="padding:6px 0;text-align:right;font-weight:700">${money(args.total, args.currency)}</td></tr>
       </table>
       <p style="color:#94a3b8;font-size:13px;margin-top:16px">Payment: cash on delivery</p>
+      ${args.attachments?.length ? `<p style="color:#94a3b8;font-size:13px">Your invoice is attached as a PDF.</p>` : ""}
     `),
+    attachments: args.attachments,
   });
 }
 

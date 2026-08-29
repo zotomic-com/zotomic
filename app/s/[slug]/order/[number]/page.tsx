@@ -63,12 +63,22 @@ export default async function OrderPage({
         </div>
       </div>
 
-      <Link
-        href={basePath || "/"}
-        className="mt-8 inline-block rounded-[var(--sf-radius)] bg-[var(--sf-accent)] px-5 py-2.5 text-sm font-semibold text-white"
-      >
-        Continue shopping
-      </Link>
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <Link
+          href={basePath || "/"}
+          className="inline-block rounded-[var(--sf-radius)] bg-[var(--sf-accent)] px-5 py-2.5 text-sm font-semibold text-white"
+        >
+          Continue shopping
+        </Link>
+        <a
+          href={`${basePath}/order/${order.order_number}/invoice`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-5 py-2.5 text-sm font-semibold"
+        >
+          Download invoice (PDF)
+        </a>
+      </div>
     </div>
   );
 }

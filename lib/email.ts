@@ -27,6 +27,12 @@ export function emailConfigured(): boolean {
   return !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
 }
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer | Uint8Array;
+  contentType?: string;
+}
+
 export interface SendArgs {
   to: string;
   subject: string;
@@ -35,9 +41,10 @@ export interface SendArgs {
   replyTo?: string;
   /** override the From (must be the Gmail account or a verified "send mail as" alias) */
   from?: string;
+  attachments?: EmailAttachment[];
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo, from }: SendArgs): Promise<boolean> {
+export async function sendEmail({ to, subject, html, text, replyTo, from, attachments }: SendArgs): Promise<boolean> {
   const t = getTransport();
   if (!t) {
     console.info(`[email skipped — no GMAIL_APP_PASSWORD] to=${to} subject="${subject}"`);
@@ -51,6 +58,11 @@ export async function sendEmail({ to, subject, html, text, replyTo, from }: Send
       html,
       text: text ?? html.replace(/<[^>]+>/g, " "),
       replyTo: replyTo ?? process.env.SUPPORT_EMAIL,
+      attachments: attachments?.map((a) => ({
+        filename: a.filename,
+        content: Buffer.isBuffer(a.content) ? a.content : Buffer.from(a.content),
+        contentType: a.contentType,
+      })),
     });
     return true;
   } catch (e) {

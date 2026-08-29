@@ -9,9 +9,14 @@ import { getAdminSupabase } from "@/lib/supabase";
  *  server_tracking  — paid plans only, or admin-granted
  *  custom_domain    — paid plans only, or admin-granted
  */
-export type Feature = "payment_gateway" | "courier" | "server_tracking" | "custom_domain";
+export type Feature =
+  | "payment_gateway"
+  | "courier"
+  | "server_tracking"
+  | "custom_domain"
+  | "branded_invoice";
 
-const PAID_ONLY: Feature[] = ["payment_gateway", "server_tracking", "custom_domain"];
+const PAID_ONLY: Feature[] = ["payment_gateway", "server_tracking", "custom_domain", "branded_invoice"];
 
 export interface Entitlements {
   plan: string;
@@ -19,6 +24,8 @@ export interface Entitlements {
   courier: boolean;
   server_tracking: boolean;
   custom_domain: boolean;
+  /** paid plans: put the store's own logo on customer invoices and drop "Powered by Zotomic" */
+  branded_invoice: boolean;
 }
 
 export function deriveEntitlements(
@@ -34,6 +41,7 @@ export function deriveEntitlements(
     courier: has("courier"),
     server_tracking: has("server_tracking"),
     custom_domain: has("custom_domain"),
+    branded_invoice: has("branded_invoice"),
   };
 }
 

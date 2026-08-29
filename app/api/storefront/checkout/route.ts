@@ -326,6 +326,25 @@ export async function POST(req: NextRequest) {
   // Emails — best effort, never block the response.
   const emailItems = lineItems.map((li) => ({ name: li.name, qty: li.qty, lineTotal: li.line_total }));
   const custEmail = clean(body.customer.email, 200);
+
+  // Attach a PDF invoice to the customer's confirmation email.
+  let invoicePdf: { filename: string; content: Uint8Array; contentType: string } | undefined;
+  if (custEmail) {
+    try {
+      const { getOrderInvoiceData } = await import("@/lib/order-invoice");
+      const { renderOrderInvoicePdf } = await import("@/lib/order-invoice-pdf");
+      const inv = await getOrderInvoiceData(store.businessId, order.id as string);
+      if (inv) {
+        invoicePdf = {
+          filename: `invoice-${order.order_number}.pdf`,
+          content: await renderOrderInvoicePdf(inv),
+          contentType: "application/pdf",
+        };
+      }
+    } catch (e) {
+      console.error("invoice pdf for confirmation email failed:", (e as Error).message);
+    }
+  }
   const { data: owner } = await db
     .from("business_members")
     .select("users(email)")
@@ -345,6 +364,7 @@ export async function POST(req: NextRequest) {
           items: emailItems,
           shipping,
           total,
+          attachments: invoicePdf ? [invoicePdf] : undefined,
         })
       : Promise.resolve(),
     sendNewOrderAlert({

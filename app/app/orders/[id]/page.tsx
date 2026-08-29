@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { money } from "@/lib/money";
@@ -62,7 +62,17 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <PageHeader
         title={`Order #${order.order_number}`}
         subtitle={new Date(order.placed_at as string).toLocaleString("en-US")}
-        action={<OrderStatusControl orderId={order.id as string} status={order.status as string} />}
+        action={
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/app/orders/${order.id}/invoice`}
+              className="inline-flex items-center gap-1 rounded-sm border border-border px-3 py-1.5 text-sm font-semibold text-fg hover:bg-surface-2"
+            >
+              <FileText className="h-4 w-4" /> Invoice
+            </Link>
+            <OrderStatusControl orderId={order.id as string} status={order.status as string} />
+          </div>
+        }
       />
 
       {order.status === "cancelled" && (
