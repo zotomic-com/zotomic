@@ -189,7 +189,8 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 
 **Needs user action / external:**
 - [ ] `GMAIL_APP_PASSWORD` — all email is log-only until set (invoices email, order emails). Also `EMAIL_ASSISTANT_FROM` needs a verified Gmail "send mail as" alias for `Assistant@zotomic.com`.
-- [ ] Move `zotomic.com` domain → this Vercel project (still the old agency site) + wildcard `*.zotomic.com` DNS for real storefront subdomains
+- [x] `zotomic.com` domain moved onto this Vercel project (2026-08-30). Apex serves the app; storefronts at `zotomic.com/<slug>` (middleware path rewrite). `NEXT_PUBLIC_SITE_URL=https://zotomic.com`.
+- [ ] Wildcard `*.zotomic.com` domain in Vercel — only needed for the `<slug>.zotomic.com` storefront form; path form works now
 - [ ] Enter values in admin: Telegram bot token + zotomic.com Meta Pixel/GA4 (`/admin/settings`); Hermes gateway URL/secret + n8n URL/key (`/admin/integrations`)
 
 **Storefront / commerce:**
@@ -221,7 +222,9 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [x] Admin report-job retry button (`/admin/reports` per-row Retry for failed/queued)
 - [x] Assistant tool-error → structured `{ error }` fed back to the model (not thrown) — `runAgent` catches every handler
 - [ ] Assistant: streaming responses (still a single blocking turn)
-- [ ] `/app/marketing` + `/admin/{content-library,marketing}` — placeholders (P2 growth modules / Outreach Agent)
+- [x] Editable legal/info pages — store owner (storefront `pages`: privacy/terms/refund/shipping/faq, "Pages" tab in the editor, dynamic `/s/[slug]/[doc]` + `/faq` routes) AND admin (`platform_pages` table, `/admin/content-library` "Pages & Legal" editor, DB-backed `/privacy-policy` `/terms` `/refund-policy` `/faq`)
+- [x] Storefront: sticky footer (no blank space on short pages), real contact enquiry form
+- [ ] `/app/marketing` + `/admin/marketing` — placeholders (P2 growth modules / Outreach Agent)
 - [ ] i18n — English-only; strings not yet extracted for Bengali
 - [x] Per-store Meta Pixel + GA4 available on every plan (moved into `/app/integrations` "Tracking & pixels"; Conversions API token stored encrypted)
 - [x] `/admin/integrations` built (was a dead nav link) — Hermes gateway + n8n + Meta app-secret credential entry (`platform_settings`), per-tenant connection overview
