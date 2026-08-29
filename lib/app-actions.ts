@@ -4,10 +4,19 @@ import { getAdminSupabase } from "./supabase";
 /**
  * Guard for server actions / server components that mutate tenant data.
  * Returns the business id + a service-role client, or throws.
+ * Pass { allowReadOnly: true } for billing/support actions that must work while
+ * the account is soft/hard locked.
  */
-export async function requireBusiness() {
+export async function requireBusiness(opts: { allowReadOnly?: boolean } = {}) {
   const tenant = await getTenant();
   if (!tenant?.businessId) throw new Error("No active business");
+  if (!opts.allowReadOnly && tenant.billing.readOnly) {
+    throw new Error(
+      tenant.billing.hardLocked
+        ? "Your account is locked. Reactivate on the Billing page."
+        : "Your account is read-only until payment is confirmed.",
+    );
+  }
   return { ...tenant, businessId: tenant.businessId, db: getAdminSupabase() };
 }
 

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { verifyToken } from "./jwt";
 import { getAdminSupabase } from "./supabase";
+import { deriveBilling, type BillingState } from "./billing";
 
 export interface ServerBusiness {
   id: string;
@@ -16,6 +17,7 @@ export interface ServerTenant {
   business: ServerBusiness | null;
   businessId: string | null;
   memberRole: "owner" | "staff" | null;
+  billing: BillingState;
 }
 
 export async function getSessionUser() {
@@ -42,17 +44,24 @@ export async function getTenant(): Promise<ServerTenant | null> {
     .maybeSingle();
 
   if (!data) {
-    return { user, business: null, businessId: null, memberRole: null };
+    return { user, business: null, businessId: null, memberRole: null, billing: deriveBilling(null) };
   }
 
   const b = (Array.isArray(data.businesses) ? data.businesses[0] : data.businesses) as
     | ServerBusiness
     | undefined;
 
+  const { data: sub } = await db
+    .from("subscriptions")
+    .select("plan, status, current_period_end, price, currency")
+    .eq("business_id", data.business_id)
+    .maybeSingle();
+
   return {
     user,
     business: b ?? null,
     businessId: data.business_id,
     memberRole: data.role === "owner" ? "owner" : "staff",
+    billing: deriveBilling(sub),
   };
 }

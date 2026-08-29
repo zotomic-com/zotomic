@@ -21,6 +21,7 @@ export interface Store {
   slug: string;
   currency: string;
   published: boolean;
+  offline?: boolean;
   config: StorefrontConfig;
 }
 
@@ -58,6 +59,14 @@ export const getStoreBySlug = cache(async function getStoreBySlug(
     | undefined;
   if (!biz || biz.status !== "active") return null;
 
+  // A hard-locked subscription takes the storefront offline (soft-lock keeps it live).
+  const { data: sub } = await db
+    .from("subscriptions")
+    .select("status")
+    .eq("business_id", cfg.business_id)
+    .maybeSingle();
+  const hardLocked = sub?.status === "hard_lock";
+
   const raw = draft ? cfg.draft_json : cfg.published_json;
   const source = raw && Object.keys(raw).length ? raw : cfg.draft_json;
 
@@ -66,7 +75,8 @@ export const getStoreBySlug = cache(async function getStoreBySlug(
     name: biz.name,
     slug: (cfg.subdomain as string) ?? biz.slug,
     currency: biz.currency ?? "BDT",
-    published: !!cfg.published_at,
+    published: !!cfg.published_at && !hardLocked,
+    offline: hardLocked,
     config: normalizeConfig(source, biz.name),
   };
 });

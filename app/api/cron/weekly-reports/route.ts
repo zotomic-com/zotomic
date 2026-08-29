@@ -24,7 +24,8 @@ export async function POST(req: NextRequest) {
 
   const due = (businesses ?? []).filter((b) => {
     const sub = Array.isArray(b.subscriptions) ? b.subscriptions[0] : b.subscriptions;
-    return (sub as { status?: string } | null)?.status !== "hard_lock";
+    const status = (sub as { status?: string } | null)?.status;
+    return status !== "hard_lock" && status !== "soft_lock";
   });
 
   const results: { business: string; status: string; model: string | null }[] = [];

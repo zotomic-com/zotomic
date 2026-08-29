@@ -1,20 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, Lock, TriangleAlert } from "lucide-react";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { APP_NAV } from "@/components/app-shell/nav";
 import { AppContext, type AppBusiness, type AppUser } from "./context";
 
+interface Billing {
+  status: string;
+  readOnly: boolean;
+  hardLocked: boolean;
+  daysOverdue: number | null;
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<AppUser | null>(null);
   const [businesses, setBusinesses] = useState<AppBusiness[]>([]);
+  const [billing, setBilling] = useState<Billing | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const onBilling = pathname === "/app/billing";
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -26,6 +37,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
         setUser(d.user);
         setBusinesses(d.businesses ?? []);
+        setBilling(d.billing ?? null);
         if (d.user.role === "owner" && (!d.businesses || d.businesses.length === 0)) {
           router.replace("/onboarding");
         }
@@ -33,6 +45,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       .catch(() => router.replace("/login"))
       .finally(() => setLoading(false));
   }, [router]);
+
+  useEffect(() => {
+    if (billing?.hardLocked && !onBilling) router.replace("/app/billing");
+  }, [billing, onBilling, router]);
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -57,13 +73,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         mobileOpen={menuOpen}
         onClose={() => setMenuOpen(false)}
         bottom={
-          <Link
-            href="/app/billing"
-            className="block rounded-sm border border-primary-soft bg-primary-soft p-3 text-xs"
-          >
-            <p className="font-bold text-primary">Upgrade to Pro</p>
-            <p className="mt-0.5 text-fg-muted">More insights, higher limits, automation.</p>
-          </Link>
+          billing && billing.status !== "active" ? (
+            <Link href="/app/billing" className="block rounded-sm border border-danger/30 bg-danger-soft p-3 text-xs">
+              <p className="flex items-center gap-1 font-bold text-danger">
+                <Lock className="h-3.5 w-3.5" /> Payment due
+              </p>
+              <p className="mt-0.5 text-fg-muted">Reactivate your account.</p>
+            </Link>
+          ) : (
+            <Link href="/app/billing" className="block rounded-sm border border-primary-soft bg-primary-soft p-3 text-xs">
+              <p className="font-bold text-primary">Plans &amp; billing</p>
+              <p className="mt-0.5 text-fg-muted">Manage your subscription.</p>
+            </Link>
+          )
         }
       />
 
@@ -90,6 +112,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           }
         />
+
+        {billing && (billing.status === "grace" || billing.status === "soft_lock") && !onBilling && (
+          <div className="flex items-center gap-2 border-b border-warning/30 bg-warning-soft px-4 py-2 text-sm text-warning sm:px-6">
+            <TriangleAlert className="h-4 w-4 shrink-0" />
+            {billing.status === "soft_lock"
+              ? "Your account is read-only until payment is confirmed."
+              : `Payment overdue by ${billing.daysOverdue} day(s).`}{" "}
+            <Link href="/app/billing" className="font-semibold underline">
+              Pay now
+            </Link>
+          </div>
+        )}
+
         <main className="mx-auto max-w-6xl p-4 sm:p-6">{children}</main>
       </div>
     </AppContext.Provider>

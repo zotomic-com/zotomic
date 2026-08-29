@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { getAdminSupabase } from "@/lib/supabase";
+import { deriveBilling } from "@/lib/billing";
 
 export async function GET(req: NextRequest) {
   const authUser = await getAuthUser(req);
@@ -28,5 +29,16 @@ export async function GET(req: NextRequest) {
     return { ...(b as Record<string, unknown>), membershipRole: m.role, isDefault: m.is_default };
   });
 
-  return NextResponse.json({ user, businesses });
+  let billing = deriveBilling(null);
+  const primary = businesses[0] as { id?: string } | undefined;
+  if (primary?.id) {
+    const { data: sub } = await db
+      .from("subscriptions")
+      .select("plan, status, current_period_end, price, currency")
+      .eq("business_id", primary.id)
+      .maybeSingle();
+    billing = deriveBilling(sub);
+  }
+
+  return NextResponse.json({ user, businesses, billing });
 }
