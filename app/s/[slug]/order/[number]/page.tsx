@@ -7,6 +7,7 @@ import { getStoreBySlug } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { money } from "@/lib/money";
 import { ClearCartOnMount } from "@/components/storefront/ClearCartOnMount";
+import { TrackEvent } from "@/components/tracking/TrackEvent";
 
 export const metadata: Metadata = { title: "Order confirmed", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -35,6 +36,10 @@ export default async function OrderPage({
   return (
     <div className="mx-auto max-w-lg px-4 py-16 text-center sm:px-6">
       <ClearCartOnMount storeSlug={store.slug} />
+      <TrackEvent
+        event="Purchase"
+        params={{ value: Number(order.total), currency: order.currency as string, transaction_id: order.order_number }}
+      />
       <CheckCircle2 className="mx-auto h-10 w-10 text-[var(--sf-accent)]" />
       <h1 className="mt-4 text-2xl font-extrabold tracking-tight">Order confirmed</h1>
       <p className="mt-1 text-sm text-[var(--sf-muted)]">

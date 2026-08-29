@@ -47,7 +47,7 @@ export default async function StoreLayout({ children, params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <StoreShell config={store.config} basePath={basePath}>
+      <StoreShell config={store.config} basePath={basePath} storeSlug={store.slug}>
         {children}
       </StoreShell>
     </>

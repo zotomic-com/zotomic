@@ -9,6 +9,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import {
   adminDeleteBusiness,
+  adminImpersonate,
   adminSetFeature,
   adminSetSubscription,
   adminUnpublishStore,
@@ -40,13 +41,14 @@ export function TenantAdminClient({
   const [pending, start] = useTransition();
   const [confirmName, setConfirmName] = useState("");
 
-  const run = (fn: () => Promise<{ error?: string; ok?: boolean; deleted?: boolean }>) =>
+  const run = (fn: () => Promise<{ error?: string; ok?: boolean; deleted?: boolean; redirect?: string }>) =>
     start(async () => {
       const res = await fn();
       if (res.error) toast(res.error, "error");
       else {
         toast("Saved", "success");
-        if (res.deleted) router.push("/admin/tenants");
+        if (res.redirect) window.location.href = res.redirect;
+        else if (res.deleted) router.push("/admin/tenants");
         else router.refresh();
       }
     });
@@ -153,6 +155,9 @@ export function TenantAdminClient({
           <CardTitle>Storefront &amp; danger zone</CardTitle>
         </CardHeader>
         <CardBody className="space-y-3">
+          <Button size="sm" variant="outline" onClick={() => run(() => adminImpersonate(businessId))} disabled={pending}>
+            Sign in as owner (support)
+          </Button>
           {published && (
             <Button size="sm" variant="outline" onClick={() => run(() => adminUnpublishStore(businessId))} disabled={pending}>
               Take storefront offline

@@ -211,6 +211,19 @@ export function StorefrontEditor({
               <TextareaRow label="Meta description" value={config.seo.description} onChange={(v) => update((c) => ((c.seo.description = v), c))} />
               <BoolRow label="Allow AI crawlers (GPTBot, ClaudeBot…)" value={config.seo.allowAiCrawlers} onChange={(v) => update((c) => ((c.seo.allowAiCrawlers = v), c))} />
             </Panel>
+            <Panel title="Tracking">
+              <TextRow
+                label="Meta Pixel ID"
+                value={config.tracking?.metaPixelId ?? ""}
+                onChange={(v) => update((c) => ((c.tracking = { ...c.tracking, metaPixelId: v }), c))}
+              />
+              <TextRow
+                label="Google Analytics 4 ID (G-XXXX)"
+                value={config.tracking?.ga4MeasurementId ?? ""}
+                onChange={(v) => update((c) => ((c.tracking = { ...c.tracking, ga4MeasurementId: v }), c))}
+              />
+              <p className="text-xs text-fg-subtle">Fires PageView, ViewContent, AddToCart and Purchase automatically.</p>
+            </Panel>
             {published && (
               <Button size="sm" variant="outline" onClick={unpublish} disabled={publishing}>
                 Unpublish storefront

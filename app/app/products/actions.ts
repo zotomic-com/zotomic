@@ -97,3 +97,34 @@ export async function updateProduct(id: string, formData: FormData) {
   revalidatePath("/app/products");
   return { ok: true };
 }
+
+export async function deleteProduct(id: string) {
+  const { businessId, user, db } = await requireBusiness();
+
+  const { data: p } = await db
+    .from("products")
+    .select("name")
+    .eq("business_id", businessId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!p) return { error: "Product not found" };
+
+  // guard: don't orphan order history — archive instead if it has sold
+  const { count } = await db
+    .from("order_items")
+    .select("id", { count: "exact", head: true })
+    .eq("business_id", businessId)
+    .eq("product_id", id);
+
+  if ((count ?? 0) > 0) {
+    await db.from("products").update({ status: "archived", visible: false }).eq("business_id", businessId).eq("id", id);
+    await writeAudit(businessId, user.id, "product.archived", { targetType: "product", targetId: id, summary: `Archived "${p.name}" (has orders)` });
+    revalidatePath("/app/products");
+    return { ok: true, archived: true };
+  }
+
+  await db.from("products").delete().eq("business_id", businessId).eq("id", id);
+  await writeAudit(businessId, user.id, "product.deleted", { targetType: "product", targetId: id, summary: `Deleted "${p.name}"` });
+  revalidatePath("/app/products");
+  return { ok: true };
+}

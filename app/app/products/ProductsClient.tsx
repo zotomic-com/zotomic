@@ -12,7 +12,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
-import { createProduct, updateProduct } from "./actions";
+import { createProduct, deleteProduct, updateProduct } from "./actions";
 
 export interface ProductRow {
   id: string;
@@ -122,12 +122,30 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={editing?.name ?? "Edit product"}>
         {editing && (
-          <ProductForm
-            currency={currency}
-            product={editing}
-            pending={pending}
-            onSubmit={(fd) => submit(() => updateProduct(editing.id, fd))}
-          />
+          <>
+            <ProductForm
+              currency={currency}
+              product={editing}
+              pending={pending}
+              onSubmit={(fd) => submit(() => updateProduct(editing.id, fd))}
+            />
+            <button
+              onClick={() =>
+                start(async () => {
+                  const res = await deleteProduct(editing.id);
+                  if ("error" in res && res.error) toast(res.error, "error");
+                  else {
+                    toast(res.archived ? "Archived (product has orders)" : "Product deleted", "success");
+                    setEditing(null);
+                    router.refresh();
+                  }
+                })
+              }
+              className="mt-3 w-full rounded-sm border border-danger/30 py-2 text-sm font-semibold text-danger hover:bg-danger-soft"
+            >
+              Delete product
+            </button>
+          </>
         )}
       </Modal>
     </>

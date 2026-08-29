@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { sendContactMessage } from "@/lib/emails";
+import { ga4ServerEvent } from "@/lib/platform-settings";
 
 interface ContactBody {
   name?: string;
@@ -44,6 +45,10 @@ export async function POST(req: NextRequest) {
       topic: body.topic,
       message: body.message,
     });
+
+    const ga = req.cookies.get("_ga")?.value ?? "";
+    const cid = ga.match(/GA\d\.\d\.(\d+\.\d+)/)?.[1] ?? `${Date.now()}.0`;
+    ga4ServerEvent(cid, "generate_lead", { topic: body.topic ?? "contact" }).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (e) {

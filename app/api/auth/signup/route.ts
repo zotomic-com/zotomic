@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { hashPassword, signToken } from "@/lib/auth";
 import { AUTH_COOKIE } from "@/lib/auth-server";
+import { ga4ServerEvent } from "@/lib/platform-settings";
+
+function gaClientId(req: NextRequest): string {
+  const ga = req.cookies.get("_ga")?.value ?? "";
+  const m = ga.match(/GA\d\.\d\.(\d+\.\d+)/);
+  return m?.[1] ?? `${Date.now()}.${Math.floor(Math.random() * 1e9)}`;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -68,6 +75,7 @@ export async function POST(req: NextRequest) {
       path: "/",
     });
 
+    ga4ServerEvent(gaClientId(req), "sign_up", { method: "email" }).catch(() => {});
     return res;
   } catch (e) {
     console.error("Signup error:", e);

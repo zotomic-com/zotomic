@@ -160,7 +160,61 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [x] Migration `20260829180000` — `shipments` + `payments` tables, `integrations.mode`, `businesses.feature_overrides`
 - [x] Admin `/admin/tenants/[id]` — edit business (+ suspend), subscription override (plan/status/extend days), per-feature grants (force-enable payment gateway for any store), take storefront offline, delete business (name-confirm). All audit-logged. Tenants list rows link to detail.
 - [ ] bKash sandbox live test — needs a store owner's bKash sandbox creds (entered in UI, not env)
-- [ ] Pathao / RedX real impls · Shipment status sync cron · custom domain flow · Google server-side tracking (deferred)
+- [ ] Pathao / RedX real impls · Shipment status sync cron · custom domain flow
+
+---
+
+## PHASE 8 — assistant tools, tracking, missing CRUD  ✅ DONE
+
+- [x] Assistant tools **19 total** now — added `send_report_telegram` + `send_report_email` (from `Assistant@zotomic.com`, via `EMAIL_ASSISTANT_FROM`). `lib/reports/deliver.ts` + `report_deliveries` table.
+- [x] Telegram — `lib/telegram.ts` (platform bot, `verifyBot`); admin sets bot token in `/admin/settings`; owner sets chat ID in `/app/settings`; `lib/platform-settings.ts` (`platform_settings` table, AES for secrets)
+- [x] `/admin/settings` — real: Telegram bot token + Meta Pixel + GA4 (measurement id + api secret) for zotomic.com. Audit-logged.
+- [x] Meta Pixel — **all plans**. Per-store `config.tracking.metaPixelId` + `ga4MeasurementId` in the storefront editor (Tracking panel). `components/tracking/{Pixel,TrackEvent}.tsx`. Fires PageView (StoreShell), ViewContent (product page), AddToCart (button), Purchase (order page).
+- [x] Zotomic marketing site — Meta Pixel + GA4 via `ConditionalLayout` (marketing branch only), config from `platform_settings` (cached 5 min). **Server-side GA4** (`ga4ServerEvent`, Measurement Protocol) fires `sign_up` on signup + `generate_lead` on contact.
+- [x] Product delete (owner) — `deleteProduct` action: hard-delete if unsold, else archive+hide. Button in the edit modal.
+- [x] Task delete (owner) — `deleteTask` + × button per row.
+- [x] Admin impersonate — `adminImpersonate` mints a 2-hour owner JWT + sets the cookie → admin uses `/app` as the owner for support. `admin.impersonation_started` audit event. Button on `/admin/tenants/[id]`.
+- [x] Verified: `/admin/settings` + `/app/settings` + tenant detail 200; assistant `send_report_email` called (graceful "Gmail not configured" fallback + inline summary).
+
+---
+
+## GAPS AUDIT (2026-08-29) — remaining work, no numbered phases
+
+**Ingestion (not built):**
+- [ ] CSV import (products + orders) with column mapping + preview → `/app/products` and `/app/orders`
+- [ ] Manual order entry form (`/app/orders/new`)
+- [ ] Facebook Page connect + order/message pull (onboarding option is a UI stub)
+- [ ] Messenger/WhatsApp inbound webhooks (deleted in Phase 0, not rebuilt)
+
+**Needs user action / external:**
+- [ ] `GMAIL_APP_PASSWORD` — all email is log-only until set. Also `EMAIL_ASSISTANT_FROM` needs a verified Gmail "send mail as" alias for `Assistant@zotomic.com` to actually appear as that address.
+- [ ] Move `zotomic.com` domain → this Vercel project (still the old agency site) + wildcard `*.zotomic.com` DNS for real storefront subdomains
+- [ ] Telegram bot token, Meta Pixel ID, GA4 creds — enter in `/admin/settings`
+
+**Storefront / commerce:**
+- [ ] Storefront events beyond purchase into `storefront_events` table (only client pixel fires page_view/product_view/add_to_cart; nothing writes to the DB table → intelligence doesn't see traffic yet)
+- [ ] Cart-count badge in storefront header
+- [ ] `next/image` on product images (currently plain `<img>` + Cloudinary `optimized()` helper unused)
+- [ ] Wishlist (`config` + `/wishlist` page + `add_to_wishlist` event) — spec'd, not built
+- [ ] Product variants / inventory (P1 stubs) · promo codes · abandoned-cart
+- [ ] Shipment status sync cron (`getStatus` per provider)
+- [ ] Nagad / SSLCommerz / Pathao / RedX real implementations
+- [ ] Custom domain: DNS verify → SSL → GSC unlock (paid tier)
+- [ ] Google server-side tracking per paid store (isolated container) — only the platform site has it
+
+**App polish:**
+- [ ] `/forgot-password` real email reset flow (placeholder)
+- [ ] `/app` client layout blocks with a spinner before server pages render — move auth gate so RSC content shows immediately
+- [ ] Assistant: conversation list + "new chat", streaming responses, tool-error → structured message (currently thrown)
+- [ ] Legal pages (`/privacy-policy` `/terms` `/refund-policy`) still have agency-era copy
+- [ ] `/app/marketing` + `/admin/{content-library,marketing}` — placeholders (P2 growth modules / Outreach Agent)
+- [ ] i18n — English-only; strings not yet extracted for Bengali
+- [ ] Real Hermes VPS client (HERMES_BASE_URL) — `runAgent` is the local Gemini loop
+- [ ] Notifications: mark-as-read, per-notification actions
+- [ ] Lighthouse CI actually run in a GitHub Action (config committed, not wired to CI)
+- [ ] Admin: report-job retry button, tenant CSV export, richer system-health history
+
+**Data model P1 stubs not yet created:** `ProductVariant`, `Inventory`, `Return`, `Domain` (folded into integrations for now)
 
 ---
 

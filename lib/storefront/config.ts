@@ -68,6 +68,10 @@ export interface StorefrontConfig {
     ogImageUrl: string | null;
     allowAiCrawlers: boolean;
   };
+  tracking: {
+    metaPixelId: string;
+    ga4MeasurementId: string;
+  };
   pages: {
     about: { enabled: boolean; title: string; body: string };
   };
@@ -186,6 +190,7 @@ export function makeDefaultConfig(storeName: string): StorefrontConfig {
       ogImageUrl: null,
       allowAiCrawlers: true,
     },
+    tracking: { metaPixelId: "", ga4MeasurementId: "" },
     pages: { about: { enabled: true, title: "About us", body: "" } },
   };
 }

@@ -28,3 +28,10 @@ export async function toggleTask(id: string, done: boolean) {
   revalidatePath("/app/tasks");
   return { ok: true };
 }
+
+export async function deleteTask(id: string) {
+  const { businessId, db } = await requireBusiness();
+  await db.from("tasks").delete().eq("business_id", businessId).eq("id", id);
+  revalidatePath("/app/tasks");
+  return { ok: true };
+}

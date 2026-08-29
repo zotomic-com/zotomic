@@ -1,16 +1,21 @@
 import Link from "next/link";
 import { FONT_STACKS, RADIUS_PX, type StorefrontConfig } from "@/lib/storefront/config";
+import { GA4, MetaPixel } from "@/components/tracking/Pixel";
+import { StorefrontTracker } from "./StorefrontTracker";
 
 /** Storefront chrome. Scopes accent/font/radius via CSS vars so it never
  *  collides with the Zotomic app styles. */
 export function StoreShell({
   config,
   basePath,
+  storeSlug,
   children,
 }: {
   config: StorefrontConfig;
   /** "" for a real host, or "/s/<slug>" for path-based preview */
   basePath: string;
+  /** omit for the editor preview (no analytics) */
+  storeSlug?: string;
   children: React.ReactNode;
 }) {
   const { brand, announcement, nav, footer } = config;
@@ -30,6 +35,9 @@ export function StoreShell({
 
   return (
     <div style={style} className="min-h-screen bg-[var(--sf-bg)] text-[var(--sf-fg)]">
+      <MetaPixel id={config.tracking?.metaPixelId ?? ""} />
+      <GA4 id={config.tracking?.ga4MeasurementId ?? ""} />
+      {storeSlug ? <StorefrontTracker storeSlug={storeSlug} /> : null}
       {announcement.enabled && announcement.text && (
         <div className="bg-[var(--sf-accent)] px-4 py-2 text-center text-xs font-medium text-white">
           {announcement.href ? (

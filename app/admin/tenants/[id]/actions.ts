@@ -1,8 +1,11 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-server";
 import { getAdminSupabase } from "@/lib/supabase";
+import { signToken } from "@/lib/auth";
+import { AUTH_COOKIE } from "@/lib/auth-server";
 
 async function audit(businessId: string, adminId: string, action: string, summary: string) {
   const db = getAdminSupabase();
@@ -81,6 +84,34 @@ export async function adminUnpublishStore(businessId: string) {
   await audit(businessId, admin.id, "admin.storefront_unpublished", "Storefront taken offline by admin");
   revalidatePath(`/admin/tenants/${businessId}`);
   return { ok: true };
+}
+
+/** Sign in as the business owner for support. Heavily audited. */
+export async function adminImpersonate(businessId: string) {
+  const admin = await requireAdmin();
+  const db = getAdminSupabase();
+  const { data: member } = await db
+    .from("business_members")
+    .select("users(id, name, email, role)")
+    .eq("business_id", businessId)
+    .eq("role", "owner")
+    .maybeSingle();
+  const owner = (Array.isArray(member?.users) ? member?.users[0] : member?.users) as
+    | { id: string; name: string; email: string; role: string }
+    | null;
+  if (!owner) return { error: "No owner found for this business" };
+
+  const token = await signToken({ id: owner.id, email: owner.email, role: owner.role, name: owner.name });
+  (await cookies()).set(AUTH_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 2, // short session
+    path: "/",
+  });
+
+  await audit(businessId, admin.id, "admin.impersonation_started", `${admin.email} signed in as ${owner.email}`);
+  return { ok: true, redirect: "/app" };
 }
 
 export async function adminDeleteBusiness(businessId: string, confirmName: string) {

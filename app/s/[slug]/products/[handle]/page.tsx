@@ -12,6 +12,8 @@ import { storeBasePath } from "@/lib/storefront/base-path";
 import { money } from "@/lib/money";
 import { ProductCard } from "@/components/storefront/ProductCard";
 import { AddToCartButton } from "@/components/storefront/AddToCartButton";
+import { TrackEvent } from "@/components/tracking/TrackEvent";
+import { StorefrontEvent } from "@/components/storefront/StorefrontTracker";
 
 export const revalidate = 120;
 
@@ -85,6 +87,11 @@ export default async function StoreProductPage({
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <TrackEvent
+        event="ViewContent"
+        params={{ content_name: product.name, content_ids: [product.id], value: onSale ? product.salePrice! : product.price, currency: store.currency }}
+      />
+      <StorefrontEvent storeSlug={store.slug} type="product_view" productId={product.id} value={onSale ? product.salePrice! : product.price} />
 
       <nav className="mb-6 text-xs text-[var(--sf-muted)]">
         <Link href={basePath || "/"} className="hover:underline">Home</Link> ·{" "}

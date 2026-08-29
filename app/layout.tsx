@@ -4,6 +4,7 @@ import { sans } from "@/lib/fonts";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ToastProvider } from "@/components/ui/toast";
 import ConditionalLayout from "@/components/ConditionalLayout";
+import { getPublicTracking } from "@/lib/platform-settings";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://zotomic.com";
 
@@ -27,7 +28,8 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image" },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const tracking = await getPublicTracking();
   return (
     <html lang="en" suppressHydrationWarning className={sans.variable}>
       <head>
@@ -37,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-app text-fg antialiased">
         <ThemeProvider>
           <ToastProvider>
-            <ConditionalLayout>{children}</ConditionalLayout>
+            <ConditionalLayout tracking={tracking}>{children}</ConditionalLayout>
           </ToastProvider>
         </ThemeProvider>
       </body>

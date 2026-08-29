@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getStoreBySlug, getStorePaymentOptions } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { CheckoutClient } from "./CheckoutClient";
+import { StorefrontEvent } from "@/components/storefront/StorefrontTracker";
 
 export const metadata: Metadata = { title: "Checkout", robots: { index: false } };
 
@@ -15,6 +16,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ slug:
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
+      <StorefrontEvent storeSlug={store.slug} type="begin_checkout" />
       <h1 className="mb-8 text-2xl font-extrabold tracking-tight">Checkout</h1>
       <CheckoutClient
         storeSlug={store.slug}

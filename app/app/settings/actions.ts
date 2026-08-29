@@ -18,6 +18,7 @@ export async function updateBusinessSettings(formData: FormData) {
     currency: CURRENCIES.includes(currency) ? currency : "BDT",
     timezone: String(formData.get("timezone") ?? "Asia/Dhaka"),
     description: String(formData.get("description") ?? "") || null,
+    telegram_chat_id: String(formData.get("telegram_chat_id") ?? "").trim().slice(0, 64) || null,
   };
 
   const { error } = await db.from("businesses").update(patch).eq("id", businessId);

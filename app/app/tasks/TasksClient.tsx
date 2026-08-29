@@ -2,13 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { addTask, toggleTask } from "./actions";
+import { addTask, deleteTask, toggleTask } from "./actions";
 
 export interface Task {
   id: string;
@@ -45,6 +45,12 @@ export function TasksClient({ tasks }: { tasks: Task[] }) {
   const toggle = (id: string, done: boolean) =>
     start(async () => {
       await toggleTask(id, done);
+      router.refresh();
+    });
+
+  const remove = (id: string) =>
+    start(async () => {
+      await deleteTask(id);
       router.refresh();
     });
 
@@ -85,6 +91,17 @@ export function TasksClient({ tasks }: { tasks: Task[] }) {
               <span className="flex-1 text-sm text-fg">{t.title}</span>
               {t.source === "assistant" && <Badge tone="primary">assistant</Badge>}
               <Badge tone={TONE[t.priority as keyof typeof TONE] ?? "neutral"}>{t.priority}</Badge>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  remove(t.id);
+                }}
+                className="text-fg-subtle hover:text-danger"
+                aria-label="Delete task"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </label>
           ))}
           {done.map((t) => (

@@ -18,6 +18,7 @@ export interface BusinessSettings {
   currency: string;
   timezone: string;
   description: string | null;
+  telegram_chat_id: string | null;
 }
 
 export function SettingsClient({
@@ -73,6 +74,12 @@ export function SettingsClient({
             </div>
             <Field label="Description">
               <Textarea name="description" defaultValue={business.description ?? ""} />
+            </Field>
+            <Field
+              label="Telegram chat ID"
+              hint="For assistant-delivered reports. Message @userinfobot on Telegram to get your ID, then start a chat with the Zotomic bot."
+            >
+              <Input name="telegram_chat_id" defaultValue={business.telegram_chat_id ?? ""} placeholder="123456789" />
             </Field>
             <Button type="submit" disabled={pending}>
               {pending ? "Saving…" : "Save changes"}

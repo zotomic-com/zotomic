@@ -33,9 +33,11 @@ export interface SendArgs {
   html: string;
   text?: string;
   replyTo?: string;
+  /** override the From (must be the Gmail account or a verified "send mail as" alias) */
+  from?: string;
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo }: SendArgs): Promise<boolean> {
+export async function sendEmail({ to, subject, html, text, replyTo, from }: SendArgs): Promise<boolean> {
   const t = getTransport();
   if (!t) {
     console.info(`[email skipped — no GMAIL_APP_PASSWORD] to=${to} subject="${subject}"`);
@@ -43,7 +45,7 @@ export async function sendEmail({ to, subject, html, text, replyTo }: SendArgs):
   }
   try {
     await t.sendMail({
-      from: process.env.EMAIL_FROM ?? process.env.GMAIL_USER,
+      from: from ?? process.env.EMAIL_FROM ?? process.env.GMAIL_USER,
       to,
       subject,
       html,

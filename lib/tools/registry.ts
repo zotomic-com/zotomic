@@ -1,6 +1,7 @@
 import { getSummary, buildMetricLines } from "@/lib/metrics";
 import { buildObservations } from "@/lib/observations";
 import { money } from "@/lib/money";
+import { deliverReportEmail, deliverReportTelegram } from "@/lib/reports/deliver";
 import type { ToolContext, ToolDef } from "./types";
 
 const DAY = 86_400_000;
@@ -516,6 +517,33 @@ const update_business_settings: ToolDef = {
   },
 };
 
+const send_report_telegram: ToolDef = {
+  name: "send_report_telegram",
+  description: "Send the latest Weekly Report to the owner's Telegram. Requires a Telegram chat ID set in Settings.",
+  risk: "write",
+  creditCost: 1,
+  parameters: { type: "object", properties: {} },
+  async handler(ctx) {
+    const res = await deliverReportTelegram(ctx.businessId);
+    return { delivered: res.ok, message: res.message };
+  },
+};
+
+const send_report_email: ToolDef = {
+  name: "send_report_email",
+  description: "Email the latest Weekly Report (from Zotomic Assistant). Defaults to the owner's email; an address can be given.",
+  risk: "write",
+  creditCost: 1,
+  parameters: {
+    type: "object",
+    properties: { email: { type: "string", description: "recipient; omit to use the owner's email" } },
+  },
+  async handler(ctx, a) {
+    const res = await deliverReportEmail(ctx.businessId, s(a.email));
+    return { delivered: res.ok, message: res.message };
+  },
+};
+
 export const TOOLS: ToolDef[] = [
   get_business_profile,
   get_business_settings,
@@ -532,6 +560,8 @@ export const TOOLS: ToolDef[] = [
   get_report_insights,
   list_tasks,
   create_task,
+  send_report_telegram,
+  send_report_email,
   update_product,
   update_business_settings,
 ];
