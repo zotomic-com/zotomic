@@ -183,13 +183,14 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 **Ingestion:**
 - [x] CSV import (products + orders) with column mapping + preview → `/app/products` and `/app/orders` (`ProductImport`/`OrderImport`, `lib/csv.ts`)
 - [x] Manual order entry form (`/app/orders/new`) — `NewOrderClient` + `createManualOrder` → shared `lib/orders/create.ts`
-- [ ] Facebook Page connect + order/message pull (onboarding option is a UI stub)
-- [ ] Messenger/WhatsApp inbound webhooks (deleted in Phase 0, not rebuilt)
+- [x] Per-store Messenger / WhatsApp / Instagram connect (paste creds → webhook URL + verify token) — `/app/integrations`, `lib/messaging.ts`, `/api/webhooks/meta/[businessId]`, inbox at `/app/messages` + notification. Every plan + admin, each store separate.
+- [ ] Facebook "Connect with Facebook" OAuth (deferred — paste-credentials model shipped instead; needs a reviewed Meta app)
+- [ ] Outbound replies from the Zotomic inbox (read-only for now)
 
 **Needs user action / external:**
-- [ ] `GMAIL_APP_PASSWORD` — all email is log-only until set. Also `EMAIL_ASSISTANT_FROM` needs a verified Gmail "send mail as" alias for `Assistant@zotomic.com` to actually appear as that address.
+- [ ] `GMAIL_APP_PASSWORD` — all email is log-only until set (invoices email, order emails). Also `EMAIL_ASSISTANT_FROM` needs a verified Gmail "send mail as" alias for `Assistant@zotomic.com`.
 - [ ] Move `zotomic.com` domain → this Vercel project (still the old agency site) + wildcard `*.zotomic.com` DNS for real storefront subdomains
-- [ ] Telegram bot token, Meta Pixel ID, GA4 creds — enter in `/admin/settings`
+- [ ] Enter values in admin: Telegram bot token + zotomic.com Meta Pixel/GA4 (`/admin/settings`); Hermes gateway URL/secret + n8n URL/key (`/admin/integrations`)
 
 **Storefront / commerce:**
 - [x] Storefront events into `storefront_events` table (`StorefrontTracker` / `storefrontEvent` → `/api/storefront/events`; intelligence reads it via `lib/traffic.ts`)
@@ -197,7 +198,9 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [x] `next/image`-grade optimization on product images (`cldUrl()` transforms + width/height)
 - [x] Wishlist (device localStorage, `/s/[slug]/wishlist` page, `WishlistHeart`, `add_to_wishlist` event)
 - [x] Shipment status sync cron (`/api/cron/shipments` + `20260829210000_shipment_cron.sql`, every 6h)
-- [ ] Product variants / inventory (P1 stubs) · promo codes · abandoned-cart
+- [x] Product variants + inventory — `product_variants` / `inventory_adjustments` tables, option+variant matrix editor, `/app/inventory` (stock overview + reason-coded adjustments + audit log), variant-aware pricing/stock in `lib/orders/create`, storefront checkout, storefront product page (option picker) and manual order form
+- [x] Returns / RMA — `returns` / `return_items` tables, `/app/returns` (create against an order, approve → received restocks + logs → refunded marks the order returned/refunded)
+- [ ] Promo codes · abandoned-cart
 - [ ] Nagad / SSLCommerz / Pathao / RedX real implementations
 - [ ] Custom domain: DNS verify → SSL → GSC unlock (paid tier)
 - [ ] Google server-side tracking per paid store (isolated container) — only the platform site has it
@@ -214,10 +217,14 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [ ] Assistant: streaming responses (still a single blocking turn)
 - [ ] `/app/marketing` + `/admin/{content-library,marketing}` — placeholders (P2 growth modules / Outreach Agent)
 - [ ] i18n — English-only; strings not yet extracted for Bengali
-- [ ] Real Hermes VPS client (HERMES_BASE_URL) — `runAgent` is the local Gemini loop
+- [x] Per-store Meta Pixel + GA4 available on every plan (moved into `/app/integrations` "Tracking & pixels"; Conversions API token stored encrypted)
+- [x] `/admin/integrations` built (was a dead nav link) — Hermes gateway + n8n + Meta app-secret credential entry (`platform_settings`), per-tenant connection overview
+- [x] Store-owner invoices (paid) — branded printable `/app/billing/invoice/[id]` with store logo, Print/Save-as-PDF, email invoice
+- [ ] Real Hermes VPS client (`hermes_base_url` now enterable in `/admin/integrations`; `runAgent` still the local Gemini loop until wired)
+- [ ] n8n live calls (`n8n_base_url` / `n8n_api_key` enterable in `/admin/integrations`; not yet consumed)
 - [ ] Admin: tenant CSV export, richer system-health history
 
-**Data model P1 stubs not yet created:** `ProductVariant`, `Inventory`, `Return`, `Domain` (folded into integrations for now)
+**Data model:** `ProductVariant`, `Inventory` (as `inventory_adjustments`), `Return` — DONE. `Domain` still folded into integrations.
 
 ---
 

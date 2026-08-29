@@ -15,7 +15,7 @@ export default async function ReturnsPage() {
   const currency = tenant.business.currency ?? "BDT";
   const db = getAdminSupabase();
 
-  const [{ data: returns }, { data: orders }, { data: items }] = await Promise.all([
+  const [{ data: returns }, { data: orders }] = await Promise.all([
     db
       .from("returns")
       .select("id, return_number, order_id, status, reason, refund_amount, restock, created_at, orders(order_number)")
@@ -29,11 +29,16 @@ export default async function ReturnsPage() {
       .in("status", ["delivered", "shipped", "confirmed", "processing"])
       .order("placed_at", { ascending: false })
       .limit(60),
-    db
-      .from("order_items")
-      .select("id, order_id, name, qty, unit_price")
-      .eq("business_id", tenant.businessId),
   ]);
+
+  const orderIds = (orders ?? []).map((o) => o.id as string);
+  const { data: items } = orderIds.length
+    ? await db
+        .from("order_items")
+        .select("id, order_id, name, qty, unit_price")
+        .eq("business_id", tenant.businessId)
+        .in("order_id", orderIds)
+    : { data: [] as { id: string; order_id: string; name: string; qty: number; unit_price: number }[] };
 
   const itemsByOrder = new Map<string, OrderOption["items"]>();
   for (const it of items ?? []) {
