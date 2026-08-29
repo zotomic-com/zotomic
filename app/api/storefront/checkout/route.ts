@@ -3,12 +3,13 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { getStoreBySlug } from "@/lib/storefront/store";
 import { revalidatePath } from "next/cache";
 import { sendNewOrderAlert, sendOrderConfirmation } from "@/lib/emails";
+import { loadIntegration, paymentProvider } from "@/lib/adapters/registry";
 
 interface Body {
   storeSlug: string;
   items: { id: string; qty: number }[];
   customer: { name: string; phone: string; email?: string; address: string; city?: string; note?: string };
-  paymentMethod?: "cod";
+  paymentMethod?: string;
 }
 
 const clean = (s: unknown, max = 200) => String(s ?? "").trim().slice(0, max);
@@ -118,6 +119,16 @@ export async function POST(req: NextRequest) {
 
   const orderNumber = `ZF-${Date.now().toString(36).toUpperCase().slice(-6)}`;
 
+  // Resolve a gateway if one was chosen and is actually connected.
+  const chosenMethod = clean(body.paymentMethod, 20) || "cod";
+  let gateway: { provider: string; mode: "sandbox" | "live"; creds: Record<string, string> } | null = null;
+  if (chosenMethod !== "cod") {
+    const integ = await loadIntegration(store.businessId, chosenMethod);
+    if (integ && integ.category === "payment" && integ.status === "connected") {
+      gateway = { provider: chosenMethod, mode: integ.mode, creds: integ.creds };
+    }
+  }
+
   const { data: order, error: orderErr } = await db
     .from("orders")
     .insert({
@@ -126,7 +137,7 @@ export async function POST(req: NextRequest) {
       customer_id: customerId,
       channel: "storefront",
       status: "pending",
-      payment_method: "cod",
+      payment_method: gateway ? gateway.provider : "cod",
       payment_status: "unpaid",
       subtotal,
       shipping,
@@ -199,6 +210,52 @@ export async function POST(req: NextRequest) {
   });
 
   revalidatePath(`/s/${body.storeSlug}`);
+
+  // ── gateway payment: start it and hand back a redirect URL ────────────────
+  if (gateway) {
+    const provider = paymentProvider(gateway.provider);
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+    const callbackUrl = `${siteUrl}/api/storefront/payment/callback/${gateway.provider}?order=${order.order_number}&store=${encodeURIComponent(
+      store.slug,
+    )}`;
+
+    const { data: pay } = await db
+      .from("payments")
+      .insert({
+        business_id: store.businessId,
+        order_id: order.id,
+        provider: gateway.provider,
+        mode: gateway.mode,
+        amount: total,
+        currency: store.currency,
+        status: "initiated",
+      })
+      .select("id")
+      .single();
+
+    const init = provider
+      ? await provider.init(gateway.creds, gateway.mode, {
+          amount: total,
+          currency: store.currency,
+          orderNumber: order.order_number as string,
+          callbackUrl,
+          customerName: name,
+          customerPhone: phone,
+        })
+      : { ok: false, error: "Provider unavailable" };
+
+    if (!init.ok || !init.redirectUrl) {
+      await db.from("orders").update({ status: "cancelled" }).eq("id", order.id);
+      await db.from("payments").update({ status: "failed", raw: { error: init.error } }).eq("id", pay?.id);
+      return NextResponse.json(
+        { error: init.error ?? "Could not start the payment. Try cash on delivery." },
+        { status: 502 },
+      );
+    }
+
+    await db.from("payments").update({ status: "pending", provider_ref: init.providerRef ?? null }).eq("id", pay?.id);
+    return NextResponse.json({ ok: true, redirectUrl: init.redirectUrl, orderNumber: order.order_number });
+  }
 
   // Emails — best effort, never block the response.
   const emailItems = lineItems.map((li) => ({ name: li.name, qty: li.qty, lineTotal: li.line_total }));

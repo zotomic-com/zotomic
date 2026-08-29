@@ -95,6 +95,31 @@ export const getStoreProducts = cache(async function getStoreProducts(
   return (data ?? []).map(mapProduct);
 });
 
+export interface StorePaymentOption {
+  id: string; // 'cod' | provider id
+  label: string;
+}
+
+/** COD (always) + any connected payment gateway. */
+export async function getStorePaymentOptions(businessId: string): Promise<StorePaymentOption[]> {
+  const db = getAdminSupabase();
+  const opts: StorePaymentOption[] = [{ id: "cod", label: "Cash on delivery" }];
+  const { data } = await db
+    .from("integrations")
+    .select("provider, mode")
+    .eq("business_id", businessId)
+    .eq("category", "payment")
+    .eq("status", "connected");
+  const names: Record<string, string> = { bkash: "bKash", nagad: "Nagad", sslcommerz: "Card / SSLCommerz" };
+  for (const row of data ?? []) {
+    opts.push({
+      id: row.provider as string,
+      label: `${names[row.provider as string] ?? row.provider}${row.mode === "sandbox" ? " (test)" : ""}`,
+    });
+  }
+  return opts;
+}
+
 export async function getStoreProduct(businessId: string, handle: string): Promise<StoreProduct | null> {
   const db = getAdminSupabase();
   const { data } = await db

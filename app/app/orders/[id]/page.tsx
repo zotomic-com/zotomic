@@ -7,6 +7,9 @@ import { money } from "@/lib/money";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { OrderStatusControl } from "./OrderStatusControl";
+import { CourierControl } from "./CourierControl";
+import { listIntegrations } from "@/lib/adapters/registry";
+import { COURIER_PROVIDERS } from "@/lib/adapters/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +30,22 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     .maybeSingle();
 
   if (!order) notFound();
+
+  const [integrations, { data: shipmentRow }] = await Promise.all([
+    listIntegrations(tenant.businessId),
+    db.from("shipments").select("provider, status, tracking_code, consignment_id").eq("order_id", id).maybeSingle(),
+  ]);
+  const couriers = integrations
+    .filter((i) => i.category === "courier" && i.status === "connected")
+    .map((i) => ({ id: i.provider, name: COURIER_PROVIDERS[i.provider]?.name ?? i.provider }));
+  const shipment = shipmentRow
+    ? {
+        provider: shipmentRow.provider as string,
+        status: shipmentRow.status as string,
+        trackingCode: (shipmentRow.tracking_code as string) ?? null,
+        consignmentId: (shipmentRow.consignment_id as string) ?? null,
+      }
+    : null;
 
   const cust = (Array.isArray(order.customers) ? order.customers[0] : order.customers) as
     | { name?: string; phone?: string; email?: string; city?: string }
@@ -80,6 +99,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </Card>
 
         <Card>
+          <CardHeader>
+            <CardTitle>Delivery</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <CourierControl orderId={order.id as string} couriers={couriers} shipment={shipment} />
+          </CardBody>
+        </Card>
+
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Customer</CardTitle>
           </CardHeader>

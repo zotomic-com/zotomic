@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getStoreBySlug } from "@/lib/storefront/store";
+import { getStoreBySlug, getStorePaymentOptions } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { CheckoutClient } from "./CheckoutClient";
 
@@ -11,6 +11,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ slug:
   const store = await getStoreBySlug(slug);
   if (!store || !store.published) notFound();
   const basePath = await storeBasePath(slug);
+  const paymentOptions = await getStorePaymentOptions(store.businessId);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
@@ -21,7 +22,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ slug:
         currency={store.currency}
         shipping={store.config.commerce.shippingFlatRate}
         freeOver={store.config.commerce.freeShippingOver}
-        codEnabled={store.config.commerce.codEnabled}
+        paymentOptions={paymentOptions}
       />
     </div>
   );

@@ -12,18 +12,19 @@ export function CheckoutClient({
   currency,
   shipping,
   freeOver,
-  codEnabled,
+  paymentOptions,
 }: {
   storeSlug: string;
   basePath: string;
   currency: string;
   shipping: number;
   freeOver: number | null;
-  codEnabled: boolean;
+  paymentOptions: { id: string; label: string }[];
 }) {
   const router = useRouter();
   const [items, setItems] = useState<CartItem[] | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", city: "", note: "" });
+  const [method, setMethod] = useState(paymentOptions[0]?.id ?? "cod");
   const [status, setStatus] = useState<"idle" | "placing" | "error">("idle");
   const [error, setError] = useState("");
 
@@ -54,10 +55,15 @@ export function CheckoutClient({
           storeSlug,
           items: items.map((i) => ({ id: i.id, qty: i.qty })),
           customer: form,
-          paymentMethod: "cod",
+          paymentMethod: method,
         }),
       });
       const d = await res.json();
+      if (res.ok && d.ok && d.redirectUrl) {
+        // keep the cart until payment succeeds (cleared on the order page)
+        window.location.href = d.redirectUrl;
+        return;
+      }
       if (res.ok && d.ok) {
         writeCart(storeSlug, []);
         router.push(`${basePath}/order/${d.orderNumber}`);
@@ -84,10 +90,21 @@ export function CheckoutClient({
         <textarea placeholder="Order note (optional)" rows={2} className={`${field} h-auto py-2`} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
 
         <div className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] p-3 text-sm">
-          <label className="flex items-center gap-2">
-            <input type="radio" checked readOnly />
-            {codEnabled ? "Cash on delivery" : "Payment on delivery"}
-          </label>
+          <p className="mb-2 font-medium">Payment</p>
+          <div className="space-y-1.5">
+            {paymentOptions.map((o) => (
+              <label key={o.id} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="method"
+                  value={o.id}
+                  checked={method === o.id}
+                  onChange={() => setMethod(o.id)}
+                />
+                {o.label}
+              </label>
+            ))}
+          </div>
         </div>
       </div>
 

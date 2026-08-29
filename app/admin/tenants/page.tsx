@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAdmin, adminDb } from "@/lib/admin-server";
 import { money } from "@/lib/money";
 import { Card } from "@/components/ui/card";
@@ -46,10 +47,10 @@ export default async function AdminTenantsPage() {
       key: "name",
       header: "Business",
       render: (r) => (
-        <div>
-          <p className="font-medium text-fg">{r.name}</p>
+        <Link href={`/admin/tenants/${r.id}`} className="block">
+          <p className="font-medium text-primary">{r.name}</p>
           <p className="text-xs text-fg-subtle">{r.email}</p>
-        </div>
+        </Link>
       ),
     },
     { key: "owner", header: "Owner", render: (r) => r.owner },
