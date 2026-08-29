@@ -200,7 +200,13 @@ Design tokens: bg `#F1F5F9` · white cards · border `#E8EDF2` · radius 14–16
 - [x] Shipment status sync cron (`/api/cron/shipments` + `20260829210000_shipment_cron.sql`, every 6h)
 - [x] Product variants + inventory — `product_variants` / `inventory_adjustments` tables, option+variant matrix editor, `/app/inventory` (stock overview + reason-coded adjustments + audit log), variant-aware pricing/stock in `lib/orders/create`, storefront checkout, storefront product page (option picker) and manual order form
 - [x] Returns / RMA — `returns` / `return_items` tables, `/app/returns` (create against an order, approve → received restocks + logs → refunded marks the order returned/refunded)
+- [x] Storefront customer accounts — `store_accounts` / `store_account_addresses`, per-store signup/login (bcrypt + 30-day JWT cookie scoped to the business), `/s/[slug]/account` (orders + profile + saved addresses), header + mobile-nav User icon, checkout prefill + order linking; guest checkout still works
+- [x] Storefront product search — `StoreSearchBar` + `?q=` on the Shop page (name/description/category)
+- [x] Storefront mobile bottom nav — `MobileNav` icon bar (Home/Shop/Saved/Cart/Account), cart+wishlist badges, hidden ≥ sm
+- [x] Storefront quick-add on product cards, incl. variant `<select>` (lazy-loaded from `/api/storefront/variants`)
+- [x] Working store link in dashboard — `/app/storefront` + `/admin/websites` now link the path form (`SITE/s/<slug>`) instead of the dead `<slug>.zotomic.com`
 - [ ] Promo codes · abandoned-cart
+- [ ] Storefront account: email verification + password reset (accounts work, these are follow-ons)
 - [ ] Nagad / SSLCommerz / Pathao / RedX real implementations
 - [ ] Custom domain: DNS verify → SSL → GSC unlock (paid tier)
 - [ ] Google server-side tracking per paid store (isolated container) — only the platform site has it
