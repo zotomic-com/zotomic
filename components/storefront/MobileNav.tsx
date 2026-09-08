@@ -29,6 +29,9 @@ export function MobileNav({ storeSlug, basePath }: { storeSlug: string; basePath
     };
   }, [storeSlug]);
 
+  // the product detail page is a full-screen immersive layer — no bottom nav there
+  if (/\/products\/[^/]+$/.test(pathname)) return null;
+
   const b = (h: string) => `${basePath}${h === "/" ? "" : h}` || "/";
   const side = [
     { href: b("/"), label: "Home", icon: Home, exact: true },

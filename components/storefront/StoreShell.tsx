@@ -5,6 +5,7 @@ import { StorefrontTracker } from "./StorefrontTracker";
 import { HeaderActions } from "./HeaderActions";
 import { HeaderSearch } from "./HeaderSearch";
 import { AccountLink } from "./AccountLink";
+import { MenuDrawer } from "./MenuDrawer";
 import { MobileNav } from "./MobileNav";
 
 /** Storefront chrome. Scopes accent/font/radius/shadow via CSS vars so it never
@@ -26,25 +27,26 @@ export function StoreShell({
   const dark = brand.theme === "dark";
   const href = (h: string) => (h.startsWith("/") ? `${basePath}${h === "/" ? "" : h}` || "/" : h);
 
-  const style = {
-    ["--sf-accent" as string]: brand.accent,
-    ["--sf-accent-soft" as string]: `color-mix(in srgb, ${brand.accent} 12%, transparent)`,
-    ["--sf-radius" as string]: RADIUS_PX[brand.radius],
-    ["--sf-radius-lg" as string]: RADIUS_LG_PX[brand.radius],
-    ["--sf-bg" as string]: dark ? "#0b0f14" : "#ffffff",
-    ["--sf-fg" as string]: dark ? "#e7eaee" : "#14181d",
-    ["--sf-muted" as string]: dark ? "#9aa4af" : "#5b6570",
-    ["--sf-line" as string]: dark ? "#232a32" : "#e9ebee",
-    ["--sf-card" as string]: dark ? "#11161c" : "#f6f7f8",
-    ["--sf-elevated" as string]: dark ? "#141a21" : "#ffffff",
-    ["--sf-shadow" as string]: dark
-      ? "0 1px 2px rgba(0,0,0,.4), 0 12px 32px -14px rgba(0,0,0,.6)"
-      : "0 1px 2px rgba(16,24,40,.04), 0 12px 28px -14px rgba(16,24,40,.14)",
-    fontFamily: FONT_STACKS[brand.font],
-  } as React.CSSProperties;
+  // Set the theme tokens on :root so body-level portals (bottom sheets, image
+  // zoom, drawers, modals) inherit them too. One storefront renders per page.
+  const rootCss = `:root{
+    --sf-accent:${brand.accent};
+    --sf-accent-soft:color-mix(in srgb, ${brand.accent} 12%, transparent);
+    --sf-radius:${RADIUS_PX[brand.radius]};
+    --sf-radius-lg:${RADIUS_LG_PX[brand.radius]};
+    --sf-bg:${dark ? "#0b0f14" : "#ffffff"};
+    --sf-fg:${dark ? "#e7eaee" : "#14181d"};
+    --sf-muted:${dark ? "#9aa4af" : "#5b6570"};
+    --sf-line:${dark ? "#232a32" : "#e9ebee"};
+    --sf-card:${dark ? "#11161c" : "#f6f7f8"};
+    --sf-elevated:${dark ? "#141a21" : "#ffffff"};
+    --sf-shadow:${dark ? "0 1px 2px rgba(0,0,0,.4), 0 12px 32px -14px rgba(0,0,0,.6)" : "0 1px 2px rgba(16,24,40,.04), 0 12px 28px -14px rgba(16,24,40,.14)"};
+  }
+  body{font-family:${FONT_STACKS[brand.font]}}`;
 
   return (
-    <div style={style} className="flex min-h-screen flex-col bg-[var(--sf-bg)] text-[var(--sf-fg)]">
+    <div className="flex min-h-screen flex-col bg-[var(--sf-bg)] text-[var(--sf-fg)]" style={{ fontFamily: FONT_STACKS[brand.font] }}>
+      <style dangerouslySetInnerHTML={{ __html: rootCss }} />
       <MetaPixel id={config.tracking?.metaPixelId ?? ""} />
       <GA4 id={config.tracking?.ga4MeasurementId ?? ""} />
       {storeSlug ? <StorefrontTracker storeSlug={storeSlug} /> : null}
@@ -83,7 +85,6 @@ export function StoreShell({
 
           <div className="ml-auto flex items-center gap-1">
             {storeSlug ? <HeaderSearch basePath={basePath} /> : null}
-            {/* cart/saved/account live in the floating bottom nav on mobile */}
             <div className="hidden items-center gap-1 sm:flex">
               {storeSlug ? <AccountLink storeSlug={storeSlug} basePath={basePath} /> : null}
               {storeSlug ? (
@@ -97,6 +98,8 @@ export function StoreShell({
                 </Link>
               )}
             </div>
+            {/* nav drawer — mobile/tablet where the inline nav links are hidden */}
+            <MenuDrawer nav={nav} basePath={basePath} storeSlug={storeSlug} triggerClassName="rounded-[var(--sf-radius)] p-2 md:hidden" />
           </div>
         </div>
       </header>
