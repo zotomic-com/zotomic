@@ -3,6 +3,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { hashPassword, signToken } from "@/lib/auth";
 import { AUTH_COOKIE } from "@/lib/auth-server";
 import { ga4ServerEvent } from "@/lib/platform-settings";
+import { enforceRateLimit } from "@/lib/ratelimit";
 
 function gaClientId(req: NextRequest): string {
   const ga = req.cookies.get("_ga")?.value ?? "";
@@ -11,6 +12,14 @@ function gaClientId(req: NextRequest): string {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, {
+    name: "signup",
+    limit: 5,
+    windowMs: 60 * 60_000,
+    message: "Too many sign-up attempts from this network. Try again later.",
+  });
+  if (limited) return limited;
+
   try {
     const { name, email, password } = await req.json();
 

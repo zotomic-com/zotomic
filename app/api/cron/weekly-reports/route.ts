@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { generateReport } from "@/lib/reports/generate";
+import { deriveEntitlements } from "@/lib/entitlements";
 
 export const maxDuration = 300;
 
@@ -19,13 +20,19 @@ export async function POST(req: NextRequest) {
   // Active businesses whose subscription isn't hard-locked.
   const { data: businesses } = await db
     .from("businesses")
-    .select("id, name, subscriptions(status)")
+    .select("id, name, feature_overrides, subscriptions(status, plan)")
     .eq("status", "active");
 
   const due = (businesses ?? []).filter((b) => {
     const sub = Array.isArray(b.subscriptions) ? b.subscriptions[0] : b.subscriptions;
     const status = (sub as { status?: string } | null)?.status;
-    return status !== "hard_lock" && status !== "soft_lock";
+    if (status === "hard_lock" || status === "soft_lock") return false;
+    // weekly_report entitlement — on for everyone unless an admin revoked it
+    const ent = deriveEntitlements(
+      (sub as { plan?: string } | null)?.plan ?? "free",
+      (b.feature_overrides as Record<string, unknown>) ?? {},
+    );
+    return ent.weekly_report;
   });
 
   const results: { business: string; status: string; model: string | null }[] = [];

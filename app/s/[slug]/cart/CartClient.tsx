@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { money } from "@/lib/money";
 import { readCart, writeCart, type CartItem } from "@/components/storefront/cart-store";
+import { QtyStepper } from "@/components/storefront/QtyStepper";
 
 export function CartClient({
   storeSlug,
@@ -67,9 +68,7 @@ export function CartClient({
               <p className="text-sm font-medium">{i.name}</p>
               <p className="mt-0.5 text-sm text-[var(--sf-muted)]">{money(i.price, currency)}</p>
               <div className="mt-2 flex items-center gap-2">
-                <button onClick={() => update(i.id, i.qty - 1)} className="h-7 w-7 rounded-[var(--sf-radius)] border border-[var(--sf-line)]">−</button>
-                <span className="w-8 text-center text-sm">{i.qty}</span>
-                <button onClick={() => update(i.id, i.qty + 1)} className="h-7 w-7 rounded-[var(--sf-radius)] border border-[var(--sf-line)]">+</button>
+                <QtyStepper qty={i.qty} onChange={(n) => update(i.id, n)} min={0} size="sm" />
                 <button onClick={() => update(i.id, 0)} className="ml-auto text-xs text-[var(--sf-muted)] underline">
                   Remove
                 </button>

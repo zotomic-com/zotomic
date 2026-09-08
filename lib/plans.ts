@@ -14,10 +14,20 @@ export interface Plan {
   features: string[];
   limits: {
     reportsPerMonth: number | "unlimited";
-    products: number | "unlimited";
+    /** hard cap on active/draft products a store may hold */
+    products: number;
+    /** images per product (enforced client + server) */
+    productImages: number;
+    /** hero-banner images (1 = single static hero; >1 = slideshow) */
+    heroImages: number;
+    /** legacy per-day assistant message cap — superseded by the credit system (Phase 9C) */
     assistantMessagesPerDay: number;
     seats: number;
   };
+  /** weekly assistant-credit allowance (Phase 9C). Resets every Friday. */
+  weeklyCredits: number;
+  /** hard daily ceiling on web-search / grounded tool calls (Phase 9C) */
+  webSearchPerDay: number;
 }
 
 export const PLANS: Plan[] = [
@@ -30,10 +40,20 @@ export const PLANS: Plan[] = [
       "Weekly Intelligence report",
       "Dashboard with period comparison",
       "Universal storefront + COD checkout",
-      "Up to 30 products",
-      "Assistant: limited",
+      "Up to 10 products, 3 images each",
+      "1 hero banner image",
+      "Assistant: 15 credits / week",
     ],
-    limits: { reportsPerMonth: 4, products: 30, assistantMessagesPerDay: 10, seats: 1 },
+    limits: {
+      reportsPerMonth: 4,
+      products: 10,
+      productImages: 3,
+      heroImages: 1,
+      assistantMessagesPerDay: 10,
+      seats: 1,
+    },
+    weeklyCredits: 15,
+    webSearchPerDay: 5,
   },
   {
     id: "business",
@@ -43,13 +63,24 @@ export const PLANS: Plan[] = [
     featured: true,
     features: [
       "Everything in Free",
-      "Unlimited products & report history",
+      "Up to 100 products, 5 images each",
+      "3 hero banner images",
+      "Unlimited report history",
       "Richer intelligence & alerts",
-      "Full assistant access",
+      "Assistant: 250 credits / week",
       "Courier integration",
       "Custom domain",
     ],
-    limits: { reportsPerMonth: "unlimited", products: "unlimited", assistantMessagesPerDay: 100, seats: 3 },
+    limits: {
+      reportsPerMonth: "unlimited",
+      products: 100,
+      productImages: 5,
+      heroImages: 3,
+      assistantMessagesPerDay: 100,
+      seats: 3,
+    },
+    weeklyCredits: 250,
+    webSearchPerDay: 30,
   },
   {
     id: "pro",
@@ -58,12 +89,22 @@ export const PLANS: Plan[] = [
     tagline: "For teams that need more.",
     features: [
       "Everything in Business",
+      "Up to 100 products, 5 images each",
       "Server-side tracking + Search Console",
       "Priority support",
-      "Higher assistant & automation limits",
+      "Assistant: 1,200 credits / week",
       "More seats",
     ],
-    limits: { reportsPerMonth: "unlimited", products: "unlimited", assistantMessagesPerDay: 500, seats: 10 },
+    limits: {
+      reportsPerMonth: "unlimited",
+      products: 100,
+      productImages: 5,
+      heroImages: 3,
+      assistantMessagesPerDay: 500,
+      seats: 10,
+    },
+    weeklyCredits: 1200,
+    webSearchPerDay: 100,
   },
 ];
 

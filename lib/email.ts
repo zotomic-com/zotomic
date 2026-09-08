@@ -1,29 +1,76 @@
 import nodemailer, { type Transporter } from "nodemailer";
 
 /**
- * Email adapter — Gmail SMTP via an App Password. If GMAIL_APP_PASSWORD is not
- * set, sends are logged and skipped (never throws), so the app works without
- * mail configured.
+ * Email adapter — Gmail / Google Workspace SMTP via App Passwords.
+ *
+ * Four sending identities, each authenticating as itself:
+ *   invoice  invoice@zotomic.com  — customer order invoices & confirmations
+ *   admin    admin@zotomic.com    — Zotomic-issued invoices + internal alerts
+ *   support  support@zotomic.com  — store-owner account mail (resets, billing, reports)
+ *   info     info@zotomic.com     — general / post-purchase (review invites, newsletter)
+ *
+ * Each account reads MAIL_<ACCOUNT>_USER / MAIL_<ACCOUNT>_PASS. If an account is
+ * not configured it falls back to the legacy GMAIL_USER / GMAIL_APP_PASSWORD
+ * single account. If nothing is configured, sends are logged and skipped (never
+ * throws), so the app works without mail.
  */
 
-let transporter: Transporter | null | undefined;
+export type MailAccount = "invoice" | "admin" | "support" | "info";
 
-function getTransport(): Transporter | null {
-  if (transporter !== undefined) return transporter;
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  if (!user || !pass) {
-    transporter = null;
-    return null;
-  }
-  transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user, pass },
-  });
-  return transporter;
+interface AccountCfg {
+  user?: string;
+  pass?: string;
+  from: string;
 }
 
-export function emailConfigured(): boolean {
+function accountCfg(a: MailAccount): AccountCfg {
+  const e = process.env;
+  switch (a) {
+    case "invoice":
+      return { user: e.MAIL_INVOICE_USER, pass: e.MAIL_INVOICE_PASS, from: `"Zotomic Invoices" <${e.MAIL_INVOICE_USER || "invoice@zotomic.com"}>` };
+    case "admin":
+      return { user: e.MAIL_ADMIN_USER, pass: e.MAIL_ADMIN_PASS, from: `"Zotomic" <${e.MAIL_ADMIN_USER || "admin@zotomic.com"}>` };
+    case "support":
+      return { user: e.MAIL_SUPPORT_USER, pass: e.MAIL_SUPPORT_PASS, from: `"Zotomic Support" <${e.MAIL_SUPPORT_USER || "support@zotomic.com"}>` };
+    case "info":
+      return { user: e.MAIL_INFO_USER, pass: e.MAIL_INFO_PASS, from: `"Zotomic" <${e.MAIL_INFO_USER || "info@zotomic.com"}>` };
+  }
+}
+
+function legacyCfg(): AccountCfg {
+  return {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+    from: process.env.EMAIL_FROM ?? process.env.GMAIL_USER ?? "",
+  };
+}
+
+const transports = new Map<string, Transporter>();
+
+function transportFor(account?: MailAccount): { t: Transporter | null; from: string } {
+  const want = account ? accountCfg(account) : null;
+  if (want?.user && want.pass) {
+    if (!transports.has(want.user)) {
+      transports.set(want.user, nodemailer.createTransport({ service: "gmail", auth: { user: want.user, pass: want.pass } }));
+    }
+    return { t: transports.get(want.user) ?? null, from: want.from };
+  }
+  const leg = legacyCfg();
+  if (leg.user && leg.pass) {
+    if (!transports.has(leg.user)) {
+      transports.set(leg.user, nodemailer.createTransport({ service: "gmail", auth: { user: leg.user, pass: leg.pass } }));
+    }
+    // legacy transport can't send *as* another address — use the legacy From
+    return { t: transports.get(leg.user) ?? null, from: leg.from };
+  }
+  return { t: null, from: want?.from ?? leg.from };
+}
+
+export function emailConfigured(account?: MailAccount): boolean {
+  if (account) {
+    const c = accountCfg(account);
+    if (c.user && c.pass) return true;
+  }
   return !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
 }
 
@@ -39,20 +86,22 @@ export interface SendArgs {
   html: string;
   text?: string;
   replyTo?: string;
-  /** override the From (must be the Gmail account or a verified "send mail as" alias) */
+  /** explicit From — must be the authenticating account or a verified alias */
   from?: string;
+  /** which sending identity to use; omit for the legacy default account */
+  account?: MailAccount;
   attachments?: EmailAttachment[];
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo, from, attachments }: SendArgs): Promise<boolean> {
-  const t = getTransport();
+export async function sendEmail({ to, subject, html, text, replyTo, from, account, attachments }: SendArgs): Promise<boolean> {
+  const { t, from: accountFrom } = transportFor(account);
   if (!t) {
-    console.info(`[email skipped — no GMAIL_APP_PASSWORD] to=${to} subject="${subject}"`);
+    console.info(`[email skipped — not configured] account=${account ?? "default"} to=${to} subject="${subject}"`);
     return false;
   }
   try {
     await t.sendMail({
-      from: from ?? process.env.EMAIL_FROM ?? process.env.GMAIL_USER,
+      from: from ?? accountFrom,
       to,
       subject,
       html,
@@ -71,7 +120,8 @@ export async function sendEmail({ to, subject, html, text, replyTo, from, attach
   }
 }
 
-export const NOTIFICATION_EMAIL = process.env.NOTIFICATION_EMAIL ?? process.env.GMAIL_USER ?? "";
+export const NOTIFICATION_EMAIL =
+  process.env.NOTIFICATION_EMAIL ?? process.env.MAIL_ADMIN_USER ?? process.env.GMAIL_USER ?? "";
 
 /* ── shared shell ─────────────────────────────────────────────────────────── */
 export function emailLayout(bodyHtml: string): string {

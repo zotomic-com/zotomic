@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { createProduct, deleteProduct, updateProduct } from "./actions";
+import { CategoryManager, type CategoryRow } from "./CategoryManager";
 
 export interface ProductRow {
   id: string;
@@ -29,12 +30,35 @@ export interface ProductRow {
   image_urls: string[];
   options: { name: string; values: string[] }[];
   has_variants: boolean;
+  is_hot: boolean;
+  hide_badges: boolean;
   variants: VariantRow[];
 }
 
 const STATUS_TONE = { active: "success", draft: "neutral", archived: "warning" } as const;
 
-export function ProductsClient({ products, currency }: { products: ProductRow[]; currency: string }) {
+export interface ProductLimits {
+  products: number;
+  productImages: number;
+  plan: string;
+  grandfathered: boolean;
+  activeCount: number;
+}
+
+export function ProductsClient({
+  products,
+  currency,
+  categories,
+  limits,
+}: {
+  products: ProductRow[];
+  currency: string;
+  categories: CategoryRow[];
+  limits: ProductLimits;
+}) {
+  const atCap = limits.activeCount >= limits.products;
+  const planName = limits.plan === "free" ? "Free" : limits.plan === "business" ? "Business" : "Pro";
+  const [managingCats, setManagingCats] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
   const [pending, start] = useTransition();
@@ -114,10 +138,27 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
           />
         </div>
         <ProductImport />
-        <Button onClick={() => setCreating(true)}>
+        <Button variant="outline" onClick={() => setManagingCats(true)}>
+          Categories
+        </Button>
+        <Button onClick={() => setCreating(true)} disabled={atCap}>
           <Plus className="h-4 w-4" /> Add product
         </Button>
       </div>
+
+      <p className="text-xs text-fg-subtle">
+        {limits.activeCount} / {limits.products} products used on the {planName} plan
+        {limits.grandfathered && limits.activeCount > limits.products ? " (existing products kept)" : ""}.
+      </p>
+
+      {atCap && (
+        <p className="rounded-sm border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning">
+          You&apos;ve reached the {planName} plan limit of {limits.products} products.{" "}
+          {limits.grandfathered && limits.activeCount > limits.products
+            ? "Your existing products stay live, but you can't add more until you upgrade or archive some."
+            : "Upgrade your plan or archive a product to add another."}
+        </p>
+      )}
 
       {missingCosts > 0 && (
         <p className="rounded-sm border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning">
@@ -136,8 +177,16 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
         />
       </div>
 
+      <CategoryManager open={managingCats} onClose={() => setManagingCats(false)} categories={categories} />
+
       <Modal open={creating} onClose={() => setCreating(false)} title="Add product">
-        <ProductForm currency={currency} pending={pending} onSubmit={(fd) => submit(() => createProduct(fd))} />
+        <ProductForm
+          currency={currency}
+          categories={categories}
+          maxImages={limits.productImages}
+          pending={pending}
+          onSubmit={(fd) => submit(() => createProduct(fd))}
+        />
       </Modal>
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={editing?.name ?? "Edit product"}>
@@ -145,6 +194,8 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
           <>
             <ProductForm
               currency={currency}
+              categories={categories}
+              maxImages={limits.productImages}
               product={editing}
               pending={pending}
               onSubmit={(fd) => submit(() => updateProduct(editing.id, fd))}
@@ -215,11 +266,15 @@ export function ProductsClient({ products, currency }: { products: ProductRow[];
 function ProductForm({
   product,
   currency,
+  categories,
+  maxImages,
   pending,
   onSubmit,
 }: {
   product?: ProductRow;
   currency: string;
+  categories: CategoryRow[];
+  maxImages: number;
   pending: boolean;
   onSubmit: (fd: FormData) => void;
 }) {
@@ -227,20 +282,34 @@ function ProductForm({
   return (
     <form
       action={(fd) => {
-        fd.set("image_urls", JSON.stringify(images));
+        fd.set("image_urls", JSON.stringify(images.slice(0, maxImages)));
         onSubmit(fd);
       }}
       className="space-y-3"
     >
-      <Field label="Images">
-        <ImageUploader value={images} onChange={setImages} />
+      <Field label={`Images (up to ${maxImages})`}>
+        <ImageUploader value={images} onChange={setImages} max={maxImages} />
       </Field>
       <Field label="Name">
         <Input name="name" required defaultValue={product?.name} placeholder="Classic T-Shirt" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Category">
-          <Input name="category" defaultValue={product?.category ?? ""} placeholder="T-Shirts" />
+          {categories.length ? (
+            <Select name="category" defaultValue={product?.category ?? ""}>
+              <option value="">Uncategorised</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+              {product?.category && !categories.some((c) => c.name === product.category) && (
+                <option value={product.category}>{product.category}</option>
+              )}
+            </Select>
+          ) : (
+            <Input name="category" defaultValue={product?.category ?? ""} placeholder="Add categories first" />
+          )}
         </Field>
         <Field label="Status">
           <Select name="status" defaultValue={product?.status ?? "draft"}>
@@ -277,6 +346,16 @@ function ProductForm({
         <Field label="Stock">
           <Input name="stock_qty" type="number" min="0" defaultValue={product?.stock_qty ?? 0} />
         </Field>
+      </div>
+      <div className="flex flex-wrap gap-4 rounded-sm border border-border bg-surface-2 px-3 py-2 text-sm">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" name="is_hot" defaultChecked={product?.is_hot} value="on" />
+          Mark as <span className="font-semibold text-danger">Hot</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" name="hide_badges" defaultChecked={product?.hide_badges} value="on" />
+          Hide all badges on this product
+        </label>
       </div>
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Saving…" : product ? "Save changes" : "Add product"}

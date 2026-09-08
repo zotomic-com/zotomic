@@ -4,6 +4,7 @@ import { requireBusiness } from "@/lib/app-actions";
 import { getOrderInvoiceData } from "@/lib/order-invoice";
 import { renderOrderInvoicePdf } from "@/lib/order-invoice-pdf";
 import { sendEmail, emailConfigured, emailLayout } from "@/lib/email";
+import { resolveInvoiceSender } from "@/lib/invoice-sender";
 
 export async function emailOrderInvoice(
   orderId: string,
@@ -16,13 +17,16 @@ export async function emailOrderInvoice(
 
   const to = (toOverride || data.buyer.email || "").trim();
   if (!to) return { error: "This order has no customer email — enter one to send it." };
-  if (!emailConfigured()) return { error: "Email isn't set up yet — use Print / Save as PDF for now." };
+  if (!emailConfigured("invoice")) return { error: "Email isn't set up yet — use Print / Save as PDF for now." };
 
   const pdf = await renderOrderInvoicePdf(data);
+  const sender = await resolveInvoiceSender(businessId);
   const ok = await sendEmail({
     to,
+    account: "invoice",
     subject: `Invoice ${data.orderNumber} — ${data.seller.name}`,
-    replyTo: data.seller.email || undefined,
+    from: sender.from,
+    replyTo: sender.replyTo ?? data.seller.email ?? undefined,
     html: emailLayout(
       `<h1 style="font-size:18px;margin:0 0 6px">Your invoice</h1>
        <p style="color:#475569;margin:0">Invoice for order <b>${data.orderNumber}</b> from ${data.seller.name} is attached as a PDF.</p>`,

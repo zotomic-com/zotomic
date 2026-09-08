@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getAdminSupabase } from "@/lib/supabase";
 import { sendEmail, emailLayout } from "@/lib/email";
+import { enforceRateLimit } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, { name: "forgot", limit: 5, windowMs: 60 * 60_000 });
+  if (limited) return limited;
+
   const { email } = await req.json().catch(() => ({}));
   const clean = String(email ?? "").toLowerCase().trim();
   // Always return success (don't reveal whether an account exists).
@@ -22,6 +26,7 @@ export async function POST(req: NextRequest) {
     const url = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/reset-password?token=${token}`;
     await sendEmail({
       to: clean,
+      account: "support",
       subject: "Reset your Zotomic password",
       html: emailLayout(`
         <p style="margin:0 0 12px">Hi ${user.name ?? "there"}, click below to set a new password. The link expires in 1 hour.</p>

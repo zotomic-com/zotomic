@@ -2,7 +2,8 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { sendEmail, emailLayout } from "@/lib/email";
 import { sendTelegram } from "@/lib/telegram";
 
-const ASSISTANT_FROM = process.env.EMAIL_ASSISTANT_FROM ?? "Zotomic Assistant <Assistant@zotomic.com>";
+// Use a verified alias if one is configured, otherwise send from the support identity.
+const ASSISTANT_FROM = process.env.EMAIL_ASSISTANT_FROM || undefined;
 
 interface ReportRow {
   id: string;
@@ -90,6 +91,7 @@ export async function deliverReportEmail(businessId: string, toOverride?: string
   const lines = await insights(report.id);
   const ok = await sendEmail({
     to,
+    account: "support",
     from: ASSISTANT_FROM,
     subject: `${biz?.name} — Weekly Report (${report.period_start} to ${report.period_end})`,
     html: emailLayout(`

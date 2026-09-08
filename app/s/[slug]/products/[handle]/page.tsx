@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Star } from "lucide-react";
+import { Flame, Star } from "lucide-react";
 import {
   getProductReviews,
   getStoreBySlug,
@@ -154,7 +154,30 @@ export default async function StoreProductPage({
               className="mt-1 shrink-0 rounded-full border border-[var(--sf-line)] p-2"
             />
           </div>
-          <p className="mt-2 text-xl">
+          {/* rating · sold · low stock */}
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-[var(--sf-muted)]">
+            {count > 0 && (
+              <a href="#reviews" className="flex items-center gap-1">
+                <span className="flex">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Star key={n} className="h-3.5 w-3.5 text-amber-400" fill={average >= n - 0.25 ? "currentColor" : "none"} />
+                  ))}
+                </span>
+                <span className="font-medium text-[var(--sf-fg)]">{average.toFixed(1)}</span>
+                <span>({count})</span>
+              </a>
+            )}
+            {product.sold > 0 && (
+              <span className="flex items-center gap-1">
+                <Flame className="h-3.5 w-3.5" /> {product.sold} sold
+              </span>
+            )}
+            {!variants.length && product.trackInventory && product.stockQty > 0 && product.stockQty <= 5 && (
+              <span className="font-semibold text-red-600">Only {product.stockQty} left</span>
+            )}
+          </div>
+
+          <p className="mt-3 text-xl">
             {onSale ? (
               <>
                 <span className="font-bold">{money(product.salePrice!, store.currency)}</span>{" "}
@@ -181,6 +204,7 @@ export default async function StoreProductPage({
               soldOut={soldOut}
               currency={store.currency}
               storeSlug={store.slug}
+              basePath={basePath}
               options={variantOptions}
               variants={variants}
             />
@@ -199,7 +223,7 @@ export default async function StoreProductPage({
       </div>
 
       {count > 0 && (
-        <div className="mt-16">
+        <div id="reviews" className="mt-16 scroll-mt-24">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-extrabold tracking-tight">Reviews</h2>
             <span className="flex items-center gap-1 text-sm text-[var(--sf-muted)]">

@@ -21,7 +21,7 @@ export default async function AdminSettingsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Platform Settings"
-        subtitle="Telegram bot for report delivery, and tracking for zotomic.com."
+        subtitle="Telegram bot, zotomic.com tracking, your bKash/Nagad numbers for payments, and the invoice sender address."
       />
       <PlatformSettingsForm fields={fields} />
     </div>

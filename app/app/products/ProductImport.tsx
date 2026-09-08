@@ -57,7 +57,12 @@ export function ProductImport() {
       const res = await importProducts(payload);
       if ("error" in res) toast(res.error, "error");
       else {
-        toast(`Imported ${res.count} products`, "success");
+        toast(
+          res.skipped
+            ? `Imported ${res.count} — ${res.skipped} skipped (plan product limit). Upgrade for more.`
+            : `Imported ${res.count} products`,
+          res.skipped ? "info" : "success",
+        );
         setOpen(false);
         router.refresh();
       }

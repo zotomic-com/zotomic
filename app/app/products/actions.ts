@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireBusiness, writeAudit } from "@/lib/app-actions";
+import { checkProductLimit, getPlanLimits, remainingProductBudget } from "@/lib/plan-limits";
 
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
@@ -12,10 +13,10 @@ const num = (v: FormDataEntryValue | null) => {
   return v === null || v === "" || Number.isNaN(n) ? null : n;
 };
 
-function parseImages(v: FormDataEntryValue | null): string[] {
+function parseImages(v: FormDataEntryValue | null, limit = 10): string[] {
   try {
     const arr = JSON.parse(String(v ?? "[]"));
-    return Array.isArray(arr) ? arr.filter((s) => typeof s === "string").slice(0, 10) : [];
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === "string").slice(0, Math.max(0, limit)) : [];
   } catch {
     return [];
   }
@@ -25,6 +26,10 @@ export async function createProduct(formData: FormData) {
   const { businessId, user, db } = await requireBusiness();
   const name = String(formData.get("name") ?? "").trim();
   if (name.length < 2) return { error: "Name is required" };
+
+  const limitHit = await checkProductLimit(businessId, 1);
+  if (limitHit) return { error: limitHit.error };
+  const { productImages } = await getPlanLimits(businessId);
 
   let slug = slugify(name) || "product";
   const { data: dupe } = await db
@@ -47,7 +52,9 @@ export async function createProduct(formData: FormData) {
       buying_price: num(formData.get("buying_price")),
       marketing_cost: num(formData.get("marketing_cost")) ?? 0,
       stock_qty: num(formData.get("stock_qty")) ?? 0,
-      image_urls: parseImages(formData.get("image_urls")),
+      image_urls: parseImages(formData.get("image_urls"), productImages),
+      is_hot: formData.get("is_hot") === "on",
+      hide_badges: formData.get("hide_badges") === "on",
     })
     .select("id")
     .single();
@@ -64,6 +71,7 @@ export async function createProduct(formData: FormData) {
 
 export async function updateProduct(id: string, formData: FormData) {
   const { businessId, user, db } = await requireBusiness();
+  const { productImages } = await getPlanLimits(businessId);
 
   const { data: before } = await db
     .from("products")
@@ -81,7 +89,9 @@ export async function updateProduct(id: string, formData: FormData) {
     buying_price: num(formData.get("buying_price")),
     marketing_cost: num(formData.get("marketing_cost")) ?? 0,
     stock_qty: num(formData.get("stock_qty")) ?? before.stock_qty,
-    image_urls: parseImages(formData.get("image_urls")),
+    image_urls: parseImages(formData.get("image_urls"), productImages),
+    is_hot: formData.get("is_hot") === "on",
+    hide_badges: formData.get("hide_badges") === "on",
   };
 
   const { error } = await db.from("products").update(patch).eq("business_id", businessId).eq("id", id);
@@ -111,10 +121,20 @@ export interface ImportRow {
 
 export async function importProducts(
   rows: ImportRow[],
-): Promise<{ error: string } | { ok: true; count: number }> {
+): Promise<{ error: string } | { ok: true; count: number; skipped?: number }> {
   const { businessId, user, db } = await requireBusiness();
   if (!Array.isArray(rows) || rows.length === 0) return { error: "Nothing to import" };
   if (rows.length > 1000) return { error: "Import is limited to 1000 rows at a time." };
+
+  const budget = await remainingProductBudget(businessId);
+  if (budget <= 0) {
+    return { error: "You're at your plan's product limit. Upgrade or archive products before importing." };
+  }
+  let skipped = 0;
+  if (rows.length > budget) {
+    skipped = rows.length - budget;
+    rows = rows.slice(0, budget);
+  }
 
   const num = (v?: string) => {
     if (v == null || v === "") return null;
@@ -157,10 +177,10 @@ export async function importProducts(
 
   await writeAudit(businessId, user.id, "products.imported", {
     targetType: "product",
-    summary: `Imported ${records.length} products from CSV`,
+    summary: `Imported ${records.length} products from CSV${skipped ? ` (${skipped} skipped — plan limit)` : ""}`,
   });
   revalidatePath("/app/products");
-  return { ok: true, count: records.length };
+  return { ok: true, count: records.length, skipped: skipped || undefined };
 }
 
 export async function deleteProduct(

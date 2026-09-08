@@ -1,0 +1,111 @@
+1. every sotre should have add,edite,delete functionality for catagory
+
+2. free store can not upload more then 3 image for a single product, 
+and 10 product list maximum limit for free store.
+
+3. paid store can not upload more then 5 images for a single product, 
+and 100 product list maximum limit for store.
+
+4. free store invoice should go from zotomic mail "invoice@zotomci.com"(make this mail settings for admin add,
+edite and delete functionality)
+
+5. paid store invoice go from ther mail(store owner can add ther mail for sending invoice) 
+add this section for paid store owner.
+
+6. need zotomic assistant uses credit system, admin can be able to add,edite,delete credit from any store. 
+free plan store owner can by creadit 
+for zotomic assistant. and it should shows there dashboard how much creadite the use and how much left.
+(this creadit will be deduct based on
+ using assitant tools, when any store owner need creadite buy cradite using bkash, nagad 
+(this is admin personal bkash and nagad number- admin 
+will add them using admin dashboard)admin get notify.
+*** to crate a credite functionality active your plan mode to discus with me how to handel this***
+
+7. use retlimit for database(supabase) and also for gemini api key.
+
+8. logo, product images"cheack first for product images may be its already done" 
+should be upload from device ( backend work from user device onsite compress resize upload to 
+cloudinary take the link upload the link to supabase data
+base, no need to show this info any sotre or frontend user)
+
+9. paid store can add or connect ther own teligram chatbot to zotomic assistant for comunication separetly.
+free store owner should use the store owner dashbord zotomic assitant inter face for uses. 
+
+10. add new product or edite any product there is a imput box "marketing cost/unit(BDT)" need to improve this,
+ user need to imput there campain budget, campain start time, end time, and total spend dollar, and based on this
+info i need to calculate this on site from starting date to end date how much sales genarate and how much the spend,
+how much cost them per product to seal, and this info will go to report to improve weekly report. or you can separate
+this from add new product or edite product make owner dashboard sidebar tab for marketing cost, user imput campain 
+budget and start date and end date(after end of campaing how much total spend)
+ then sellect from dropdown product list(wich product store have)*** be fore edite
+or crate this ask me how i want to make this.***
+
+11. return and restore popup box have over lapping issu on under order list fix this.
+
+12. on admin dashboard "assistant activity" i need to see user how much credit use on whic tools.
+
+13. i need to see which store use how much disc space by catagory lik, supabase for database, vercle for deployment,
+cloudinary for imge upload.(as admin)
+
+14. free store owner hero image should be only 1.
+
+15. paid store owner can upload 3 hero image not more then 3.
+
+16. cheack out page need product adding or minuse button ( cart page have this button use this ).
+
+17. single product page need improvement, product details, review, retings, how much solde, low stocks with number
+    buy now button.
+
+18. product image card need to improve, add a buy now button(under the add to cart button), add quick view(should show icon inside the image frame top left 
+    corner) to popup image and product short description,
+    product retings,low stocks, how much sold(should show only icon and number inside the image frame left bottom corner)
+
+19. single product image card need a lable , hot, new, best, seal(inside the image frame top right corner).
+
+20. need to move the wish list icon from top right corner to top left after the quick view icon.
+
+// all icon should be like wishlist icon standard and proffessional. //
+
+*** before you start rearrange them section wais ***
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

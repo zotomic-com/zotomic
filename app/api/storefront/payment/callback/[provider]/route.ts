@@ -3,6 +3,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { getStoreBySlug } from "@/lib/storefront/store";
 import { loadIntegration, paymentProvider } from "@/lib/adapters/registry";
 import { sendOrderConfirmation } from "@/lib/emails";
+import { resolveInvoiceSender } from "@/lib/invoice-sender";
 
 const ROOT = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
 
@@ -74,6 +75,7 @@ async function handle(req: NextRequest, providerId: string) {
     const email = ((Array.isArray(order.customers) ? order.customers[0] : order.customers) as { email?: string } | null)?.email;
     if (email) {
       const items = (order.order_items ?? []) as { name: string; qty: number; line_total: number }[];
+      const invSender = await resolveInvoiceSender(order.business_id as string);
       await sendOrderConfirmation({
         to: email,
         storeName: store.name,
@@ -82,6 +84,8 @@ async function handle(req: NextRequest, providerId: string) {
         items: items.map((i) => ({ name: i.name, qty: i.qty, lineTotal: Number(i.line_total) })),
         shipping: 0,
         total: Number(order.total),
+        from: invSender.from,
+        replyTo: invSender.replyTo,
       }).catch(() => {});
     }
     return done("confirmed");

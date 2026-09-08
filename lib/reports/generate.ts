@@ -2,9 +2,12 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { getSummary, buildMetricLines, type Summary } from "@/lib/metrics";
 import { buildObservations, type Observation } from "@/lib/observations";
 import { geminiGenerate, geminiConfigured, parseJsonResponse } from "@/lib/ai/gemini";
+import { checkAiBudget, recordAiCalls } from "@/lib/ai/budget";
 import { money, pctChange } from "@/lib/money";
 import { sendReportReady } from "@/lib/emails";
 import { getTrafficSummary } from "@/lib/traffic";
+import { campaignsInWindow, getCampaignAttribution } from "@/lib/marketing";
+import { getUsdToBdt } from "@/lib/fx";
 
 const DAY = 86_400_000;
 
@@ -156,6 +159,27 @@ export async function generateReport(
       }
     }
 
+    // marketing campaigns overlapping this week (deterministic attribution)
+    try {
+      const campaigns = await campaignsInWindow(businessId, periodStart, periodEnd);
+      if (campaigns.length) {
+        const fx = await getUsdToBdt();
+        for (const c of campaigns.slice(0, 5)) {
+          const a = await getCampaignAttribution(businessId, c, fx.usdToBdt);
+          if (!a.productIds.length) continue;
+          const cpu = a.costPerUnitBdt != null ? money(a.costPerUnitBdt, currency) : "n/a";
+          const roas = a.roas != null ? `${a.roas}× ROAS` : "no linked sales yet";
+          observations.push({
+            key: `campaign-${c.id}`,
+            severity: a.roas != null && a.roas < 1 ? "medium" : "info",
+            text: `Campaign "${c.name}" (${c.starts_on}–${c.ends_on}): ${a.finalised ? "spent" : "budget"} ${money(a.spendBdt, currency)}, linked products sold ${a.units} units for ${money(a.revenueBdt, currency)} — ${cpu}/unit, ${roas}. Counts all sales of these products in the window, not only ad-driven ones.`,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("campaign attribution for report failed:", (e as Error).message);
+    }
+
     const coldStart = cur.orders_count === 0 && prev.orders_count === 0;
 
     // ── deterministic metrics rows ──────────────────────────────────────────
@@ -188,12 +212,13 @@ export async function generateReport(
     if (coldStart) {
       summary =
         "There isn't enough sales history yet to produce a full report. Add or import orders, or connect a data source, and the next weekly report will have real numbers to work with.";
-    } else if (geminiConfigured()) {
+    } else if (geminiConfigured() && (await checkAiBudget(db, businessId)).ok) {
       const sheet = factSheet(cur, prev, currency, observations, top);
       const ai = await geminiGenerate(
         `Here are this week's figures for the store. Write the weekly report.\n\n${sheet}`,
         { system: SYSTEM, json: true, maxOutputTokens: 2048 },
       );
+      if (ai) await recordAiCalls(db, businessId, null, 1, ai.model);
       const parsed = ai ? parseJsonResponse<AiNarrative>(ai.text) : null;
       if (parsed?.summary) {
         summary = parsed.summary;

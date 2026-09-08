@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { sendContactMessage } from "@/lib/emails";
 import { ga4ServerEvent } from "@/lib/platform-settings";
+import { enforceRateLimit } from "@/lib/ratelimit";
 
 interface ContactBody {
   name?: string;
@@ -13,6 +14,9 @@ interface ContactBody {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, { name: "contact", limit: 5, windowMs: 60 * 60_000 });
+  if (limited) return limited;
+
   try {
     const body = (await req.json()) as ContactBody;
 

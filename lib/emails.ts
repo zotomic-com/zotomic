@@ -14,6 +14,8 @@ export async function sendOrderConfirmation(args: {
   shipping: number;
   total: number;
   attachments?: EmailAttachment[];
+  from?: string;
+  replyTo?: string;
 }): Promise<boolean> {
   if (!args.to) return false;
   const rows = args.items
@@ -27,6 +29,7 @@ export async function sendOrderConfirmation(args: {
     .join("");
   return sendEmail({
     to: args.to,
+    account: "invoice",
     subject: `Order ${args.orderNumber} confirmed — ${args.storeName}`,
     html: emailLayout(`
       <h1 style="font-size:18px;margin:0 0 4px">Thanks for your order</h1>
@@ -40,6 +43,8 @@ export async function sendOrderConfirmation(args: {
       ${args.attachments?.length ? `<p style="color:#94a3b8;font-size:13px">Your invoice is attached as a PDF.</p>` : ""}
     `),
     attachments: args.attachments,
+    from: args.from,
+    replyTo: args.replyTo,
   });
 }
 
@@ -55,6 +60,7 @@ export async function sendNewOrderAlert(args: {
   if (!to) return false;
   return sendEmail({
     to,
+    account: "admin",
     subject: `New order ${args.orderNumber} — ${money(args.total, args.currency)}`,
     html: emailLayout(
       `<p style="margin:0"><b>${esc(args.customerName)}</b> just placed order <b>${esc(
@@ -75,6 +81,7 @@ export async function sendReportReady(args: {
   if (!args.to) return false;
   return sendEmail({
     to: args.to,
+    account: "support",
     subject: `Your weekly report is ready — ${args.businessName}`,
     html: emailLayout(`
       <h1 style="font-size:18px;margin:0 0 4px">Weekly Intelligence</h1>
@@ -95,6 +102,7 @@ export async function sendReviewInvite(args: {
   if (!args.to) return false;
   return sendEmail({
     to: args.to,
+    account: "info",
     subject: `How was your ${args.productName}?`,
     html: emailLayout(`
       <p style="margin:0 0 16px;color:#475569">Your order from ${esc(args.storeName)} has been delivered. Would you leave a quick review of the <b>${esc(
@@ -117,6 +125,7 @@ export async function sendContactMessage(args: {
   if (!NOTIFICATION_EMAIL) return false;
   return sendEmail({
     to: NOTIFICATION_EMAIL,
+    account: "admin",
     replyTo: args.email,
     subject: `Contact${args.topic ? ` · ${args.topic}` : ""} — ${args.name}`,
     html: emailLayout(`

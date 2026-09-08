@@ -18,6 +18,7 @@ export async function emailInvoice(
 
   const ok = await sendEmail({
     to,
+    account: "admin",
     subject: `Invoice ${data.invoiceNumber} — Zotomic`,
     html: `<div style="background:#f1f5f9;padding:24px">${renderInvoiceHtml(data)}</div>`,
     text: `Invoice ${data.invoiceNumber} for ${data.planLabel} plan — ${data.amount} ${data.currency}. Status: ${data.status}.`,

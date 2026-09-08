@@ -2,6 +2,9 @@ import { getSummary, buildMetricLines } from "@/lib/metrics";
 import { buildObservations } from "@/lib/observations";
 import { money } from "@/lib/money";
 import { deliverReportEmail, deliverReportTelegram } from "@/lib/reports/deliver";
+import { groundedSearch, searchConfigured } from "@/lib/ai/search";
+import { webSearchesToday, webSearchCapFor } from "@/lib/credits";
+import type { PlanId } from "@/lib/plans";
 import type { ToolContext, ToolDef } from "./types";
 
 const DAY = 86_400_000;
@@ -804,6 +807,50 @@ const get_returns: ToolDef = {
   },
 };
 
+const web_search: ToolDef = {
+  name: "web_search",
+  description:
+    "Search the public web for current information the store's own data can't answer — supplier prices, competitor products, market trends, delivery/regulation news, how-to guidance. Returns a short synthesised answer with source links. This is a premium action: it costs 10 credits and is capped per day. Only use it when the answer genuinely needs live external information.",
+  risk: "read",
+  creditCost: 10,
+  parameters: {
+    type: "object",
+    properties: { query: { type: "string", description: "what to look up, as a natural-language question" } },
+    required: ["query"],
+  },
+  async handler(ctx, a) {
+    const query = s(a.query)?.trim();
+    if (!query) return { error: "query required" };
+    if (!searchConfigured()) return { error: "Web search is not configured." };
+
+    const { data: sub } = await ctx.db
+      .from("subscriptions")
+      .select("plan")
+      .eq("business_id", ctx.businessId)
+      .maybeSingle();
+    const plan = (sub?.plan ?? "free") as PlanId;
+    const cap = webSearchCapFor(plan);
+    const used = await webSearchesToday(ctx.businessId);
+    if (used >= cap) {
+      return { error: `Daily web-search limit reached (${cap}/day on the ${plan} plan). It resets at 00:00 UTC.` };
+    }
+
+    // record the call so the daily cap counts it (credits are charged by the agent loop)
+    await ctx.db.from("usage_ledger").insert({
+      business_id: ctx.businessId,
+      user_id: ctx.userId,
+      kind: "tool_call",
+      tool_name: "web_search",
+      units: 1,
+      cost: 10,
+    });
+
+    const res = await groundedSearch(query);
+    if (!res) return { error: "Web search is temporarily unavailable. Try again shortly." };
+    return { answer: res.answer, sources: res.sources, remainingToday: Math.max(0, cap - used - 1) };
+  },
+};
+
 // ── write tools ────────────────────────────────────────────────────────────
 
 const create_task: ToolDef = {
@@ -843,7 +890,7 @@ const update_product: ToolDef = {
   name: "update_product",
   description: "Modify approved fields of one product: price, sale_price, status, category, stock_qty, buying_price, marketing_cost. Requires user confirmation.",
   risk: "consequential",
-  creditCost: 1,
+  creditCost: 2,
   parameters: {
     type: "object",
     properties: {
@@ -897,7 +944,7 @@ const update_business_settings: ToolDef = {
   name: "update_business_settings",
   description: "Modify approved business settings: currency, timezone, description. Requires user confirmation.",
   risk: "consequential",
-  creditCost: 1,
+  creditCost: 2,
   parameters: {
     type: "object",
     properties: {
@@ -976,6 +1023,7 @@ export const TOOLS: ToolDef[] = [
   get_customer_details,
   get_cancelled_orders,
   get_returns,
+  web_search,
   list_tasks,
   create_task,
   send_report_telegram,

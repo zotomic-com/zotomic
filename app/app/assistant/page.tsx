@@ -5,6 +5,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { geminiConfigured } from "@/lib/ai/gemini";
 import { PageHeader } from "@/components/app/PageHeader";
 import { EmptyState } from "@/components/ui/empty-state";
+import { CreditMeter } from "@/components/app/CreditMeter";
 import { AssistantChat } from "./AssistantChat";
 
 export const dynamic = "force-dynamic";
@@ -63,10 +64,13 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Zotomic Assistant"
-        subtitle="Ask about your metrics, reports, products, orders and customers."
-      />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader
+          title="Zotomic Assistant"
+          subtitle="Ask about your metrics, reports, products, orders and customers."
+        />
+        <CreditMeter businessId={tenant.businessId} compact />
+      </div>
       <Suspense fallback={null}>
         <AssistantChat
           key={activeId ?? "new"}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
+import { ImageUploader } from "@/components/app/ImageUploader";
 import { Select } from "@/components/ui/select";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -21,6 +22,7 @@ export interface BusinessSettings {
   telegram_chat_id: string | null;
   logo_url: string | null;
   invoice_address: string | null;
+  invoice_from_email: string | null;
   contact_email: string | null;
   contact_phone: string | null;
 }
@@ -28,16 +30,20 @@ export interface BusinessSettings {
 export function SettingsClient({
   business,
   user,
+  brandedInvoice,
 }: {
   business: BusinessSettings;
   user: { name: string; email: string; role: string };
+  brandedInvoice: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, start] = useTransition();
+  const [logo, setLogo] = useState<string[]>(business.logo_url ? [business.logo_url] : []);
 
   const save = (fd: FormData) =>
     start(async () => {
+      fd.set("logo_url", logo[0] ?? "");
       const res = await updateBusinessSettings(fd);
       if (res.error) toast(res.error, "error");
       else {
@@ -90,9 +96,10 @@ export function SettingsClient({
               <p className="text-sm font-semibold text-fg">Invoice &amp; branding</p>
               <p className="mb-3 text-xs text-fg-subtle">Shown on the invoices you download or email from Billing.</p>
               <div className="space-y-4">
-                <Field label="Logo URL" hint="Upload in Media, then paste the image link here.">
-                  <Input name="logo_url" defaultValue={business.logo_url ?? ""} placeholder="https://res.cloudinary.com/…" />
-                </Field>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-fg">Logo</p>
+                  <ImageUploader value={logo} onChange={setLogo} max={1} />
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Contact email">
                     <Input name="contact_email" type="email" defaultValue={business.contact_email ?? ""} />
@@ -104,6 +111,24 @@ export function SettingsClient({
                 <Field label="Billing address">
                   <Textarea name="invoice_address" defaultValue={business.invoice_address ?? ""} />
                 </Field>
+                {brandedInvoice ? (
+                  <Field
+                    label="Invoice reply-to email"
+                    hint="Customer replies to invoices go here. Invoices still send from Zotomic's mail server."
+                  >
+                    <Input
+                      name="invoice_from_email"
+                      type="email"
+                      defaultValue={business.invoice_from_email ?? ""}
+                      placeholder="orders@yourstore.com"
+                    />
+                  </Field>
+                ) : (
+                  <p className="rounded-sm border border-border bg-surface-2 px-3 py-2 text-xs text-fg-subtle">
+                    On a paid plan you can set your own reply-to address for customer invoices, and drop
+                    the &ldquo;Powered by Zotomic&rdquo; footer.
+                  </p>
+                )}
               </div>
             </div>
 

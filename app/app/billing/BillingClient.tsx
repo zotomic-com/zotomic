@@ -7,7 +7,15 @@ import { Field, Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { submitPaymentAction } from "./actions";
 
-export function PaymentForm({ reference, amount }: { reference: string; amount: number }) {
+export function PaymentForm({
+  reference,
+  amount,
+  bkashNumber,
+}: {
+  reference: string;
+  amount: number;
+  bkashNumber?: string;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, start] = useTransition();
@@ -28,8 +36,9 @@ export function PaymentForm({ reference, amount }: { reference: string; amount: 
     >
       <div className="rounded-sm border border-border bg-surface-2 p-3 text-sm">
         <p className="text-fg-muted">
-          Send <span className="font-bold text-fg">৳{amount.toLocaleString("en-US")}</span> to our
-          bKash, then enter the transaction ID below.
+          Send <span className="font-bold text-fg">৳{amount.toLocaleString("en-US")}</span> to{" "}
+          {bkashNumber ? <span className="font-bold text-fg">{bkashNumber}</span> : "our bKash"}, then
+          enter the transaction ID below.
         </p>
         <p className="mt-1 text-xs text-fg-subtle">Reference: {reference}</p>
       </div>

@@ -4,6 +4,8 @@
  * schema; the adapter walks a fallback chain of models.
  */
 
+import { canAttempt, recordSuccess, recordFailure, chainOpen, sleep, backoffDelay } from "./circuit";
+
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 // Fallback chain — first that responds wins. `gemini-2.5-*` is retired for new
@@ -44,7 +46,12 @@ export async function geminiGenerate(
     },
   };
 
+  // Every model is cooling off — don't bother, let the caller fall back.
+  if (chainOpen(MODEL_CHAIN)) return null;
+
+  let transientFails = 0;
   for (const model of MODEL_CHAIN) {
+    if (!canAttempt(model)) continue;
     try {
       const res = await fetch(`${ENDPOINT}/${model}:generateContent`, {
         method: "POST",
@@ -54,8 +61,12 @@ export async function geminiGenerate(
       });
 
       if (!res.ok) {
-        // 404 (model gone) / 503 (overloaded) → try next model
-        if (res.status === 404 || res.status === 503 || res.status === 429) continue;
+        recordFailure(model);
+        // 404 (model gone) / 503 (overloaded) / 429 (rate limited) → back off, try next
+        if (res.status === 404 || res.status === 503 || res.status === 429) {
+          await sleep(backoffDelay(transientFails++));
+          continue;
+        }
         const err = await res.text();
         console.error(`gemini ${model} ${res.status}`, err.slice(0, 200));
         continue;
@@ -65,9 +76,15 @@ export async function geminiGenerate(
       const text: string =
         data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ??
         "";
-      if (text.trim()) return { text: text.trim(), model };
+      if (text.trim()) {
+        recordSuccess(model);
+        return { text: text.trim(), model };
+      }
+      recordFailure(model);
     } catch (e) {
+      recordFailure(model);
       console.error(`gemini ${model} failed`, (e as Error).message);
+      await sleep(backoffDelay(transientFails++));
     }
   }
   return null;

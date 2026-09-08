@@ -22,7 +22,7 @@ export function AccountAuthClient({
     start(async () => {
       setErr("");
       const res = mode === "login" ? await loginAction(slug, fd) : await registerAction(slug, fd);
-      if ("error" in res) setErr(res.error);
+      if ("error" in res && res.error) setErr(res.error);
       else {
         router.push(`${basePath}/account`);
         router.refresh();

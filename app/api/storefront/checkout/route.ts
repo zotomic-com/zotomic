@@ -5,6 +5,8 @@ import { getStoreAccount } from "@/lib/storefront/account";
 import { revalidatePath } from "next/cache";
 import { sendNewOrderAlert, sendOrderConfirmation } from "@/lib/emails";
 import { loadIntegration, paymentProvider } from "@/lib/adapters/registry";
+import { enforceRateLimit } from "@/lib/ratelimit";
+import { resolveInvoiceSender } from "@/lib/invoice-sender";
 
 interface Body {
   storeSlug: string;
@@ -16,6 +18,14 @@ interface Body {
 const clean = (s: unknown, max = 200) => String(s ?? "").trim().slice(0, max);
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, {
+    name: "checkout",
+    limit: 12,
+    windowMs: 10 * 60_000,
+    message: "Too many checkout attempts. Wait a few minutes and try again.",
+  });
+  if (limited) return limited;
+
   let body: Body;
   try {
     body = (await req.json()) as Body;
@@ -353,6 +363,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   const ownerEmail =
     ((Array.isArray(owner?.users) ? owner?.users[0] : owner?.users) as { email?: string } | null)?.email ?? "";
+  const invSender = await resolveInvoiceSender(store.businessId);
 
   await Promise.allSettled([
     custEmail
@@ -365,6 +376,8 @@ export async function POST(req: NextRequest) {
           shipping,
           total,
           attachments: invoicePdf ? [invoicePdf] : undefined,
+          from: invSender.from,
+          replyTo: invSender.replyTo ?? ownerEmail ?? undefined,
         })
       : Promise.resolve(),
     sendNewOrderAlert({

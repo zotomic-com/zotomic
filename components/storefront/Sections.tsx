@@ -42,12 +42,40 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
 
   switch (section.type) {
     case "hero": {
-      const img = s(d, "imageUrl");
+      const imgs = (Array.isArray(d.images) ? (d.images as unknown[]).filter((x) => typeof x === "string") : []) as string[];
+      const legacy = s(d, "imageUrl");
+      const slides = imgs.length ? imgs : legacy ? [legacy] : [];
+      const single = slides[0];
       return (
-        <section className="relative">
+        <section className="relative overflow-hidden">
+          {slides.length > 1 && (
+            <>
+              <div aria-hidden className="absolute inset-0 -z-10">
+                {slides.slice(0, 3).map((src, i) => (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    key={src + i}
+                    src={src}
+                    alt=""
+                    className="sf-hero-slide absolute inset-0 h-full w-full object-cover"
+                    style={{ animationDelay: `${i * (6 / slides.slice(0, 3).length)}s` }}
+                  />
+                ))}
+              </div>
+              <style
+                dangerouslySetInnerHTML={{
+                  __html: `.sf-hero-slide{opacity:0;animation:sfHeroFade 6s linear infinite}@keyframes sfHeroFade{0%,8%{opacity:1}40%,100%{opacity:0}}@media (prefers-reduced-motion:reduce){.sf-hero-slide{animation:none}.sf-hero-slide:first-child{opacity:1}}`,
+                }}
+              />
+            </>
+          )}
           <div
             className="mx-auto flex max-w-6xl flex-col items-start gap-4 px-4 py-20 sm:px-6"
-            style={img ? { backgroundImage: `url(${img})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+            style={
+              slides.length === 1 && single
+                ? { backgroundImage: `url(${single})`, backgroundSize: "cover", backgroundPosition: "center" }
+                : undefined
+            }
           >
             <h1 className="max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">
               {s(d, "heading", "Welcome")}

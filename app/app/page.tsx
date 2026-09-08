@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { LineChart, DonutChart } from "@/components/charts";
 import { AskZotomicPanel } from "@/components/app/AskZotomicPanel";
+import { CreditMeter } from "@/components/app/CreditMeter";
 import { OrderStatusBadge } from "@/components/app/OrderStatusBadge";
 
 function greeting() {
@@ -257,8 +258,9 @@ export default async function DashboardPage() {
           />
         </Card>
 
-        <div className="lg:row-span-2">
+        <div className="space-y-4 lg:row-span-2">
           <AskZotomicPanel />
+          <CreditMeter businessId={businessId} />
         </div>
 
         <Card className="lg:col-span-2">

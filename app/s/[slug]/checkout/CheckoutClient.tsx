@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { money } from "@/lib/money";
 import { readCart, writeCart, type CartItem } from "@/components/storefront/cart-store";
+import { QtyStepper } from "@/components/storefront/QtyStepper";
 
 export function CheckoutClient({
   storeSlug,
@@ -33,6 +34,14 @@ export function CheckoutClient({
   const [error, setError] = useState("");
 
   useEffect(() => setItems(readCart(storeSlug)), [storeSlug]);
+
+  const updateQty = (id: string, qty: number) => {
+    const next = readCart(storeSlug)
+      .map((i) => (i.id === id ? { ...i, qty: Math.max(0, qty) } : i))
+      .filter((i) => i.qty > 0);
+    writeCart(storeSlug, next);
+    setItems(next);
+  };
 
   if (items === null) return <p className="text-sm text-[var(--sf-muted)]">Loading…</p>;
   if (items.length === 0) {
@@ -118,11 +127,16 @@ export function CheckoutClient({
       </div>
 
       <div className="h-fit rounded-[var(--sf-radius)] border border-[var(--sf-line)] p-5">
-        <ul className="space-y-2 text-sm">
+        <ul className="space-y-3 text-sm">
           {items.map((i) => (
-            <li key={i.id} className="flex justify-between">
-              <span className="text-[var(--sf-muted)]">{i.name} × {i.qty}</span>
-              <span>{money(i.price * i.qty, currency)}</span>
+            <li key={i.id} className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[var(--sf-fg)]">{i.name}</p>
+                <div className="mt-1">
+                  <QtyStepper qty={i.qty} onChange={(n) => updateQty(i.id, n)} min={0} size="sm" />
+                </div>
+              </div>
+              <span className="shrink-0 font-medium">{money(i.price * i.qty, currency)}</span>
             </li>
           ))}
         </ul>

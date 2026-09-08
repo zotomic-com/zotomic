@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveTenant, isTenantError } from "@/lib/tenant";
 import { getAdminSupabase } from "@/lib/supabase";
 import { getBilling } from "@/lib/billing";
-import { PLANS } from "@/lib/plans";
 import { runAgent, type AgentMessage } from "@/lib/agent/hermes";
 import { toolContext } from "@/lib/tools/registry";
 import { TOOL_MAP } from "@/lib/tools/registry";
+import { checkAiBudget, recordAiCalls } from "@/lib/ai/budget";
+import { canSpendCredits, chargeCredits, getCreditAccount } from "@/lib/credits";
+import { enforceRateLimit } from "@/lib/ratelimit";
+import type { AgentOutcome } from "@/lib/agent/hermes";
 
 export const maxDuration = 120;
 
@@ -13,25 +16,41 @@ export async function POST(req: NextRequest) {
   const tenant = await resolveTenant(req);
   if (isTenantError(tenant)) return tenant;
 
+  // burst guard — one assistant turn every few seconds per business
+  const burst = enforceRateLimit(req, {
+    name: "assistant",
+    key: tenant.businessId,
+    limit: 8,
+    windowMs: 30_000,
+    message: "You're sending messages very quickly. Wait a few seconds and try again.",
+  });
+  if (burst) return burst;
+
   const body = await req.json().catch(() => ({}));
   const db = getAdminSupabase();
+
+  // daily AI ceiling — backstop against a runaway loop draining the key
+  const budget = await checkAiBudget(db, tenant.businessId);
+  if (!budget.ok) {
+    return NextResponse.json({ error: budget.reason }, { status: 429 });
+  }
 
   const billing = await getBilling(tenant.businessId);
   const plan = billing.plan;
 
-  // daily message cap by plan
-  const cap = PLANS.find((p) => p.id === plan)?.limits.assistantMessagesPerDay ?? 10;
-  const since = new Date(Date.now() - 86_400_000).toISOString();
-  const { count } = await db
-    .from("assistant_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("business_id", tenant.businessId)
-    .eq("role", "user")
-    .gte("created_at", since);
-  if ((count ?? 0) >= cap) {
+  // credit gate — the assistant runs on credits (weekly allowance + top-ups).
+  // At/below the -20 overdraft floor the assistant is blocked until Friday's reset.
+  if (!(await canSpendCredits(tenant.businessId, 1))) {
+    const acc = await getCreditAccount(tenant.businessId);
     return NextResponse.json(
-      { error: `You've reached today's assistant limit (${cap} messages). It resets in 24 hours.` },
-      { status: 429 },
+      {
+        error:
+          "You're out of assistant credits. Top up on the Billing page" +
+          (plan === "free" ? ", upgrade your plan," : "") +
+          ` or wait for your free credits to reset on ${new Date(acc.weekResetsOn + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "long" })}.`,
+        credits: { spendable: acc.spendable, resetsOn: acc.weekResetsOn },
+      },
+      { status: 402 },
     );
   }
 
@@ -87,9 +106,9 @@ export async function POST(req: NextRequest) {
 
     await db.from("assistant_pending_actions").update({ status: "approved", resolved_at: new Date().toISOString() }).eq("id", pending.id);
     await saveTurn(db, conversationId, tenant.businessId, "Approved the change.", out.reply, out.model);
-    await recordUsage(db, tenant.businessId, tenant.user.id, out.creditsUsed, out.toolTraces.length);
+    const credits = await settleTurn(db, tenant.businessId, tenant.user.id, conversationId, out);
 
-    return NextResponse.json({ conversationId, reply: out.reply, toolTraces: out.toolTraces });
+    return NextResponse.json({ conversationId, reply: out.reply, toolTraces: out.toolTraces, credits });
   }
 
   // ── normal message ───────────────────────────────────────────────────────
@@ -109,10 +128,12 @@ export async function POST(req: NextRequest) {
         "I can't make changes while the account is read-only. Once payment is confirmed I can apply that.",
         out.model,
       );
+      const credits = await settleTurn(db, tenant.businessId, tenant.user.id, conversationId, out);
       return NextResponse.json({
         conversationId,
         reply: "I can't make changes while the account is read-only. Confirm payment on the Billing page and I'll apply it.",
         toolTraces: out.toolTraces,
+        credits,
       });
     }
     const { data: pa } = await db
@@ -129,19 +150,20 @@ export async function POST(req: NextRequest) {
       .single();
 
     await saveTurn(db, conversationId, tenant.businessId, message, `Proposed: ${out.pendingAction.preview}`, out.model);
-    await recordUsage(db, tenant.businessId, tenant.user.id, out.creditsUsed, out.toolTraces.length);
+    const credits = await settleTurn(db, tenant.businessId, tenant.user.id, conversationId, out);
 
     return NextResponse.json({
       conversationId,
       toolTraces: out.toolTraces,
+      credits,
       pendingAction: { id: pa!.id, tool: out.pendingAction.tool, preview: out.pendingAction.preview, risk: TOOL_MAP.get(out.pendingAction.tool)?.risk },
     });
   }
 
   await saveTurn(db, conversationId, tenant.businessId, message, out.reply, out.model);
-  await recordUsage(db, tenant.businessId, tenant.user.id, out.creditsUsed, out.toolTraces.length);
+  const credits = await settleTurn(db, tenant.businessId, tenant.user.id, conversationId, out);
 
-  return NextResponse.json({ conversationId, reply: out.reply, toolTraces: out.toolTraces });
+  return NextResponse.json({ conversationId, reply: out.reply, toolTraces: out.toolTraces, credits });
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -177,19 +199,54 @@ async function saveTurn(
   await db.from("assistant_conversations").update(patch).eq("id", conversationId);
 }
 
-async function recordUsage(
+/**
+ * After a turn: record AI calls (daily ceiling), record per-tool usage
+ * (admin analytics), and charge the store's credit balance. Returns the new
+ * balance so the client can update its meter.
+ *
+ * Credit cost of a turn = 1 per Gemini call + each tool's `creditCost`
+ * (read 0, write 1, consequential 2, web_search 10).
+ */
+async function settleTurn(
   db: ReturnType<typeof getAdminSupabase>,
   businessId: string,
   userId: string,
-  credits: number,
-  toolCalls: number,
-) {
-  if (credits <= 0 && toolCalls === 0) credits = 0;
-  await db.from("usage_ledger").insert({
-    business_id: businessId,
-    user_id: userId,
-    kind: "tool_call",
-    units: Math.max(1, toolCalls),
-    cost: credits,
+  conversationId: string,
+  out: AgentOutcome,
+): Promise<{ spendable: number; resetsOn: string } | null> {
+  await recordAiCalls(db, businessId, userId, out.aiCalls, out.model);
+
+  // per-tool usage rows (web_search records its own row inside the tool)
+  const toolRows = out.toolTraces
+    .filter((t) => t.tool !== "web_search")
+    .map((t) => ({
+      business_id: businessId,
+      user_id: userId,
+      kind: "tool_call" as const,
+      tool_name: t.tool,
+      units: 1,
+      cost: TOOL_MAP.get(t.tool)?.creditCost ?? 0,
+    }));
+  if (toolRows.length) await db.from("usage_ledger").insert(toolRows);
+
+  const cost = out.aiCalls + out.creditsUsed;
+  if (cost <= 0) {
+    try {
+      const acc = await getCreditAccount(businessId);
+      return { spendable: acc.spendable, resetsOn: acc.weekResetsOn };
+    } catch {
+      return null;
+    }
+  }
+  const res = await chargeCredits(businessId, cost, {
+    reason: "assistant",
+    refType: "conversation",
+    refId: conversationId,
+    actorId: userId,
+    actorType: "assistant",
+    meta: { aiCalls: out.aiCalls, toolCredits: out.creditsUsed },
   });
+  const acc = await getCreditAccount(businessId);
+  void res;
+  return { spendable: acc.spendable, resetsOn: acc.weekResetsOn };
 }

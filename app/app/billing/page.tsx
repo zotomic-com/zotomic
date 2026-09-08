@@ -9,7 +9,10 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { getCreditAccount, recentCreditLedger } from "@/lib/credits";
+import { getPaymentNumbers } from "@/lib/platform-settings";
 import { PaymentForm } from "./BillingClient";
+import { CreditsCard } from "./CreditsCard";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +55,12 @@ export default async function BillingPage() {
       .eq("business_id", tenant.businessId)
       .order("created_at", { ascending: false })
       .limit(20),
+  ]);
+
+  const [credit, payment, creditLog] = await Promise.all([
+    getCreditAccount(tenant.businessId),
+    getPaymentNumbers(),
+    recentCreditLedger(tenant.businessId, 8),
   ]);
 
   const invRows = (invoices ?? []).map((i) => ({
@@ -136,8 +145,36 @@ export default async function BillingPage() {
               <PaymentForm
                 reference={openInvoice.payment_reference as string}
                 amount={Number(openInvoice.amount)}
+                bkashNumber={payment.bkash || undefined}
               />
             )}
+          </CardBody>
+        </Card>
+      )}
+
+      <CreditsCard
+        balance={credit.spendable}
+        resetsOn={credit.weekResetsOn}
+        weeklyAllowance={credit.planAllowance}
+        purchased={credit.purchasedBalance}
+        payment={payment}
+      />
+
+      {creditLog.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent credit activity</CardTitle>
+          </CardHeader>
+          <CardBody className="space-y-1.5 text-sm">
+            {creditLog.map((l, i) => (
+              <div key={i} className="flex items-center justify-between border-b border-border py-1.5 last:border-0">
+                <span className="capitalize text-fg-muted">{String(l.reason).replace(/_/g, " ")}</span>
+                <span className={Number(l.delta) >= 0 ? "font-semibold text-primary" : "text-fg"}>
+                  {Number(l.delta) >= 0 ? "+" : ""}
+                  {l.delta} · bal {l.balance_after}
+                </span>
+              </div>
+            ))}
           </CardBody>
         </Card>
       )}

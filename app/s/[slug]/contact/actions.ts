@@ -51,6 +51,7 @@ export async function sendStoreEnquiry(
   if (ownerEmail) {
     await sendEmail({
       to: ownerEmail,
+      account: "admin",
       subject: `New enquiry on your store — ${name}`,
       replyTo: email || undefined,
       html: `<p><b>${name}</b> ${email ? `&lt;${email}&gt;` : ""} ${phone}</p><p>${message.replace(/\n/g, "<br>")}</p>`,

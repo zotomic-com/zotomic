@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { money } from "@/lib/money";
-import { cldUrl } from "@/lib/cloudinary";
-import type { StoreProduct } from "@/lib/storefront/store";
-import { WishlistHeart } from "./WishlistHeart";
+import { badgeFor, type StoreProduct } from "@/lib/storefront/store";
 import { QuickAdd } from "./QuickAdd";
+import { ProductCardMedia } from "./ProductCardMedia";
 
 export function ProductCard({
   product,
@@ -19,64 +18,52 @@ export function ProductCard({
   const onSale = product.salePrice != null && product.salePrice < product.price;
   const soldOut = product.trackInventory && product.stockQty <= 0;
   const price = onSale ? product.salePrice! : product.price;
+  const href = `${basePath}/products/${product.slug}`;
+  const stockLeft = product.trackInventory ? product.stockQty : null;
 
   return (
     <div className="group overflow-hidden rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-bg)]">
-      <Link href={`${basePath}/products/${product.slug}`} className="block">
-        <div className="relative aspect-square bg-[var(--sf-card)]">
-          {product.imageUrls[0] ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={cldUrl(product.imageUrls[0], 600)}
-              alt={product.name}
-              width={600}
-              height={600}
-              className="h-full w-full object-cover transition-transform group-hover:scale-105"
-              loading="lazy"
-              decoding="async"
-            />
+      <ProductCardMedia
+        product={{
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          price: product.price,
+          salePrice: onSale ? product.salePrice : null,
+          image: product.imageUrls[0] ?? null,
+          description: product.description,
+          rating: product.rating,
+          reviewCount: product.reviewCount,
+          sold: product.sold,
+          stockLeft,
+          badge: badgeFor(product),
+        }}
+        currency={currency}
+        href={href}
+        storeSlug={storeSlug}
+      />
+
+      <Link href={href} className="block px-3 pt-3">
+        <p className="line-clamp-1 text-sm font-medium">{product.name}</p>
+        <p className="mt-1 text-sm">
+          {onSale ? (
+            <>
+              <span className="font-semibold">{money(product.salePrice!, currency)}</span>{" "}
+              <span className="text-[var(--sf-muted)] line-through">{money(product.price, currency)}</span>
+            </>
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-[var(--sf-muted)]">No image</div>
+            <span className="font-semibold">{money(product.price, currency)}</span>
           )}
-          {soldOut && (
-            <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-xs font-semibold text-white">
-              Sold out
-            </span>
-          )}
-          {onSale && !soldOut && (
-            <span className="absolute left-2 top-2 rounded-full bg-[var(--sf-accent)] px-2 py-0.5 text-xs font-semibold text-white">
-              Sale
-            </span>
-          )}
-          {storeSlug && (
-            <WishlistHeart
-              storeSlug={storeSlug}
-              item={{ id: product.id, name: product.name, price, image: product.imageUrls[0] ?? null, slug: product.slug }}
-              size={18}
-              className="absolute right-2 top-2 rounded-full bg-[var(--sf-bg)]/80 p-1.5 text-[var(--sf-fg)] backdrop-blur"
-            />
-          )}
-        </div>
-        <div className="px-3 pt-3">
-          <p className="line-clamp-1 text-sm font-medium">{product.name}</p>
-          <p className="mt-1 text-sm">
-            {onSale ? (
-              <>
-                <span className="font-semibold">{money(product.salePrice!, currency)}</span>{" "}
-                <span className="text-[var(--sf-muted)] line-through">{money(product.price, currency)}</span>
-              </>
-            ) : (
-              <span className="font-semibold">{money(product.price, currency)}</span>
-            )}
-          </p>
-        </div>
+        </p>
       </Link>
+
       <div className="px-3 pb-3">
         {storeSlug ? (
           <QuickAdd
             product={{ id: product.id, name: product.name, price, image: product.imageUrls[0] ?? null, slug: product.slug }}
             currency={currency}
             storeSlug={storeSlug}
+            basePath={basePath}
             hasVariants={product.hasVariants}
             soldOut={soldOut}
           />

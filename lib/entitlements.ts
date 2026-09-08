@@ -14,7 +14,8 @@ export type Feature =
   | "courier"
   | "server_tracking"
   | "custom_domain"
-  | "branded_invoice";
+  | "branded_invoice"
+  | "weekly_report";
 
 const PAID_ONLY: Feature[] = ["payment_gateway", "server_tracking", "custom_domain", "branded_invoice"];
 
@@ -26,6 +27,12 @@ export interface Entitlements {
   custom_domain: boolean;
   /** paid plans: put the store's own logo on customer invoices and drop "Powered by Zotomic" */
   branded_invoice: boolean;
+  /**
+   * Weekly Intelligence report generation. Granted to everyone today; the flag
+   * exists so an admin can later make it a paid add-on (set
+   * `feature_overrides.weekly_report = false` to revoke for a tenant).
+   */
+  weekly_report: boolean;
 }
 
 export function deriveEntitlements(
@@ -33,8 +40,11 @@ export function deriveEntitlements(
   overrides: Record<string, unknown> = {},
 ): Entitlements {
   const paid = plan === "business" || plan === "pro";
-  const has = (f: Feature) =>
-    overrides[f] === true || (PAID_ONLY.includes(f) ? paid : true);
+  const has = (f: Feature) => {
+    if (overrides[f] === true) return true;
+    if (overrides[f] === false) return false;
+    return PAID_ONLY.includes(f) ? paid : true;
+  };
   return {
     plan,
     payment_gateway: has("payment_gateway"),
@@ -42,6 +52,7 @@ export function deriveEntitlements(
     server_tracking: has("server_tracking"),
     custom_domain: has("custom_domain"),
     branded_invoice: has("branded_invoice"),
+    weekly_report: has("weekly_report"),
   };
 }
 

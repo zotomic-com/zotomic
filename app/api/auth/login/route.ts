@@ -2,8 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { comparePassword, signToken } from "@/lib/auth";
 import { AUTH_COOKIE } from "@/lib/auth-server";
+import { enforceRateLimit } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, {
+    name: "login",
+    limit: 10,
+    windowMs: 5 * 60_000,
+    message: "Too many sign-in attempts. Wait a few minutes and try again.",
+  });
+  if (limited) return limited;
+
   try {
     const { email, password } = await req.json();
     if (!email || !password) {

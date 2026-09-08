@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { addToCart } from "./cart-store";
 import { pixel } from "@/components/tracking/Pixel";
 import { storefrontEvent } from "./StorefrontTracker";
@@ -20,6 +21,7 @@ export function AddToCartButton({
   soldOut,
   currency,
   storeSlug,
+  basePath = "",
   options = [],
   variants = [],
 }: {
@@ -27,9 +29,11 @@ export function AddToCartButton({
   soldOut: boolean;
   currency: string;
   storeSlug: string;
+  basePath?: string;
   options?: { name: string; values: string[] }[];
   variants?: Variant[];
 }) {
+  const router = useRouter();
   const hasVariants = options.length > 0 && variants.length > 0;
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [added, setAdded] = useState(false);
@@ -56,7 +60,7 @@ export function AddToCartButton({
         ? "Added to cart ✓"
         : "Add to cart";
 
-  const add = () => {
+  const add = (buyNow = false) => {
     const unit = hasVariants
       ? (selected!.salePrice ?? selected!.price)
       : product.price;
@@ -72,6 +76,10 @@ export function AddToCartButton({
     });
     pixel.track("AddToCart", { content_name: product.name, value: unit, currency });
     storefrontEvent(storeSlug, "add_to_cart", { productId: product.id, value: unit });
+    if (buyNow) {
+      router.push(`${basePath}/checkout`);
+      return;
+    }
     setAdded(true);
     setTimeout(() => setAdded(false), 1600);
   };
@@ -105,15 +113,26 @@ export function AddToCartButton({
         ))}
 
       <button
-        onClick={add}
+        onClick={() => add(false)}
         disabled={disabled}
         className={`w-full rounded-[var(--sf-radius)] px-5 py-3 text-sm font-semibold transition-opacity ${
           disabled
             ? "cursor-not-allowed border border-[var(--sf-line)] text-[var(--sf-muted)]"
-            : "bg-[var(--sf-accent)] text-white hover:opacity-90"
+            : "border border-[var(--sf-accent)] text-[var(--sf-accent)] hover:bg-[var(--sf-accent)] hover:text-white"
         }`}
       >
         {label}
+      </button>
+      <button
+        onClick={() => add(true)}
+        disabled={disabled}
+        className={`w-full rounded-[var(--sf-radius)] px-5 py-3 text-sm font-semibold transition-opacity ${
+          disabled
+            ? "hidden"
+            : "bg-[var(--sf-accent)] text-white hover:opacity-90"
+        }`}
+      >
+        Buy now
       </button>
     </div>
   );

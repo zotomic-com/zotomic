@@ -21,6 +21,7 @@ export async function updateBusinessSettings(formData: FormData) {
     telegram_chat_id: String(formData.get("telegram_chat_id") ?? "").trim().slice(0, 64) || null,
     logo_url: String(formData.get("logo_url") ?? "").trim().slice(0, 400) || null,
     invoice_address: String(formData.get("invoice_address") ?? "").trim().slice(0, 400) || null,
+    invoice_from_email: String(formData.get("invoice_from_email") ?? "").trim().slice(0, 200) || null,
     contact_email: String(formData.get("contact_email") ?? "").trim().slice(0, 200) || null,
     contact_phone: String(formData.get("contact_phone") ?? "").trim().slice(0, 40) || null,
   };

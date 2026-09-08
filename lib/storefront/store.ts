@@ -14,6 +14,26 @@ export interface StoreProduct {
   stockQty: number;
   trackInventory: boolean;
   hasVariants: boolean;
+  /** social-proof + badge inputs (populated by getStoreProducts / getStoreProduct) */
+  rating: number;
+  reviewCount: number;
+  sold: number;
+  isNew: boolean;
+  isHot: boolean;
+  isBest: boolean;
+  hideBadges: boolean;
+}
+
+/** Which single badge (if any) a card shows. Priority: sale → hot → best → new. */
+export type ProductBadge = "sale" | "hot" | "best" | "new" | null;
+export function badgeFor(p: StoreProduct): ProductBadge {
+  if (p.hideBadges) return null;
+  const onSale = p.salePrice != null && p.salePrice < p.price;
+  if (onSale) return "sale";
+  if (p.isHot) return "hot";
+  if (p.isBest) return "best";
+  if (p.isNew) return "new";
+  return null;
 }
 
 export interface StoreVariant {
@@ -72,8 +92,11 @@ export interface Store {
   config: StorefrontConfig;
 }
 
+const NEW_DAYS = 14;
+
 function mapProduct(r: Record<string, unknown>): StoreProduct {
   const imgs = Array.isArray(r.image_urls) ? (r.image_urls as string[]) : [];
+  const created = r.created_at ? new Date(r.created_at as string).getTime() : 0;
   return {
     id: r.id as string,
     name: r.name as string,
@@ -86,7 +109,72 @@ function mapProduct(r: Record<string, unknown>): StoreProduct {
     stockQty: Number(r.stock_qty ?? 0),
     trackInventory: Boolean(r.track_inventory),
     hasVariants: Boolean(r.has_variants),
+    rating: 0,
+    reviewCount: 0,
+    sold: 0,
+    isNew: created > 0 && Date.now() - created < NEW_DAYS * 86_400_000,
+    isHot: Boolean(r.is_hot),
+    isBest: false,
+    hideBadges: Boolean(r.hide_badges),
   };
+}
+
+const PRODUCT_COLS =
+  "id, name, slug, description, price, sale_price, category, image_urls, stock_qty, track_inventory, has_variants, is_hot, hide_badges, created_at";
+
+/** Attach ratings + lifetime units sold, and (for a full catalogue) flag the top sellers as "Best". */
+async function enrichProducts(
+  businessId: string,
+  products: StoreProduct[],
+  rankBest = true,
+): Promise<StoreProduct[]> {
+  if (!products.length) return products;
+  const db = getAdminSupabase();
+  const ids = products.map((p) => p.id);
+
+  const [{ data: reviews }, { data: items }] = await Promise.all([
+    db.from("product_reviews").select("product_id, rating").eq("business_id", businessId).eq("status", "approved").in("product_id", ids),
+    db.from("order_items").select("product_id, qty").eq("business_id", businessId).in("product_id", ids),
+  ]);
+
+  const rAgg = new Map<string, { sum: number; n: number }>();
+  for (const r of reviews ?? []) {
+    const a = rAgg.get(r.product_id as string) ?? { sum: 0, n: 0 };
+    a.sum += Number(r.rating);
+    a.n += 1;
+    rAgg.set(r.product_id as string, a);
+  }
+  const soldAgg = new Map<string, number>();
+  for (const it of items ?? []) {
+    soldAgg.set(it.product_id as string, (soldAgg.get(it.product_id as string) ?? 0) + Number(it.qty));
+  }
+
+  for (const p of products) {
+    const a = rAgg.get(p.id);
+    p.rating = a && a.n ? a.sum / a.n : 0;
+    p.reviewCount = a?.n ?? 0;
+    p.sold = soldAgg.get(p.id) ?? 0;
+  }
+
+  if (rankBest) {
+    const topIds = new Set(
+      [...products].filter((p) => p.sold > 0).sort((a, b) => b.sold - a.sold).slice(0, 5).map((p) => p.id),
+    );
+    for (const p of products) p.isBest = topIds.has(p.id);
+  }
+
+  return products;
+}
+
+/** For the PDP: rating/sold are real, but "Best" needs the whole catalogue. */
+async function enrichSingle(businessId: string, product: StoreProduct): Promise<StoreProduct> {
+  const [enriched, all] = await Promise.all([
+    enrichProducts(businessId, [product], false),
+    getStoreProducts(businessId),
+  ]);
+  const inTop = all.find((p) => p.id === product.id)?.isBest ?? false;
+  enriched[0].isBest = inTop;
+  return enriched[0];
 }
 
 /** Resolve a store by its subdomain slug. `draft` loads the unpublished config (editor preview). */
@@ -135,12 +223,12 @@ export const getStoreProducts = cache(async function getStoreProducts(
   const db = getAdminSupabase();
   const { data } = await db
     .from("products")
-    .select("id, name, slug, description, price, sale_price, category, image_urls, stock_qty, track_inventory, has_variants")
+    .select(PRODUCT_COLS)
     .eq("business_id", businessId)
     .eq("status", "active")
     .eq("visible", true)
     .order("created_at", { ascending: true });
-  return (data ?? []).map(mapProduct);
+  return enrichProducts(businessId, (data ?? []).map(mapProduct));
 });
 
 export interface StorePaymentOption {
@@ -172,12 +260,13 @@ export async function getStoreProduct(businessId: string, handle: string): Promi
   const db = getAdminSupabase();
   const { data } = await db
     .from("products")
-    .select("id, name, slug, description, price, sale_price, category, image_urls, stock_qty, track_inventory, has_variants")
+    .select(PRODUCT_COLS)
     .eq("business_id", businessId)
     .eq("slug", handle)
     .eq("status", "active")
     .maybeSingle();
-  return data ? mapProduct(data) : null;
+  if (!data) return null;
+  return enrichSingle(businessId, mapProduct(data));
 }
 
 export interface StoreReview {

@@ -8,6 +8,11 @@ export const PLATFORM_KEYS = {
   meta_pixel_id: { secret: false, label: "Meta Pixel ID (zotomic.com)" },
   ga4_measurement_id: { secret: false, label: "GA4 Measurement ID (zotomic.com)" },
   ga4_api_secret: { secret: true, label: "GA4 API Secret (server-side)" },
+  // payments — one number each, shared by subscription payments + credit top-ups
+  payment_bkash_number: { secret: false, label: "bKash number (personal — payments)" },
+  payment_nagad_number: { secret: false, label: "Nagad number (personal — payments)" },
+  // invoicing — the From address for store invoices sent to buyers (free plan)
+  invoice_from_email: { secret: false, label: "Invoice sender email (free stores)" },
   // Automation / agent gateway — entered here, wired to live calls later
   hermes_base_url: { secret: false, label: "Hermes gateway base URL" },
   hermes_shared_secret: { secret: true, label: "Hermes shared secret" },
@@ -22,9 +27,28 @@ export type PlatformKey = keyof typeof PLATFORM_KEYS;
 
 /** Which admin screen owns each key. */
 export const PLATFORM_KEY_GROUPS = {
-  settings: ["telegram_bot_token", "meta_pixel_id", "ga4_measurement_id", "ga4_api_secret"],
+  settings: [
+    "telegram_bot_token",
+    "meta_pixel_id",
+    "ga4_measurement_id",
+    "ga4_api_secret",
+    "payment_bkash_number",
+    "payment_nagad_number",
+    "invoice_from_email",
+  ],
   integrations: ["hermes_base_url", "hermes_shared_secret", "n8n_base_url", "n8n_api_key", "n8n_webhook_url", "meta_app_secret"],
 } as const satisfies Record<string, readonly PlatformKey[]>;
+
+export const DEFAULT_INVOICE_FROM = "invoice@zotomic.com";
+
+/** Payment numbers for the owner-facing top-up / billing screens. */
+export async function getPaymentNumbers(): Promise<{ bkash: string; nagad: string }> {
+  const [bkash, nagad] = await Promise.all([
+    getPlatformSetting("payment_bkash_number"),
+    getPlatformSetting("payment_nagad_number"),
+  ]);
+  return { bkash: bkash ?? "", nagad: nagad ?? "" };
+}
 
 export async function getPlatformSetting(key: PlatformKey): Promise<string | null> {
   const db = getAdminSupabase();

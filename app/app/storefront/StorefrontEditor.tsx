@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
+import { ImageUploader } from "@/components/app/ImageUploader";
 import { publishStorefront, saveDraft, unpublishStorefront } from "./actions";
 import { SECTION_FIELDS } from "./section-fields";
 
@@ -23,11 +24,13 @@ export function StorefrontEditor({
   published,
   storeUrl,
   subdomainUrl,
+  heroImageLimit = 1,
 }: {
   initialConfig: StorefrontConfig;
   published: boolean;
   storeUrl: string | null;
   subdomainUrl?: string | null;
+  heroImageLimit?: number;
 }) {
   const { toast } = useToast();
   const [config, setConfig] = useState<StorefrontConfig>(initialConfig);
@@ -164,7 +167,14 @@ export function StorefrontEditor({
           <Panel title="Brand">
             <TextRow label="Store name" value={config.brand.storeName} onChange={(v) => update((c) => ((c.brand.storeName = v), c))} />
             <TextRow label="Tagline" value={config.brand.tagline} onChange={(v) => update((c) => ((c.brand.tagline = v), c))} />
-            <TextRow label="Logo URL" value={config.brand.logoUrl ?? ""} onChange={(v) => update((c) => ((c.brand.logoUrl = v || null), c))} />
+            <div>
+              <p className="mb-1 text-xs font-medium text-fg">Logo</p>
+              <ImageUploader
+                value={config.brand.logoUrl ? [config.brand.logoUrl] : []}
+                onChange={(urls) => update((c) => ((c.brand.logoUrl = urls[0] ?? null), c))}
+                max={1}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs font-medium text-fg">
                 Accent colour
@@ -196,6 +206,7 @@ export function StorefrontEditor({
                     onToggle={() => toggleSection(i)}
                     onDelete={() => deleteSection(i)}
                     onField={(k, v) => setSectionField(i, k, v)}
+                    heroImageLimit={heroImageLimit}
                   />
                 ))}
               </div>
@@ -425,6 +436,7 @@ function SectionCard({
   onToggle,
   onDelete,
   onField,
+  heroImageLimit,
 }: {
   section: Section;
   onUp: () => void;
@@ -432,6 +444,7 @@ function SectionCard({
   onToggle: () => void;
   onDelete: () => void;
   onField: (key: string, val: unknown) => void;
+  heroImageLimit: number;
 }) {
   const [open, setOpen] = useState(false);
   const fields = SECTION_FIELDS[section.type];
@@ -455,6 +468,17 @@ function SectionCard({
               <TextareaRow key={f.key} label={f.label} value={String(section.data[f.key] ?? "")} onChange={(v) => onField(f.key, v)} />
             ) : f.type === "number" ? (
               <NumberRow key={f.key} label={f.label} value={Number(section.data[f.key] ?? 0)} onChange={(v) => onField(f.key, v)} />
+            ) : f.type === "images" ? (
+              <div key={f.key}>
+                <p className="mb-1 text-xs font-medium text-fg">
+                  {f.label} <span className="text-fg-subtle">(up to {heroImageLimit}{heroImageLimit === 1 ? " — upgrade for a slideshow" : ", auto slideshow"})</span>
+                </p>
+                <ImageUploader
+                  value={(Array.isArray(section.data[f.key]) ? (section.data[f.key] as string[]) : []).slice(0, heroImageLimit)}
+                  onChange={(urls) => onField(f.key, urls.slice(0, heroImageLimit))}
+                  max={heroImageLimit}
+                />
+              </div>
             ) : (
               <TextRow key={f.key} label={f.label} value={String(section.data[f.key] ?? "")} onChange={(v) => onField(f.key, v)} />
             ),

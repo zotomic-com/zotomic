@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { revalidateTag } from "next/cache";
+import { enforceRateLimit } from "@/lib/ratelimit";
 
 const clean = (v: unknown, n = 2000) => String(v ?? "").trim().slice(0, n);
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, { name: "review", limit: 10, windowMs: 60 * 60_000 });
+  if (limited) return limited;
+
   const body = await req.json().catch(() => null);
   const token = clean(body?.token, 64);
   const rating = Math.round(Number(body?.rating));

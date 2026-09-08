@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
 
     await sendEmail({
       to: email,
+      account: "support",
       subject: `Invoice ${inv.invoice_number} — ${reason}`,
       html: emailLayout(`
         <p style="margin:0 0 12px">Your Zotomic subscription for <b>${bizName}</b> is ${reason}.</p>

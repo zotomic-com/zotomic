@@ -141,7 +141,9 @@ export function defaultSection(type: SectionType): Section {
           subheading: "Quality you can feel, prices you'll like.",
           ctaLabel: "Shop now",
           ctaHref: "/products",
-          imageUrl: null,
+          // 1 image = static banner; 2–3 = auto crossfade slideshow (plan-gated in the editor)
+          images: [] as string[],
+          imageUrl: null, // legacy single-image field, still honoured by the renderer
         },
       };
     case "featured_products":
@@ -286,7 +288,18 @@ export function normalizeConfig(stored: unknown, storeName: string): StorefrontC
   if (Array.isArray((stored as Record<string, unknown>).sections)) {
     merged.sections = ((stored as Record<string, unknown>).sections as Section[])
       .filter((s) => s && typeof s.type === "string" && s.id)
-      .map((s) => ({ ...s, data: isObj(s.data) ? s.data : {} }));
+      .map((s) => {
+        const data = isObj(s.data) ? { ...s.data } : {};
+        // hero: fold the legacy single `imageUrl` into the `images` array
+        if (s.type === "hero") {
+          const imgs = Array.isArray(data.images)
+            ? (data.images as unknown[]).filter((x): x is string => typeof x === "string")
+            : [];
+          if (!imgs.length && typeof data.imageUrl === "string" && data.imageUrl) imgs.push(data.imageUrl);
+          data.images = imgs;
+        }
+        return { ...s, data };
+      });
   }
   if (Array.isArray((stored as Record<string, unknown>).nav)) {
     merged.nav = (stored as Record<string, unknown>).nav as StorefrontConfig["nav"];

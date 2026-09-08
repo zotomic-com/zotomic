@@ -5,6 +5,7 @@
  */
 import { TOOL_MAP, TOOLS } from "@/lib/tools/registry";
 import type { ToolContext, ToolDef } from "@/lib/tools/types";
+import { canAttempt, recordSuccess, recordFailure, chainOpen, sleep, backoffDelay } from "@/lib/ai/circuit";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-flash-lite-latest"];
@@ -16,7 +17,9 @@ const SYSTEM = `You are Zotomic Assistant for a small online store owner.
 - Be concise and plain — no hype, no emojis. Short paragraphs or tight bullet lists.
 - For any change to the store (updating a product, changing settings) call the
   relevant tool; the platform will ask the user to confirm before it applies.
-- If a tool returns an error or no data, say so plainly. Do not guess.`;
+- If a tool returns an error or no data, say so plainly. Do not guess.
+- Prefer the store's own data tools. Only use web_search when the question truly needs live external information (supplier prices, competitors, news) — it costs the owner extra credits.
+- When you use web_search, cite the sources it returns.`;
 
 export interface AgentMessage {
   role: "user" | "assistant";
@@ -35,6 +38,8 @@ export interface AgentOutcome {
   model: string;
   toolTraces: ToolTrace[];
   creditsUsed: number;
+  /** Gemini model calls made this turn — for the daily AI ceiling (usage_ledger). */
+  aiCalls: number;
   pendingAction?: { tool: string; args: Record<string, unknown>; preview: string };
 }
 
@@ -67,13 +72,16 @@ function previewFor(tool: string, args: Record<string, unknown>): string {
 async function callGemini(contents: GeminiContent[]): Promise<{ parts: GeminiPart[]; model: string } | null> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
+  if (chainOpen(MODEL_CHAIN)) return null;
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM }] },
     contents,
     tools: [{ functionDeclarations: TOOLS.map(toDeclaration) }],
     generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
   };
+  let transientFails = 0;
   for (const model of MODEL_CHAIN) {
+    if (!canAttempt(model)) continue;
     try {
       const res = await fetch(`${ENDPOINT}/${model}:generateContent`, {
         method: "POST",
@@ -82,15 +90,25 @@ async function callGemini(contents: GeminiContent[]): Promise<{ parts: GeminiPar
         signal: AbortSignal.timeout(45_000),
       });
       if (!res.ok) {
-        if ([404, 429, 503].includes(res.status)) continue;
+        recordFailure(model);
+        if ([404, 429, 503].includes(res.status)) {
+          await sleep(backoffDelay(transientFails++));
+          continue;
+        }
         console.error("gemini agent", res.status, (await res.text()).slice(0, 200));
         continue;
       }
       const data = await res.json();
       const parts = data?.candidates?.[0]?.content?.parts as GeminiPart[] | undefined;
-      if (parts) return { parts, model };
+      if (parts) {
+        recordSuccess(model);
+        return { parts, model };
+      }
+      recordFailure(model);
     } catch (e) {
+      recordFailure(model);
       console.error("gemini agent failed", (e as Error).message);
+      await sleep(backoffDelay(transientFails++));
     }
   }
   return null;
@@ -114,6 +132,7 @@ export async function runAgent(
 
   const traces: ToolTrace[] = [];
   let credits = 0;
+  let aiCalls = 0;
   let model = MODEL_CHAIN[0];
   let lastToolResult: unknown = null;
   let didApprovedWrite = false;
@@ -153,7 +172,8 @@ export async function runAgent(
 
   for (let step = 0; step < 8; step++) {
     const resp = await callGemini(contents);
-    if (!resp) return { reply: fallbackReply(), model, toolTraces: traces, creditsUsed: credits };
+    if (!resp) return { reply: fallbackReply(), model, toolTraces: traces, creditsUsed: credits, aiCalls };
+    aiCalls += 1;
     model = resp.model;
 
     const fnCall = resp.parts.find((p): p is Extract<GeminiPart, { functionCall: unknown }> => "functionCall" in p);
@@ -162,7 +182,7 @@ export async function runAgent(
         .map((p) => ("text" in p ? p.text : ""))
         .join("")
         .trim();
-      return { reply: text || "I don't have an answer for that.", model, toolTraces: traces, creditsUsed: credits };
+      return { reply: text || "I don't have an answer for that.", model, toolTraces: traces, creditsUsed: credits, aiCalls };
     }
 
     const { name, args } = fnCall.functionCall;
@@ -190,6 +210,7 @@ export async function runAgent(
         model,
         toolTraces: traces,
         creditsUsed: credits,
+        aiCalls,
         pendingAction: { tool: name, args: args ?? {}, preview: previewFor(name, args ?? {}) },
       };
     }
@@ -211,5 +232,5 @@ export async function runAgent(
     contents.push({ role: "user", parts: [{ functionResponse: { name, response: { result: out } } }] });
   }
 
-  return { reply: fallbackReply(), model, toolTraces: traces, creditsUsed: credits };
+  return { reply: fallbackReply(), model, toolTraces: traces, creditsUsed: credits, aiCalls };
 }

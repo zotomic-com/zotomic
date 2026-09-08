@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { normalizeConfig } from "@/lib/storefront/config";
+import { getPlanLimits } from "@/lib/plan-limits";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StorefrontEditor } from "./StorefrontEditor";
 
@@ -20,6 +21,7 @@ export default async function StorefrontPage() {
     .single();
 
   const config = normalizeConfig(row?.draft_json, tenant.business.name);
+  const planLimits = await getPlanLimits(tenant.businessId);
   const published = !!row?.published_at;
   const root = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
   const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
@@ -38,6 +40,7 @@ export default async function StorefrontPage() {
         published={published}
         storeUrl={storeUrl}
         subdomainUrl={subdomainUrl}
+        heroImageLimit={planLimits.heroImages}
       />
     </div>
   );

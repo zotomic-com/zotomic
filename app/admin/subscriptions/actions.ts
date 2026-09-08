@@ -31,6 +31,7 @@ export async function confirmPayment(invoiceId: string) {
       if (email) {
         await sendEmail({
           to: email,
+          account: "support",
           subject: `Payment confirmed — ${name} is active`,
           html: emailLayout(
             `<p style="margin:0 0 12px">We've confirmed your payment for invoice <b>${inv.invoice_number}</b>. Your subscription is active again and everything is back online.</p>
