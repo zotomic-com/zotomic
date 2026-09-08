@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronLeft, Flame, Maximize2, Ruler, Star, Truck } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Flame, Maximize2, Ruler, Star, Truck } from "lucide-react";
 import { money } from "@/lib/money";
 import { cldUrl } from "@/lib/cloudinary";
 import { isColourOpt, isSizeOpt, resolveSwatch } from "@/lib/storefront/colour";
+import { Stars } from "./Stars";
 import { addToCart } from "./cart-store";
 import { pixel } from "@/components/tracking/Pixel";
 import { storefrontEvent } from "./StorefrontTracker";
@@ -89,6 +90,7 @@ export function ProductDetail({
   const [zoom, setZoom] = useState(false);
   const [img, setImg] = useState(0);
   const [added, setAdded] = useState(false);
+  const [sizePage, setSizePage] = useState(0); // mobile: 3 sizes per page
 
   // lock page scroll behind the full-screen mobile layer
   useEffect(() => {
@@ -160,44 +162,67 @@ export function ProductDetail({
 
   /* ── shared bits ─────────────────────────────────────────────── */
 
-  const RatingRow = ({ light }: { light?: boolean }) => (
-    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-sm ${light ? "text-white/85" : "text-[var(--sf-muted)]"}`}>
-      <button
-        onClick={() => (reviewCount > 0 ? setSheet("reviews") : undefined)}
-        className={`flex items-center gap-1 ${reviewCount > 0 ? "" : "cursor-default"}`}
-      >
-        <span className="flex">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Star
-              key={n}
-              className={`h-3.5 w-3.5 ${reviewCount > 0 ? "text-amber-400" : light ? "text-white/40" : "text-[var(--sf-line)]"}`}
-              fill={reviewCount > 0 && reviewAverage >= n - 0.25 ? "currentColor" : "none"}
-            />
-          ))}
+  const soldLine = product.sold > 0 && (
+    <span className="flex items-center gap-1">
+      <Flame className="h-3.5 w-3.5" /> {product.sold} sold
+    </span>
+  );
+
+  /** desktop: ★★★★★ 4.5 (120)  ·  N sold */
+  const RatingRow = () => (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--sf-muted)]">
+      {reviewCount > 0 ? (
+        <button onClick={() => setSheet("reviews")} className="text-[var(--sf-fg)]">
+          <Stars value={reviewAverage} count={reviewCount} />
+        </button>
+      ) : (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="flex">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Star key={n} className="h-3.5 w-3.5 text-[var(--sf-line)]" />
+            ))}
+          </span>
+          No reviews yet
         </span>
-        {reviewCount > 0 ? (
-          <>
-            <span className={`font-semibold ${light ? "text-white" : "text-[var(--sf-fg)]"}`}>{reviewAverage.toFixed(1)}</span>
-            <span>({reviewCount})</span>
-          </>
-        ) : (
-          <span>No reviews yet</span>
-        )}
-      </button>
-      {product.sold > 0 && (
+      )}
+      {soldLine}
+    </div>
+  );
+
+  /** mobile: "N sold" on top, then a single ★ 4.5 */
+  const MobileRating = () => (
+    <div className="space-y-0.5 text-sm text-[var(--sf-muted)]">
+      {soldLine}
+      {reviewCount > 0 ? (
+        <button onClick={() => setSheet("reviews")} className="block text-[var(--sf-fg)]">
+          <Stars value={reviewAverage} single starClass="h-4 w-4" />
+        </button>
+      ) : (
         <span className="flex items-center gap-1">
-          <Flame className="h-3.5 w-3.5" /> {product.sold} sold
+          <Star className="h-4 w-4 text-[var(--sf-line)]" /> No reviews yet
         </span>
       )}
     </div>
   );
 
-  /** compact tappable size values — "S  M  L  XL" as text */
-  const SizeTokens = ({ light, className = "" }: { light?: boolean; className?: string }) => {
+  /** compact tappable size values as text. On mobile only 3 show at once with a
+   *  chevron to page through the rest. */
+  const SizeTokens = ({
+    light,
+    className = "",
+    paged = false,
+  }: {
+    light?: boolean;
+    className?: string;
+    paged?: boolean;
+  }) => {
     if (!sizeOpt) return null;
+    const per = 3;
+    const pages = Math.ceil(sizeOpt.values.length / per);
+    const shown = paged && pages > 1 ? sizeOpt.values.slice(sizePage * per, sizePage * per + per) : sizeOpt.values;
     return (
-      <div className={`flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold ${className}`}>
-        {sizeOpt.values.map((val) => {
+      <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold ${className}`}>
+        {shown.map((val) => {
           const active = choice[sizeOpt.name] === val;
           return (
             <button
@@ -215,6 +240,15 @@ export function ProductDetail({
             </button>
           );
         })}
+        {paged && pages > 1 && (
+          <button
+            onClick={() => setSizePage((p) => (p + 1) % pages)}
+            aria-label="More sizes"
+            className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--sf-line)] text-[var(--sf-fg)]"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
     );
   };
@@ -483,16 +517,16 @@ export function ProductDetail({
           <div className="mt-1.5 flex items-start justify-between gap-3">
             <h1 className="text-xl font-extrabold tracking-tight">{product.name}</h1>
             {sizeOpt && (
-              <div className="max-w-[46%] shrink-0 pt-0.5 text-right">
-                <SizeTokens className="justify-end" />
+              <div className="max-w-[48%] shrink-0 pt-0.5 text-right">
+                <SizeTokens className="justify-end" paged />
                 <div className="mt-0.5 flex justify-end">
                   <SizeGuideLink />
                 </div>
               </div>
             )}
           </div>
-          <div className="mt-1.5">
-            <RatingRow />
+          <div className="mt-2">
+            <MobileRating />
           </div>
 
           {otherOpts.length > 0 && (
@@ -659,28 +693,25 @@ export function ProductDetail({
           </div>
         </div>
 
-        {/* labelled sections */}
-        <section className="mt-14 max-w-2xl">
-          <h2 className="text-lg font-extrabold tracking-tight">Description</h2>
-          <p className="mt-3 whitespace-pre-line text-sm text-[var(--sf-muted)]">
-            {product.description || "No description provided for this product yet."}
-          </p>
-        </section>
+        {/* labelled sections — description & reviews side by side */}
+        <div className="mt-14 grid gap-10 md:grid-cols-2">
+          <section>
+            <h2 className="text-lg font-extrabold tracking-tight">Description</h2>
+            <p className="mt-3 whitespace-pre-line text-sm text-[var(--sf-muted)]">
+              {product.description || "No description provided for this product yet."}
+            </p>
+          </section>
 
-        <section className="mt-14 max-w-2xl">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-extrabold tracking-tight">Ratings &amp; reviews</h2>
-            {reviewCount > 0 && (
-              <span className="flex items-center gap-1 text-sm text-[var(--sf-muted)]">
-                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                {reviewAverage.toFixed(1)} ({reviewCount})
-              </span>
-            )}
-          </div>
-          <div className="mt-4">
-            <ReviewsList />
-          </div>
-        </section>
+          <section>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-extrabold tracking-tight">Ratings &amp; reviews</h2>
+              {reviewCount > 0 && <Stars value={reviewAverage} count={reviewCount} className="text-sm text-[var(--sf-fg)]" />}
+            </div>
+            <div className="mt-4">
+              <ReviewsList />
+            </div>
+          </section>
+        </div>
       </div>
 
       {/* ══════════ overlays ══════════ */}

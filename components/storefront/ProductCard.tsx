@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Flame } from "lucide-react";
 import { money } from "@/lib/money";
 import { badgeFor, type StoreProduct } from "@/lib/storefront/store";
 import { QuickAdd } from "./QuickAdd";
 import { ProductCardMedia } from "./ProductCardMedia";
+import { Stars } from "./Stars";
 
 export function ProductCard({
   product,
@@ -20,6 +22,7 @@ export function ProductCard({
   const price = onSale ? product.salePrice! : product.price;
   const href = `${basePath}/products/${product.slug}`;
   const stockLeft = product.trackInventory ? product.stockQty : null;
+  const lowStock = stockLeft != null && stockLeft > 0 && stockLeft <= 5;
 
   return (
     <div className="group flex flex-col">
@@ -59,6 +62,20 @@ export function ProductCard({
             <span className="font-bold">{money(product.price, currency)}</span>
           )}
         </p>
+
+        {(product.reviewCount > 0 || product.sold > 0 || lowStock) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--sf-muted)]">
+            {product.reviewCount > 0 && (
+              <Stars value={product.rating} count={product.reviewCount} starClass="h-3 w-3" className="text-[var(--sf-fg)]" />
+            )}
+            {product.sold > 0 && (
+              <span className="flex items-center gap-0.5">
+                <Flame className="h-3 w-3" /> {product.sold} sold
+              </span>
+            )}
+            {lowStock && <span className="font-semibold text-red-600">{stockLeft} left</span>}
+          </div>
+        )}
       </Link>
 
       {storeSlug ? (
