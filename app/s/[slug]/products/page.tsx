@@ -44,7 +44,7 @@ export default async function StoreProductsPage({
         <p className="text-sm text-[var(--sf-muted)]">{products.length} item{products.length === 1 ? "" : "s"}</p>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 hidden sm:block">
         <StoreSearchBar basePath={basePath} initial={q ?? ""} />
       </div>
 

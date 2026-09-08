@@ -16,32 +16,22 @@ export function HeaderSearch({ basePath }: { basePath: string }) {
   };
 
   return (
-    <>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          go();
-        }}
-        className="relative hidden lg:block"
-      >
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--sf-muted)]" />
-        <input
-          ref={ref}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search"
-          className="h-9 w-44 rounded-full border border-[var(--sf-line)] bg-[var(--sf-card)] pl-8 pr-3 text-sm outline-none transition-[width] focus:w-60"
-          aria-label="Search products"
-        />
-      </form>
-      <button
-        type="button"
-        onClick={() => router.push(`${basePath}/products`)}
-        className="rounded-[var(--sf-radius)] p-2 lg:hidden"
-        aria-label="Search"
-      >
-        <Search className="h-5 w-5" />
-      </button>
-    </>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        go();
+      }}
+      className="relative hidden lg:block"
+    >
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--sf-muted)]" />
+      <input
+        ref={ref}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search"
+        className="h-9 w-44 rounded-full border border-[var(--sf-line)] bg-[var(--sf-card)] pl-8 pr-3 text-sm outline-none transition-[width] focus:w-60"
+        aria-label="Search products"
+      />
+    </form>
   );
 }

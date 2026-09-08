@@ -5,7 +5,6 @@ import type { StoreCategory, StoreProduct } from "@/lib/storefront/store";
 import { ProductCard } from "./ProductCard";
 import { ProductCarousel } from "./ProductCarousel";
 import { CategoryChips } from "./CategoryChips";
-import { HeroSlides } from "./HeroSlides";
 import { HeroCard } from "./HeroCard";
 
 interface Ctx {
@@ -70,36 +69,18 @@ function Hero({ section, ctx }: { section: Section; ctx: Ctx }) {
   const ctaLabel = s(d, "ctaLabel");
   const ctaHref = `${ctx.basePath}${s(d, "ctaHref", "/products")}`;
 
-  const cardProps = { heading, sub, tag, ctaLabel, ctaHref, images: slides, tone };
-
-  // "card" layout — banner card on every breakpoint
-  if (style === "card") {
-    return <HeroCard {...cardProps} />;
-  }
-
-  // "full" layout — banner card on mobile, edge-to-edge background on desktop
+  // Always the banner card. `style: "full"` just makes it an edge-to-edge band.
   return (
-    <>
-      <HeroCard {...cardProps} className="sm:hidden" />
-      <section className="relative isolate hidden overflow-hidden bg-[var(--sf-card)] sm:block">
-        {slides.length > 0 && <HeroSlides images={slides} className="absolute inset-0 z-0" showDots scrim />}
-        <div
-          className={`relative z-10 mx-auto flex max-w-6xl flex-col items-start px-6 py-36 ${slides.length ? "text-white" : "text-[var(--sf-fg)]"}`}
-        >
-          <h1 className="max-w-2xl text-5xl font-extrabold tracking-tight drop-shadow-sm">{heading}</h1>
-          {sub && <p className={`mt-3 max-w-xl ${slides.length ? "text-white/90" : "text-[var(--sf-muted)]"}`}>{sub}</p>}
-          {ctaLabel && (
-            <Link
-              href={ctaHref}
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-neutral-900 py-1.5 pl-4 pr-1.5 text-sm font-bold text-white"
-            >
-              {ctaLabel}
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900">→</span>
-            </Link>
-          )}
-        </div>
-      </section>
-    </>
+    <HeroCard
+      heading={heading}
+      sub={sub}
+      tag={tag}
+      ctaLabel={ctaLabel}
+      ctaHref={ctaHref}
+      images={slides}
+      tone={tone}
+      contained={style !== "full"}
+    />
   );
 }
 
@@ -130,26 +111,10 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
 
     case "category_grid": {
       if (!ctx.categories.length) return null;
-      const hasPhotos = ctx.categories.some((c) => c.imageUrl);
       return (
         <Wrap>
-          <SectionHead title={s(d, "heading", "Shop by category")} seeAllHref={`${ctx.basePath}/products`} />
-          {hasPhotos ? (
-            <CategoryChips categories={ctx.categories} basePath={ctx.basePath} />
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {ctx.categories.map((c) => (
-                <Link
-                  key={c.slug}
-                  href={`${ctx.basePath}/products?category=${encodeURIComponent(c.name)}`}
-                  className="rounded-[var(--sf-radius-lg)] border border-[var(--sf-line)] bg-[var(--sf-card)] p-6 text-center text-sm font-semibold transition-colors hover:border-[var(--sf-accent)]"
-                >
-                  {c.name}
-                  <span className="mt-1 block text-xs font-normal text-[var(--sf-muted)]">{c.count} item{c.count === 1 ? "" : "s"}</span>
-                </Link>
-              ))}
-            </div>
-          )}
+          <SectionHead title={s(d, "heading", "Categories")} seeAllHref={`${ctx.basePath}/products`} />
+          <CategoryChips categories={ctx.categories} basePath={ctx.basePath} />
         </Wrap>
       );
     }

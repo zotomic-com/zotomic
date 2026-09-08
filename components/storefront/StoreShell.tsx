@@ -4,6 +4,7 @@ import { GA4, MetaPixel } from "@/components/tracking/Pixel";
 import { StorefrontTracker } from "./StorefrontTracker";
 import { HeaderActions } from "./HeaderActions";
 import { HeaderSearch } from "./HeaderSearch";
+import { StoreSearchBar } from "./StoreSearchBar";
 import { AccountLink } from "./AccountLink";
 import { MenuDrawer } from "./MenuDrawer";
 import { MobileNav } from "./MobileNav";
@@ -104,6 +105,11 @@ export function StoreShell({
             {/* nav drawer — mobile/tablet where the inline nav links are hidden */}
             <MenuDrawer nav={nav} basePath={basePath} storeSlug={storeSlug} triggerClassName="rounded-[var(--sf-radius)] p-2 md:hidden" />
           </div>
+        </div>
+
+        {/* full-width search — mobile only (desktop uses the header input) */}
+        <div className="border-t border-[var(--sf-line)] px-4 py-2.5 sm:hidden">
+          <StoreSearchBar basePath={basePath} initial="" />
         </div>
       </header>
 

@@ -17,11 +17,11 @@ export const SECTION_FIELDS: Record<SectionType, FieldDef[]> = {
     { key: "ctaHref", label: "Button link", type: "text" },
     {
       key: "style",
-      label: "Desktop layout (mobile always uses the card)",
+      label: "Banner width",
       type: "select",
       options: [
-        { value: "full", label: "Full-width background" },
-        { value: "card", label: "Banner card + side image" },
+        { value: "card", label: "Rounded card (recommended)" },
+        { value: "full", label: "Full-bleed band" },
       ],
     },
     {

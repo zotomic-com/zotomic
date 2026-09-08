@@ -1,7 +1,9 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { getStoreBySlug, getStoreCategories, getStoreProducts } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { SectionRenderer } from "@/components/storefront/Sections";
+import { CategoryChips } from "@/components/storefront/CategoryChips";
 
 export const revalidate = 120;
 
@@ -27,10 +29,32 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
   ]);
   const ctx = { products, categories, currency: store.currency, basePath, storeSlug: store.slug };
 
+  const sections = store.config.sections;
+  const firstEnabled = sections.find((s) => s.enabled);
+  // auto-place a category strip right under the hero, unless the owner put a
+  // "Shop by category" section somewhere themselves
+  const autoCategories =
+    categories.length > 0 &&
+    firstEnabled?.type === "hero" &&
+    !sections.some((s) => s.enabled && s.type === "category_grid");
+
   return (
     <>
-      {store.config.sections.map((section) => (
-        <SectionRenderer key={section.id} section={section} ctx={ctx} />
+      {sections.map((section) => (
+        <Fragment key={section.id}>
+          <SectionRenderer section={section} ctx={ctx} />
+          {autoCategories && section.id === firstEnabled?.id && (
+            <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
+              <div className="mb-3 flex items-end justify-between gap-3">
+                <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">Categories</h2>
+                <Link href={`${basePath}/products`} className="shrink-0 text-sm font-semibold text-[var(--sf-accent)] hover:underline">
+                  See all
+                </Link>
+              </div>
+              <CategoryChips categories={categories} basePath={basePath} />
+            </section>
+          )}
+        </Fragment>
       ))}
       {store.config.sections.every((s) => !s.enabled) && (
         <div className="mx-auto max-w-6xl px-4 py-20 text-center">

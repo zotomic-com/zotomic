@@ -13,8 +13,8 @@ const TONE: Record<Tone, { card: string; sub: string; tag: string }> = {
   accent: { card: "bg-[var(--sf-accent)] text-white", sub: "text-white/85", tag: "bg-black/25 text-white" },
 };
 
-/** Rounded banner-card hero — always used on mobile, and on desktop when the
- *  store picks the "card" layout. Auto-crossfades its images. */
+/** Rounded banner-card hero. Auto-crossfades its images. No overlay/scrim —
+ *  the owner uploads artwork composed for the storefront. */
 export function HeroCard({
   heading,
   sub,
@@ -23,6 +23,7 @@ export function HeroCard({
   ctaHref,
   images,
   tone = "surface",
+  contained = true,
   className = "",
 }: {
   heading: string;
@@ -32,6 +33,8 @@ export function HeroCard({
   ctaHref: string;
   images: string[];
   tone?: Tone;
+  /** contained + rounded (default) vs full-bleed band */
+  contained?: boolean;
   className?: string;
 }) {
   const [i, setI] = useState(0);
@@ -46,10 +49,10 @@ export function HeroCard({
   const t = TONE[tone] ?? TONE.surface;
 
   return (
-    <section className={`mx-auto max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6 ${className}`}>
-      <div className={`relative overflow-hidden rounded-[var(--sf-radius-lg)] ${t.card}`}>
+    <section className={`${contained ? "mx-auto max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6" : ""} ${className}`}>
+      <div className={`relative overflow-hidden ${contained ? "rounded-[var(--sf-radius-lg)]" : ""} ${t.card}`}>
         <div className="grid sm:grid-cols-2">
-          <div className="relative z-10 max-w-[62%] p-5 sm:max-w-none sm:p-12">
+          <div className="relative z-10 max-w-[60%] p-5 sm:max-w-none sm:p-12">
             {tag && (
               <span className={`inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${t.tag}`}>
                 {tag}
@@ -70,7 +73,7 @@ export function HeroCard({
             )}
           </div>
 
-          <div className="pointer-events-none absolute right-0 top-0 h-full w-[46%] sm:relative sm:h-auto sm:min-h-[300px] sm:w-auto">
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-1/2 sm:relative sm:h-auto sm:min-h-[300px] sm:w-auto">
             {images.map((src, n) => (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
@@ -78,12 +81,8 @@ export function HeroCard({
                 src={cldUrl(src, 900)}
                 alt=""
                 aria-hidden
-                className="absolute inset-0 h-full w-full object-cover transition-opacity duration-700"
-                style={{
-                  opacity: n === i ? 1 : 0,
-                  maskImage: "linear-gradient(to right, transparent, #000 30%)",
-                  WebkitMaskImage: "linear-gradient(to right, transparent, #000 30%)",
-                }}
+                className="absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-700"
+                style={{ opacity: n === i ? 1 : 0 }}
                 loading={n === 0 ? "eager" : "lazy"}
               />
             ))}
