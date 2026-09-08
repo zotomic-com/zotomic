@@ -361,14 +361,14 @@ Founder-grade sequencing: **protect the downside → build the revenue mechanism
 
 ## LOG
 
-- 2026-09-08 — **Phase 9 (need-to-add.txt, 20 items) CODE COMPLETE.** 9A guardrails · 9B plan limits · 9C credits + invoicing · 9D operator visibility · 9E storefront conversion · 9F marketing module. `npx tsc --noEmit` + `npx next build` green after every sub-phase. NOT committed to git yet (per user), NOT deployed.
-  - **7 migrations written, NOT applied** (this session's command classifier blocks `supabase db push` and the Management API). User must apply them in order:
-    `20260908120000_plan_limits` · `130000_credits` · `140000_invoice_sender` · `150000_admin_usage` · `160000_categories` · `170000_product_badges` · `180000_campaigns`
-    Apply: `SUPABASE_ACCESS_TOKEN=<token> npx supabase db push --linked` (from repo root; token is in `.env.local`).
-  - **New pg_cron job** after migration: `credit-reset` (Fridays 04:00 UTC → `/api/cron/credits`). Existing: `weekly-reports`, `billing-sweep`, `shipment-sync`.
-  - **User still needs to enter** in `/admin/settings`: `payment_bkash_number`, `payment_nagad_number`, `invoice_from_email` (defaults to `invoice@zotomic.com`). Assistant credit top-ups + subscription payments both use these numbers.
-  - **Env (optional)**: `AI_DAILY_LIMIT_PER_BUSINESS` (500), `AI_DAILY_LIMIT_GLOBAL` (8000). FX needs no key.
-  - Deps: none added.
+- 2026-09-08 — **Phase 9 (need-to-add.txt, 20 items) DONE + DEPLOYED + VERIFIED.** 9A guardrails · 9B plan limits · 9C credits + invoicing · 9D operator visibility · 9E storefront conversion · 9F marketing module.
+  - Commits `5e04909` (Phase 9) + `441cf8e` (redeploy for mail env). Live on https://zotomic.com — storefront cards (Buy Now, "N sold"), PDP, pricing page copy verified via WebFetch.
+  - **7 migrations APPLIED to prod** (2026-09-08, via combined idempotent SQL pasted in Supabase SQL Editor — `supabase db push` + Management API are blocked by this session's classifier). Recorded in `supabase_migrations.schema_migrations`. Verified: all 6 new tables + `businesses.limits_grandfathered_at`/`invoice_from_email` + `products.is_hot`/`hide_badges` + `credit-reset` cron all present; `product_categories` backfilled from existing free-text categories.
+  - **Cron jobs now (4):** `weekly-reports` (Mon 03:00), `billing-sweep` (daily 02:00), `shipment-sync` (6h), **`credit-reset` (Fri 04:00 UTC → /api/cron/credits)**.
+  - **Email: 4 Workspace identities wired + set in Vercel** — `MAIL_{INVOICE,ADMIN,SUPPORT,INFO}_{USER,PASS}` + `NOTIFICATION_EMAIL=admin@zotomic.com`. `lib/email.ts` routes by `account` param (invoice→customer invoices, admin→internal alerts + Zotomic invoices, support→owner account mail, info→review invites). Passwords in `.env.local` + Vercel (encrypted). `GMAIL_APP_PASSWORD` now just a fallback.
+  - **STILL NEEDS USER** — enter in `/admin/settings`: `payment_bkash_number`, `payment_nagad_number` (credit top-ups + subscription payments), `invoice_from_email` (defaults `invoice@zotomic.com`).
+  - **Env (optional, unset = defaults):** `AI_DAILY_LIMIT_PER_BUSINESS` (500), `AI_DAILY_LIMIT_GLOBAL` (8000). FX needs no key.
+  - Deps: none added. `.env.local` `VERCEL_PROJECT_ID` corrected to the live `prj_aqgDRddWwjCkkT801vwvDd9gfz43`.
 - 2026-08-29 — Plan approved. TODO file created. Phase 0 starting.
 - 2026-08-29 — Phase 0 code complete. ~150 out-of-scope files deleted; new design system, component kit, 3 layout shells, P0 migration + RLS, tenant/auth libs, middleware, seed, Lighthouse config all in. `npx next build` green.
 - 2026-08-29 — Supabase keys received. Migrations + seed applied to remote (24 tables live). Git initialised + Phase 0 pushed to github.com/zotomic-com/zotomic (branch main). Vercel wiring deferred (CLI unresponsive in this env; will do at Phase 1 checkpoint).
