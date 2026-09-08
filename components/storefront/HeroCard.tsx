@@ -50,12 +50,23 @@ export function HeroCard({
   const headingCls = hasImg ? "text-white [text-shadow:0_2px_10px_rgba(0,0,0,.55)]" : t.heading;
   const subCls = hasImg ? "text-white/90 [text-shadow:0_1px_6px_rgba(0,0,0,.5)]" : t.sub;
 
+  // Full-bleed hero: rounded top corners + a wide arched bottom edge (the
+  // carousel dots sit inside that arch). Contained hero: plain rounded card.
+  const archStyle = contained
+    ? undefined
+    : { borderRadius: "22px 22px 46% 46% / 22px 22px 60px 60px" };
+
   return (
-    <section className={`${contained ? "mx-auto max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6" : ""} ${className}`}>
+    <section
+      className={`${
+        contained ? "mx-auto max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6" : "px-2.5 pt-2.5 sm:px-0 sm:pt-0"
+      } ${className}`}
+    >
       <div
         className={`relative min-h-[340px] overflow-hidden sm:min-h-[460px] ${
-          contained ? "rounded-[var(--sf-radius-lg)]" : "rounded-b-[26px] sm:rounded-b-[36px]"
+          contained ? "rounded-[var(--sf-radius-lg)]" : ""
         } ${hasImg ? "bg-[var(--sf-card)]" : t.card}`}
+        style={archStyle}
       >
         {/* image layer */}
         {images.map((src, n) => (
