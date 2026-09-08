@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireBusiness, writeAudit } from "@/lib/app-actions";
+import { isColourOpt } from "@/lib/storefront/colour";
 
 export interface OptionDef {
   name: string;
@@ -32,7 +33,7 @@ export async function saveVariants(
   options: OptionDef[],
   variants: VariantInput[],
 ): Promise<{ error: string } | { ok: true; count: number }> {
-  const { businessId, user, db } = await requireBusiness();
+  const { businessId, user, db, billing } = await requireBusiness();
 
   const { data: product } = await db
     .from("products")
@@ -48,6 +49,11 @@ export async function saveVariants(
       values: [...new Set((o.values ?? []).map((v) => String(v).trim()).filter(Boolean))].slice(0, 30),
     }))
     .filter((o) => o.name && o.values.length);
+
+  // Colour variations are a paid feature — free stores get size (and other) options only.
+  if (billing.plan === "free" && cleanOptions.some((o) => isColourOpt(o.name))) {
+    return { error: "Colour variations are on the Business plan. Upgrade to add colours." };
+  }
 
   if (variants.length > 200) return { error: "A product can have at most 200 variants." };
 

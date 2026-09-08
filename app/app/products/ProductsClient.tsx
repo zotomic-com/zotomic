@@ -255,6 +255,7 @@ export function ProductsClient({
           productId={variantsFor.id}
           productName={variantsFor.name}
           currency={currency}
+          plan={limits.plan}
           initialOptions={variantsFor.options ?? []}
           initialVariants={variantsFor.variants ?? []}
         />

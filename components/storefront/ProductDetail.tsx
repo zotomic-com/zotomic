@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, Flame, Maximize2, Ruler, Star, Truck } from "lucide-react";
 import { money } from "@/lib/money";
 import { cldUrl } from "@/lib/cloudinary";
+import { isColourOpt, isSizeOpt, resolveSwatch } from "@/lib/storefront/colour";
 import { addToCart } from "./cart-store";
 import { pixel } from "@/components/tracking/Pixel";
 import { storefrontEvent } from "./StorefrontTracker";
@@ -39,19 +40,6 @@ const BADGE_BG: Record<Exclude<ProductBadge, null>, string> = {
   new: "bg-black",
 };
 
-const COLOUR_HEX: Record<string, string> = { cream: "#f5efe0", beige: "#e8dcc0", tan: "#d2b48c", navy: "#1f2937", charcoal: "#374151", offwhite: "#f7f7f4" };
-const isColourOpt = (n: string) => /colou?r|shade/i.test(n);
-function swatchColour(v: string): string | null {
-  const k = v.toLowerCase().replace(/\s+/g, "");
-  if (COLOUR_HEX[k]) return COLOUR_HEX[k];
-  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)) return v;
-  if (typeof window !== "undefined") {
-    const el = document.createElement("span");
-    el.style.color = v;
-    return el.style.color ? v : null;
-  }
-  return /^[a-z]+$/i.test(v) ? v : null;
-}
 
 export function ProductDetail({
   product,
@@ -92,6 +80,9 @@ export function ProductDetail({
 }) {
   const router = useRouter();
   const hasVariants = options.length > 0 && variants.length > 0;
+  const sizeOpt = hasVariants ? options.find((o) => isSizeOpt(o.name)) ?? null : null;
+  const colourOpt = hasVariants ? options.find((o) => isColourOpt(o.name)) ?? null : null;
+  const otherOpts = options.filter((o) => o !== sizeOpt && o !== colourOpt);
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   const [sheet, setSheet] = useState<null | "details" | "reviews" | "sizechart">(null);
@@ -170,17 +161,28 @@ export function ProductDetail({
 
   const RatingRow = ({ light }: { light?: boolean }) => (
     <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-sm ${light ? "text-white/85" : "text-[var(--sf-muted)]"}`}>
-      {reviewCount > 0 && (
-        <button onClick={() => setSheet("reviews")} className="flex items-center gap-1">
-          <span className="flex">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <Star key={n} className="h-3.5 w-3.5 text-amber-400" fill={reviewAverage >= n - 0.25 ? "currentColor" : "none"} />
-            ))}
-          </span>
-          <span className={`font-semibold ${light ? "text-white" : "text-[var(--sf-fg)]"}`}>{reviewAverage.toFixed(1)}</span>
-          <span>({reviewCount})</span>
-        </button>
-      )}
+      <button
+        onClick={() => (reviewCount > 0 ? setSheet("reviews") : undefined)}
+        className={`flex items-center gap-1 ${reviewCount > 0 ? "" : "cursor-default"}`}
+      >
+        <span className="flex">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Star
+              key={n}
+              className={`h-3.5 w-3.5 ${reviewCount > 0 ? "text-amber-400" : light ? "text-white/40" : "text-[var(--sf-line)]"}`}
+              fill={reviewCount > 0 && reviewAverage >= n - 0.25 ? "currentColor" : "none"}
+            />
+          ))}
+        </span>
+        {reviewCount > 0 ? (
+          <>
+            <span className={`font-semibold ${light ? "text-white" : "text-[var(--sf-fg)]"}`}>{reviewAverage.toFixed(1)}</span>
+            <span>({reviewCount})</span>
+          </>
+        ) : (
+          <span>No reviews yet</span>
+        )}
+      </button>
       {product.sold > 0 && (
         <span className="flex items-center gap-1">
           <Flame className="h-3.5 w-3.5" /> {product.sold} sold
@@ -188,6 +190,75 @@ export function ProductDetail({
       )}
     </div>
   );
+
+  /** compact tappable size values — "S  M  L  XL" as text */
+  const SizeTokens = ({ light, className = "" }: { light?: boolean; className?: string }) => {
+    if (!sizeOpt) return null;
+    return (
+      <div className={`flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold ${className}`}>
+        {sizeOpt.values.map((val) => {
+          const active = choice[sizeOpt.name] === val;
+          return (
+            <button
+              key={val}
+              onClick={() => setChoice((c) => ({ ...c, [sizeOpt.name]: val }))}
+              className={
+                active
+                  ? "text-[var(--sf-accent)] underline underline-offset-4"
+                  : light
+                    ? "text-white/70 hover:text-white"
+                    : "text-[var(--sf-muted)] hover:text-[var(--sf-fg)]"
+              }
+            >
+              {val}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const SizeGuideLink = ({ light }: { light?: boolean }) =>
+    sizeOpt && commerce.sizeChartUrl ? (
+      <button
+        onClick={() => setSheet("sizechart")}
+        className={`flex items-center gap-1 text-xs font-medium ${light ? "text-white" : "text-[var(--sf-accent)]"}`}
+      >
+        <Ruler className="h-3.5 w-3.5" /> Size guide
+      </button>
+    ) : null;
+
+  /** round filled colour circles; `overlay` = floating over the product image */
+  const ColourCircles = ({ overlay, light }: { overlay?: boolean; light?: boolean }) => {
+    if (!colourOpt) return null;
+    return (
+      <div className={overlay ? "flex flex-col gap-2" : "flex flex-wrap gap-2"}>
+        {colourOpt.values.map((val) => {
+          const active = choice[colourOpt.name] === val;
+          const hex = resolveSwatch(val) ?? "#d1d5db";
+          return (
+            <button
+              key={val}
+              title={val}
+              onClick={() => setChoice((c) => ({ ...c, [colourOpt.name]: val }))}
+              className={`h-8 w-8 rounded-full border-2 transition ${
+                overlay ? "shadow-md" : ""
+              } ${
+                active
+                  ? "border-[var(--sf-accent)] ring-2 ring-[var(--sf-accent)]/40"
+                  : overlay
+                    ? "border-white/80"
+                    : light
+                      ? "border-white/40"
+                      : "border-[var(--sf-line)]"
+              }`}
+              style={{ backgroundColor: hex }}
+            />
+          );
+        })}
+      </div>
+    );
+  };
 
   /** only rendered when the item is actually low on stock */
   const LowStock = () =>
@@ -207,10 +278,11 @@ export function ProductDetail({
     </p>
   );
 
-  function OptionPicker({ light }: { light?: boolean }) {
+  function OptionPicker({ light, opts = otherOpts }: { light?: boolean; opts?: { name: string; values: string[] }[] }) {
+    if (!opts.length) return null;
     return (
       <div className="space-y-3">
-        {options.map((o) => {
+        {opts.map((o) => {
           const colour = isColourOpt(o.name);
           return (
             <div key={o.name}>
@@ -219,16 +291,11 @@ export function ProductDetail({
                   {o.name}
                   {choice[o.name] ? <span className={`ml-1 normal-case ${light ? "text-white" : "text-[var(--sf-fg)]"}`}>· {choice[o.name]}</span> : ""}
                 </p>
-                {/size/i.test(o.name) && commerce.sizeChartUrl && (
-                  <button onClick={() => setSheet("sizechart")} className={`flex items-center gap-1 text-xs ${light ? "text-white" : "text-[var(--sf-accent)]"}`}>
-                    <Ruler className="h-3.5 w-3.5" /> Size chart
-                  </button>
-                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {o.values.map((val) => {
                   const active = choice[o.name] === val;
-                  const hex = colour ? swatchColour(val) : null;
+                  const hex = colour ? resolveSwatch(val) : null;
                   if (hex) {
                     return (
                       <button
@@ -398,6 +465,13 @@ export function ProductDetail({
           </div>
         )}
 
+        {/* colour palette — left-centre, inside the image frame */}
+        {colourOpt && (
+          <div className="absolute left-3 top-1/2 z-10 -translate-y-1/2">
+            <ColourCircles overlay />
+          </div>
+        )}
+
         {/* solid info panel */}
         <div className="absolute inset-x-2 bottom-[86px] z-10 max-h-[58%] overflow-y-auto rounded-2xl border border-[var(--sf-line)] bg-[var(--sf-bg)] p-4 text-[var(--sf-fg)] shadow-xl">
           {product.badge && (
@@ -405,14 +479,24 @@ export function ProductDetail({
               {BADGE[product.badge]}
             </span>
           )}
-          <h1 className="mt-1.5 text-xl font-extrabold tracking-tight">{product.name}</h1>
+          <div className="mt-1.5 flex items-start justify-between gap-3">
+            <h1 className="text-xl font-extrabold tracking-tight">{product.name}</h1>
+            {sizeOpt && (
+              <div className="max-w-[46%] shrink-0 pt-0.5 text-right">
+                <SizeTokens className="justify-end" />
+                <div className="mt-0.5 flex justify-end">
+                  <SizeGuideLink />
+                </div>
+              </div>
+            )}
+          </div>
           <div className="mt-1.5">
             <RatingRow />
           </div>
 
-          {hasVariants && (
+          {otherOpts.length > 0 && (
             <div className="mt-3">
-              <OptionPicker />
+              <OptionPicker opts={otherOpts} />
             </div>
           )}
 
@@ -515,9 +599,47 @@ export function ProductDetail({
               <p className="mt-3 line-clamp-3 whitespace-pre-line text-sm text-[var(--sf-muted)]">{product.description}</p>
             )}
 
-            {hasVariants && (
+            {colourOpt && (
               <div className="mt-5">
-                <OptionPicker />
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--sf-muted)]">
+                  Colour{choice[colourOpt.name] ? <span className="ml-1 normal-case text-[var(--sf-fg)]">· {choice[colourOpt.name]}</span> : ""}
+                </p>
+                <ColourCircles />
+              </div>
+            )}
+
+            {sizeOpt && (
+              <div className="mt-5">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--sf-muted)]">
+                    Size{choice[sizeOpt.name] ? <span className="ml-1 normal-case text-[var(--sf-fg)]">· {choice[sizeOpt.name]}</span> : ""}
+                  </p>
+                  <SizeGuideLink />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {sizeOpt.values.map((val) => {
+                    const active = choice[sizeOpt.name] === val;
+                    return (
+                      <button
+                        key={val}
+                        onClick={() => setChoice((c) => ({ ...c, [sizeOpt.name]: val }))}
+                        className={`min-w-10 rounded-[var(--sf-radius)] border px-3 py-1.5 text-sm ${
+                          active
+                            ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
+                            : "border-[var(--sf-line)] text-[var(--sf-fg)] hover:border-[var(--sf-fg)]"
+                        }`}
+                      >
+                        {val}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {otherOpts.length > 0 && (
+              <div className="mt-5">
+                <OptionPicker opts={otherOpts} />
               </div>
             )}
 
@@ -537,16 +659,16 @@ export function ProductDetail({
         </div>
 
         {/* labelled sections */}
-        {product.description && (
-          <section className="mt-14 max-w-2xl">
-            <h2 className="text-lg font-extrabold tracking-tight">Description</h2>
-            <p className="mt-3 whitespace-pre-line text-sm text-[var(--sf-muted)]">{product.description}</p>
-          </section>
-        )}
+        <section className="mt-14 max-w-2xl">
+          <h2 className="text-lg font-extrabold tracking-tight">Description</h2>
+          <p className="mt-3 whitespace-pre-line text-sm text-[var(--sf-muted)]">
+            {product.description || "No description provided for this product yet."}
+          </p>
+        </section>
 
         <section className="mt-14 max-w-2xl">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-extrabold tracking-tight">Reviews</h2>
+            <h2 className="text-lg font-extrabold tracking-tight">Ratings &amp; reviews</h2>
             {reviewCount > 0 && (
               <span className="flex items-center gap-1 text-sm text-[var(--sf-muted)]">
                 <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
