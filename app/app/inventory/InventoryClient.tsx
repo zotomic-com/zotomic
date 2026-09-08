@@ -66,6 +66,8 @@ export function InventoryClient({ rows, lowThreshold }: { rows: StockRow[]; lowT
                   productId={r.productId}
                   variantId={r.variantId ?? undefined}
                   currentStock={r.stock}
+                  tracked={r.tracked}
+                  canStopTracking={!r.variantId}
                   onDone={() => {
                     setOpen(null);
                     router.refresh();

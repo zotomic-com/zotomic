@@ -221,6 +221,8 @@ export function ProductsClient({
                 <InventoryAdjust
                   productId={editing.id}
                   currentStock={editing.stock_qty}
+                  tracked={editing.track_inventory}
+                  canStopTracking
                   onDone={() => {
                     setEditing(null);
                     router.refresh();

@@ -127,36 +127,44 @@ export async function saveVariants(
   return { ok: true, count: variants.length };
 }
 
-/** Log a stock change with a reason and apply it to product or variant. */
+const ADJ_REASONS = ["recount", "restock", "damage", "theft", "correction", "sale", "return", "other"];
+
+/**
+ * Change stock for a product (or a variant).
+ *  - mode "set":    `amount` is the new exact total (0 allowed → out of stock)
+ *  - mode "adjust":  `amount` is a +/- delta (must be non-zero)
+ */
 export async function adjustInventory(input: {
   productId: string;
   variantId?: string | null;
-  delta: number;
+  mode: "set" | "adjust";
+  amount: number;
   reason: string;
   note?: string;
 }): Promise<{ error: string } | { ok: true; balance: number }> {
   const { businessId, user, db } = await requireBusiness();
-  const delta = Math.round(Number(input.delta) || 0);
-  if (!delta) return { error: "Enter a non-zero quantity." };
-  const reason = ["recount", "restock", "damage", "theft", "correction", "sale", "return", "other"].includes(
-    input.reason,
-  )
-    ? input.reason
-    : "correction";
+  const mode = input.mode === "set" ? "set" : "adjust";
+  const amount = Math.round(Number(input.amount) || 0);
+  if (mode === "adjust" && amount === 0) return { error: "Enter a non-zero quantity to add or remove." };
+  if (mode === "set" && amount < 0) return { error: "Stock can't be negative." };
+  const reason = ADJ_REASONS.includes(input.reason) ? input.reason : mode === "set" ? "recount" : "correction";
 
-  let balance: number;
+  const table = input.variantId ? "product_variants" : "products";
+  const idCol = input.variantId ?? input.productId;
+  const { data: current } = await db
+    .from(table)
+    .select("stock_qty")
+    .eq("business_id", businessId)
+    .eq("id", idCol)
+    .maybeSingle();
+  if (!current) return { error: input.variantId ? "Variant not found" : "Product not found" };
+
+  const before = Number(current.stock_qty);
+  const balance = mode === "set" ? Math.max(0, amount) : Math.max(0, before + amount);
+  const delta = balance - before;
+
   if (input.variantId) {
-    const { data: v } = await db
-      .from("product_variants")
-      .select("stock_qty")
-      .eq("business_id", businessId)
-      .eq("id", input.variantId)
-      .maybeSingle();
-    if (!v) return { error: "Variant not found" };
-    balance =
-      reason === "recount" ? Math.max(0, delta) : Math.max(0, Number(v.stock_qty) + delta);
-    await db.from("product_variants").update({ stock_qty: balance }).eq("id", input.variantId);
-    // refresh product total
+    await db.from("product_variants").update({ stock_qty: balance }).eq("id", input.variantId).eq("business_id", businessId);
     const { data: sib } = await db
       .from("product_variants")
       .select("stock_qty")
@@ -168,15 +176,6 @@ export async function adjustInventory(input: {
       .update({ stock_qty: (sib ?? []).reduce((s, r) => s + Number(r.stock_qty), 0) })
       .eq("id", input.productId);
   } else {
-    const { data: p } = await db
-      .from("products")
-      .select("stock_qty")
-      .eq("business_id", businessId)
-      .eq("id", input.productId)
-      .maybeSingle();
-    if (!p) return { error: "Product not found" };
-    balance =
-      reason === "recount" ? Math.max(0, delta) : Math.max(0, Number(p.stock_qty) + delta);
     await db
       .from("products")
       .update({ stock_qty: balance, track_inventory: true })
@@ -188,7 +187,7 @@ export async function adjustInventory(input: {
     business_id: businessId,
     product_id: input.productId,
     variant_id: input.variantId ?? null,
-    delta: reason === "recount" ? balance : delta,
+    delta,
     balance,
     reason,
     note: input.note ? String(input.note).slice(0, 300) : null,
@@ -204,4 +203,30 @@ export async function adjustInventory(input: {
   revalidatePath("/app/products");
   revalidatePath("/app/inventory");
   return { ok: true, balance };
+}
+
+/** Turn stock tracking on/off for a simple (non-variant) product. */
+export async function setStockTracking(
+  productId: string,
+  tracked: boolean,
+): Promise<{ error: string } | { ok: true }> {
+  const { businessId, user, db } = await requireBusiness();
+  const { data: p } = await db
+    .from("products")
+    .select("id, name, has_variants")
+    .eq("business_id", businessId)
+    .eq("id", productId)
+    .maybeSingle();
+  if (!p) return { error: "Product not found" };
+  if (p.has_variants) return { error: "Variant products always track stock." };
+
+  await db.from("products").update({ track_inventory: tracked }).eq("business_id", businessId).eq("id", productId);
+  await writeAudit(businessId, user.id, "inventory.tracking_changed", {
+    targetType: "product",
+    targetId: productId,
+    summary: `${tracked ? "Started" : "Stopped"} tracking stock for "${p.name}"`,
+  });
+  revalidatePath("/app/products");
+  revalidatePath("/app/inventory");
+  return { ok: true };
 }
