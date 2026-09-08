@@ -113,7 +113,8 @@ export function ProductDetail({
   const price = hasVariants && selected ? (selected.salePrice ?? selected.price) : onSale ? product.salePrice! : product.price;
   const compareAt = hasVariants && selected ? (selected.salePrice != null ? selected.price : null) : onSale ? product.price : null;
   const soldOut = hasVariants ? variants.every((v) => v.soldOut) : product.trackInventory && product.stockQty <= 0;
-  const lowStock = !hasVariants && product.trackInventory && product.stockQty > 0 && product.stockQty <= 5;
+  const stockLeft = hasVariants ? (selected ? selected.stockQty : null) : product.trackInventory ? product.stockQty : null;
+  const lowStock = stockLeft != null && stockLeft > 0 && stockLeft <= 5;
   const images = product.imageUrls.length ? product.imageUrls : [];
 
   const add = (buyNow: boolean) => {
@@ -265,7 +266,7 @@ export function ProductDetail({
     lowStock ? (
       <p className="flex items-center gap-1.5 font-bold text-red-500">
         <Flame className="h-4 w-4" />
-        Only <span className="text-lg leading-none">{product.stockQty}</span> left
+        Only <span className="text-lg leading-none">{stockLeft}</span> left
       </p>
     ) : null;
 
