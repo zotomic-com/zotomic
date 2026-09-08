@@ -13,10 +13,10 @@ export default async function StoreProductsPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ category?: string; q?: string }>;
+  searchParams: Promise<{ category?: string; q?: string; sort?: string; stock?: string }>;
 }) {
   const { slug } = await params;
-  const { category, q } = await searchParams;
+  const { category, q, sort, stock } = await searchParams;
   const store = await getStoreBySlug(slug);
   if (!store || !store.published) return null;
 
@@ -26,14 +26,22 @@ export default async function StoreProductsPage({
     getStoreCategories(store.businessId),
   ]);
   const term = (q ?? "").trim().toLowerCase();
+  const inStockOnly = stock === "1";
+  const priceOf = (p: (typeof all)[number]) => p.salePrice ?? p.price;
   const products = all.filter((p) => {
     if (category && p.category !== category) return false;
+    if (inStockOnly && p.trackInventory && p.stockQty <= 0) return false;
     if (term) {
       const hay = `${p.name} ${p.description ?? ""} ${p.category ?? ""}`.toLowerCase();
       if (!hay.includes(term)) return false;
     }
     return true;
   });
+
+  if (sort === "price-asc") products.sort((a, b) => priceOf(a) - priceOf(b));
+  else if (sort === "price-desc") products.sort((a, b) => priceOf(b) - priceOf(a));
+  else if (sort === "rating") products.sort((a, b) => b.rating - a.rating);
+  else if (sort === "new") products.sort((a, b) => Number(b.isNew) - Number(a.isNew));
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -45,7 +53,12 @@ export default async function StoreProductsPage({
       </div>
 
       <div className="mt-4 hidden sm:block">
-        <StoreSearchBar basePath={basePath} initial={q ?? ""} />
+        <StoreSearchBar
+          basePath={basePath}
+          initial={q ?? ""}
+          initialSort={sort ?? ""}
+          initialInStock={stock === "1"}
+        />
       </div>
 
       {categories.length > 0 && (
