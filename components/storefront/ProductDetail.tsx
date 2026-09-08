@@ -116,8 +116,14 @@ export function ProductDetail({
   const price = hasVariants && selected ? (selected.salePrice ?? selected.price) : onSale ? product.salePrice! : product.price;
   const compareAt = hasVariants && selected ? (selected.salePrice != null ? selected.price : null) : onSale ? product.price : null;
   const soldOut = hasVariants ? variants.every((v) => v.soldOut) : product.trackInventory && product.stockQty <= 0;
-  const stockLeft = hasVariants ? (selected ? selected.stockQty : null) : product.trackInventory ? product.stockQty : null;
-  const lowStock = stockLeft != null && stockLeft > 0 && stockLeft <= 5;
+  // per-variant stock once a variant is chosen; otherwise the product's own
+  // tracked stock (keeps the PDP consistent with the product card)
+  const stockLeft = selected
+    ? selected.stockQty
+    : product.trackInventory
+      ? product.stockQty
+      : null;
+  const lowStock = !soldOut && stockLeft != null && stockLeft > 0 && stockLeft <= 5;
   const images = product.imageUrls.length ? product.imageUrls : [];
 
   const add = (buyNow: boolean) => {

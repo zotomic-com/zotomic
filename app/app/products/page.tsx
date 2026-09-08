@@ -16,7 +16,7 @@ export default async function ProductsPage() {
   const [{ data }, { data: variants }, { data: cats }] = await Promise.all([
     db
       .from("products")
-      .select("id, name, category, status, price, buying_price, marketing_cost, stock_qty, image_urls, options, has_variants, is_hot, hide_badges")
+      .select("id, name, category, status, price, buying_price, marketing_cost, stock_qty, track_inventory, image_urls, options, has_variants, is_hot, hide_badges")
       .eq("business_id", tenant.businessId)
       .order("created_at", { ascending: true }),
     db

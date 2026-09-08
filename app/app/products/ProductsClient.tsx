@@ -27,6 +27,7 @@ export interface ProductRow {
   buying_price: number | null;
   marketing_cost: number;
   stock_qty: number;
+  track_inventory: boolean;
   image_urls: string[];
   options: { name: string; values: string[] }[];
   has_variants: boolean;
@@ -348,6 +349,10 @@ function ProductForm({
           <Input name="stock_qty" type="number" min="0" defaultValue={product?.stock_qty ?? 0} />
         </Field>
       </div>
+      <label className="flex items-center gap-2 rounded-sm border border-border bg-surface-2 px-3 py-2 text-sm">
+        <input type="checkbox" name="track_inventory" defaultChecked={product ? product.track_inventory : true} value="on" />
+        Track stock — show &ldquo;only N left&rdquo; and &ldquo;sold out&rdquo; on the storefront
+      </label>
       <div className="flex flex-wrap gap-4 rounded-sm border border-border bg-surface-2 px-3 py-2 text-sm">
         <label className="flex items-center gap-2">
           <input type="checkbox" name="is_hot" defaultChecked={product?.is_hot} value="on" />
