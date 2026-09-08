@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { requireAdmin, adminDb } from "@/lib/admin-server";
 import { money } from "@/lib/money";
 import { StatCard } from "@/components/ui/stat-card";
@@ -44,7 +46,19 @@ export default async function AdminFinancialsPage() {
   }));
 
   const cols: Column<(typeof rows)[number]>[] = [
-    { key: "number", header: "Invoice", render: (r) => <span className="font-medium text-fg">{r.number}</span> },
+    {
+      key: "number",
+      header: "Invoice",
+      render: (r) => (
+        <Link
+          href={`/admin/financials/${r.id}`}
+          className="group flex items-center gap-1.5 font-medium text-fg hover:text-primary"
+        >
+          {r.number}
+          <ChevronRight className="h-4 w-4 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        </Link>
+      ),
+    },
     { key: "business", header: "Business", render: (r) => r.business },
     { key: "amount", header: "Amount", render: (r) => r.amount },
     { key: "date", header: "Date", render: (r) => r.date },

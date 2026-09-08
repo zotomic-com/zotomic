@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
@@ -42,7 +44,19 @@ export default async function ReportsPage() {
   }));
 
   const cols: Column<Row>[] = [
-    { key: "period", header: "Period", render: (r) => <span className="font-medium text-fg">{r.period}</span> },
+    {
+      key: "period",
+      header: "Period",
+      render: (r) => (
+        <Link
+          href={`/app/reports/${r.id}`}
+          className="group flex items-center gap-1.5 font-medium text-fg hover:text-primary"
+        >
+          {r.period}
+          <ChevronRight className="h-4 w-4 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        </Link>
+      ),
+    },
     {
       key: "status",
       header: "Status",
@@ -50,7 +64,16 @@ export default async function ReportsPage() {
         <Badge tone={STATUS_TONE[r.status as keyof typeof STATUS_TONE] ?? "neutral"}>{r.status}</Badge>
       ),
     },
-    { key: "generated", header: "Generated", align: "right", render: (r) => r.generated ?? "—" },
+    {
+      key: "generated",
+      header: "Generated",
+      align: "right",
+      render: (r) => (
+        <Link href={`/app/reports/${r.id}`} className="text-fg-muted hover:text-primary">
+          {r.generated ?? "—"}
+        </Link>
+      ),
+    },
   ];
 
   return (
