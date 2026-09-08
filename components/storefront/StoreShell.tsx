@@ -42,7 +42,10 @@ export function StoreShell({
     --sf-elevated:${dark ? "#141a21" : "#ffffff"};
     --sf-shadow:${dark ? "0 1px 2px rgba(0,0,0,.4), 0 12px 32px -14px rgba(0,0,0,.6)" : "0 1px 2px rgba(16,24,40,.04), 0 12px 28px -14px rgba(16,24,40,.14)"};
   }
-  body{font-family:${FONT_STACKS[brand.font]}}`;
+  body{font-family:${FONT_STACKS[brand.font]}}
+  /* storefront headings inherit their container colour (the app's global base rule
+     pins them to a fixed colour, which loses contrast on image overlays) */
+  h1,h2,h3,h4{color:inherit}`;
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--sf-bg)] text-[var(--sf-fg)]" style={{ fontFamily: FONT_STACKS[brand.font] }}>

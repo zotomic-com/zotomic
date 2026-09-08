@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, Flame, Maximize2, Ruler, Star, Truck } from "lucide-react";
 import { money } from "@/lib/money";
@@ -152,6 +152,20 @@ export function ProductDetail({
 
   const back = () => (history.length > 1 ? router.back() : router.push(`${basePath}/products`));
 
+  // swipe between images on the mobile hero
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const onImgTouchStart = (e: React.TouchEvent) => {
+    touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onImgTouchEnd = (e: React.TouchEvent) => {
+    if (!touch.current || images.length < 2) return;
+    const dx = e.changedTouches[0].clientX - touch.current.x;
+    const dy = e.changedTouches[0].clientY - touch.current.y;
+    touch.current = null;
+    if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy)) return;
+    setImg((i) => (dx < 0 ? Math.min(images.length - 1, i + 1) : Math.max(0, i - 1)));
+  };
+
   /* ── shared bits ─────────────────────────────────────────────── */
 
   const RatingRow = ({ light }: { light?: boolean }) => (
@@ -172,13 +186,17 @@ export function ProductDetail({
           <Flame className="h-3.5 w-3.5" /> {product.sold} sold
         </span>
       )}
-      {lowStock && (
-        <span className="font-bold text-red-500">
-          Only <span className="text-base">{product.stockQty}</span> left
-        </span>
-      )}
     </div>
   );
+
+  /** only rendered when the item is actually low on stock */
+  const LowStock = () =>
+    lowStock ? (
+      <p className="flex items-center gap-1.5 font-bold text-red-500">
+        <Flame className="h-4 w-4" />
+        Only <span className="text-lg leading-none">{product.stockQty}</span> left
+      </p>
+    ) : null;
 
   const Price = ({ big }: { big?: boolean }) => (
     <p className={big ? "text-2xl font-bold sm:text-3xl" : "text-lg font-bold"}>
@@ -254,33 +272,40 @@ export function ProductDetail({
     </div>
   );
 
-  /** single rounded pill split into Add to cart | Buy now */
-  const BuyBar = ({ floating }: { floating?: boolean }) => {
+  /** single rounded pill split into Add to cart | Buy now — blue glass */
+  const BuyBar = ({ glass }: { glass?: boolean }) => {
     const disabled = soldOut || selected?.soldOut;
+    const pill =
+      "flex w-full overflow-hidden rounded-full text-white shadow-lg " +
+      (glass ? "border border-white/25 bg-[var(--sf-accent)]/85 backdrop-blur-xl" : "bg-[var(--sf-accent)]");
+    if (disabled) {
+      return (
+        <div className="w-full rounded-full bg-[var(--sf-line)] py-3.5 text-center text-sm font-semibold text-[var(--sf-muted)]">
+          Sold out
+        </div>
+      );
+    }
+    if (needsSelection) {
+      return (
+        <button
+          onClick={() => setSheet(null)}
+          className={`w-full rounded-full py-3.5 text-center text-sm font-bold text-white shadow-lg ${
+            glass ? "border border-white/25 bg-[var(--sf-accent)]/85 backdrop-blur-xl" : "bg-[var(--sf-accent)]"
+          }`}
+        >
+          Select {options.map((o) => o.name.toLowerCase()).join(" & ")}
+        </button>
+      );
+    }
     return (
-      <div className={floating ? "fixed inset-x-0 bottom-0 z-[45] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2" : ""}>
-        {disabled ? (
-          <div className="w-full rounded-full bg-[var(--sf-line)] py-3.5 text-center text-sm font-semibold text-[var(--sf-muted)]">
-            Sold out
-          </div>
-        ) : needsSelection ? (
-          <button
-            onClick={() => setSheet(null)}
-            className="w-full rounded-full border-2 border-[var(--sf-accent)] py-3.5 text-center text-sm font-bold text-[var(--sf-accent)]"
-          >
-            Select {options.map((o) => o.name.toLowerCase()).join(" & ")}
-          </button>
-        ) : (
-          <div className="flex w-full overflow-hidden rounded-full bg-[var(--sf-accent)] text-white shadow-lg">
-            <button onClick={() => add(false)} className="flex-1 py-3.5 text-sm font-bold">
-              {added ? "Added ✓" : "Add to cart"}
-            </button>
-            <span aria-hidden className="my-2 w-px bg-white/30" />
-            <button onClick={() => add(true)} className="flex-1 py-3.5 text-sm font-bold">
-              Buy now
-            </button>
-          </div>
-        )}
+      <div className={pill} style={glass ? { WebkitBackdropFilter: "blur(16px)" } : undefined}>
+        <button onClick={() => add(false)} className="flex-1 py-3.5 text-sm font-bold">
+          {added ? "Added ✓" : "Add to cart"}
+        </button>
+        <span aria-hidden className="my-2 w-px bg-white/40" />
+        <button onClick={() => add(true)} className="flex-1 py-3.5 text-sm font-bold">
+          Buy now
+        </button>
       </div>
     );
   };
@@ -323,33 +348,13 @@ export function ProductDetail({
   return (
     <>
       {/* ══════════ MOBILE — immersive ══════════ */}
-      <div className="fixed inset-0 z-40 flex flex-col bg-black sm:hidden">
-        {/* top bar */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between p-3">
-          <button onClick={back} aria-label="Back" className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-black backdrop-blur">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="pointer-events-auto flex items-center gap-2">
-            <button onClick={() => setZoom(true)} aria-label="Zoom" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-black backdrop-blur">
-              <Maximize2 className="h-4 w-4" />
-            </button>
-            <WishlistHeart
-              storeSlug={storeSlug}
-              item={{ id: product.id, name: product.name, price, image: images[0] ?? null, slug: product.slug }}
-              size={18}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-black backdrop-blur"
-            />
-            <MenuDrawer
-              nav={nav}
-              basePath={basePath}
-              storeSlug={storeSlug}
-              triggerClassName="flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-black backdrop-blur"
-            />
-          </div>
-        </div>
-
-        {/* image frame — fills all space above the buy bar */}
-        <div className="relative flex-1 overflow-hidden">
+      <div className="fixed inset-0 z-40 bg-black sm:hidden">
+        {/* image frame — full height, swipe between images */}
+        <div
+          className="absolute inset-0 overflow-hidden"
+          onTouchStart={onImgTouchStart}
+          onTouchEnd={onImgTouchEnd}
+        >
           {images[img] ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
@@ -361,57 +366,87 @@ export function ProductDetail({
           ) : (
             <div className="flex h-full items-center justify-center bg-neutral-800 text-sm text-white/50">No image</div>
           )}
+        </div>
 
-          {images.length > 1 && (
-            <div className="absolute left-1/2 top-3 flex -translate-x-1/2 gap-1.5">
-              {images.map((_, n) => (
-                <button key={n} onClick={() => setImg(n)} aria-label={`Image ${n + 1}`} className={`h-1.5 rounded-full ${n === img ? "w-4 bg-white" : "w-1.5 bg-white/50"}`} />
-              ))}
-            </div>
-          )}
-
-          {/* info overlay */}
-          <div className="absolute inset-x-0 bottom-0 max-h-[62%] overflow-y-auto bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-4 pt-16 text-white">
-            {product.badge && (
-              <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${BADGE_BG[product.badge]}`}>
-                {BADGE[product.badge]}
-              </span>
-            )}
-            <h1 className="mt-1.5 text-xl font-extrabold tracking-tight">{product.name}</h1>
-            <div className="mt-1.5">
-              <RatingRow light />
-            </div>
-            <div className="mt-1.5">
-              <Price big />
-            </div>
-
-            {hasVariants && (
-              <div className="mt-3">
-                <OptionPicker light />
-              </div>
-            )}
-
-            <div className="mt-3 flex items-center gap-3">
-              <span className="text-xs font-semibold uppercase tracking-wide text-white/70">Qty</span>
-              <div className="inline-flex items-center rounded-full border border-white/40 text-white">
-                <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-3 py-1.5 text-lg leading-none">−</button>
-                <span className="w-8 text-center text-sm tabular-nums">{qty}</span>
-                <button onClick={() => setQty((q) => q + 1)} className="px-3 py-1.5 text-lg leading-none">+</button>
-              </div>
-            </div>
-
-            <div className="mt-3 flex gap-2">
-              <button onClick={() => setSheet("details")} className="flex-1 rounded-full border border-white/40 py-2 text-xs font-semibold">
-                Details
-              </button>
-              <button onClick={() => setSheet("reviews")} className="flex-1 rounded-full border border-white/40 py-2 text-xs font-semibold">
-                Reviews{reviewCount ? ` (${reviewCount})` : ""}
-              </button>
-            </div>
+        {/* top bar — theme-adaptive glass buttons */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between p-3">
+          <button onClick={back} aria-label="Back" className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sf-bg)]/75 text-[var(--sf-fg)] shadow backdrop-blur-md">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div className="pointer-events-auto flex items-center gap-2">
+            <button onClick={() => setZoom(true)} aria-label="Zoom" className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sf-bg)]/75 text-[var(--sf-fg)] shadow backdrop-blur-md">
+              <Maximize2 className="h-4 w-4" />
+            </button>
+            <WishlistHeart
+              storeSlug={storeSlug}
+              item={{ id: product.id, name: product.name, price, image: images[0] ?? null, slug: product.slug }}
+              size={18}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sf-bg)]/75 text-[var(--sf-fg)] shadow backdrop-blur-md"
+            />
+            <MenuDrawer
+              nav={nav}
+              basePath={basePath}
+              storeSlug={storeSlug}
+              triggerClassName="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sf-bg)]/75 text-[var(--sf-fg)] shadow backdrop-blur-md"
+            />
           </div>
         </div>
 
-        <BuyBar floating />
+        {/* image dots */}
+        {images.length > 1 && (
+          <div className="pointer-events-none absolute inset-x-0 top-16 z-10 flex justify-center gap-1.5">
+            {images.map((_, n) => (
+              <span key={n} className={`h-1.5 rounded-full transition-all ${n === img ? "w-4 bg-white" : "w-1.5 bg-white/50"}`} />
+            ))}
+          </div>
+        )}
+
+        {/* glass info panel — frosted, adapts to theme, always legible */}
+        <div
+          style={{ WebkitBackdropFilter: "blur(20px)" }}
+          className="absolute inset-x-2 bottom-[86px] z-10 max-h-[58%] overflow-y-auto rounded-2xl border border-[var(--sf-line)]/50 bg-[var(--sf-bg)]/75 p-4 text-[var(--sf-fg)] shadow-xl backdrop-blur-xl"
+        >
+          {product.badge && (
+            <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${BADGE_BG[product.badge]}`}>
+              {BADGE[product.badge]}
+            </span>
+          )}
+          <h1 className="mt-1.5 text-xl font-extrabold tracking-tight">{product.name}</h1>
+          <div className="mt-1.5">
+            <RatingRow />
+          </div>
+
+          {hasVariants && (
+            <div className="mt-3">
+              <OptionPicker />
+            </div>
+          )}
+
+          <div className="mt-3 space-y-2">
+            <LowStock />
+            <div className="flex items-center justify-between">
+              <Price big />
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--sf-muted)]">Qty</span>
+                <Qty />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex gap-2">
+            <button onClick={() => setSheet("details")} className="flex-1 rounded-full border border-[var(--sf-line)] py-2 text-xs font-semibold">
+              Details
+            </button>
+            <button onClick={() => setSheet("reviews")} className="flex-1 rounded-full border border-[var(--sf-line)] py-2 text-xs font-semibold">
+              Reviews{reviewCount ? ` (${reviewCount})` : ""}
+            </button>
+          </div>
+        </div>
+
+        {/* blue-glass buy bar — overlaps the image bottom */}
+        <div className="absolute inset-x-0 bottom-0 z-10 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+          <BuyBar glass />
+        </div>
       </div>
 
       {/* ══════════ DESKTOP / tablet ══════════ */}
@@ -477,6 +512,9 @@ export function ProductDetail({
             </div>
             <div className="mt-3">
               <Price big />
+            </div>
+            <div className="mt-2 text-sm">
+              <LowStock />
             </div>
 
             {product.description && (

@@ -27,14 +27,22 @@ export function MenuDrawer({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState(false); // drives the slide transition
   const [mounted, setMounted] = useState(false);
   const [account, setAccount] = useState<{ loggedIn: boolean; name?: string | null } | null>(null);
 
   useEffect(() => setMounted(true), []);
+
+  const close = () => {
+    setShown(false);
+    setTimeout(() => setOpen(false), 260);
+  };
+
   useEffect(() => {
     if (!open) return;
     document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const raf = requestAnimationFrame(() => setShown(true));
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     document.addEventListener("keydown", onKey);
     if (storeSlug && !account) {
       fetch(`/api/storefront/account/session?store=${encodeURIComponent(storeSlug)}`)
@@ -43,6 +51,7 @@ export function MenuDrawer({
         .catch(() => setAccount({ loggedIn: false }));
     }
     return () => {
+      cancelAnimationFrame(raf);
       document.body.style.overflow = "";
       document.removeEventListener("keydown", onKey);
     };
@@ -50,7 +59,7 @@ export function MenuDrawer({
 
   const href = (h: string) => (h.startsWith("/") ? `${basePath}${h === "/" ? "" : h}` || "/" : h);
   const go = (h: string) => {
-    setOpen(false);
+    close();
     router.push(href(h));
   };
 
@@ -66,12 +75,19 @@ export function MenuDrawer({
       {open &&
         mounted &&
         createPortal(
-          <div className="fixed inset-0 z-[85]" style={{ fontFamily: "inherit" }}>
-            <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-            <aside className="absolute right-0 top-0 flex h-full w-72 max-w-[82vw] flex-col bg-[var(--sf-bg)] text-[var(--sf-fg)] shadow-2xl">
+          <div className="fixed inset-0 z-[85]">
+            <div
+              className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}
+              onClick={close}
+            />
+            <aside
+              className={`absolute right-0 top-0 flex h-full w-72 max-w-[82vw] flex-col bg-[var(--sf-bg)] text-[var(--sf-fg)] shadow-2xl transition-transform duration-300 ease-out ${
+                shown ? "translate-x-0" : "translate-x-full"
+              }`}
+            >
               <div className="flex items-center justify-between border-b border-[var(--sf-line)] px-4 py-3">
                 <span className="text-sm font-bold">Menu</span>
-                <button onClick={() => setOpen(false)} aria-label="Close">
+                <button onClick={close} aria-label="Close">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -82,7 +98,7 @@ export function MenuDrawer({
                     <li key={n.href + n.label}>
                       <Link
                         href={href(n.href)}
-                        onClick={() => setOpen(false)}
+                        onClick={close}
                         className="block rounded-[var(--sf-radius)] px-3 py-2.5 text-sm font-medium hover:bg-[var(--sf-card)]"
                       >
                         {n.label}
