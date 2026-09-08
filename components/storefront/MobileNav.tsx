@@ -44,16 +44,16 @@ export function MobileNav({ storeSlug, basePath }: { storeSlug: string; basePath
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:hidden">
-      <div className="relative flex w-full max-w-sm items-center justify-around rounded-full border border-[var(--sf-line)] bg-[var(--sf-bg)] px-2 py-1.5 shadow-[var(--sf-shadow)]">
+      <div className="relative flex w-full max-w-sm items-center justify-around rounded-full bg-neutral-900 px-2 py-1.5 shadow-[var(--sf-shadow)]">
         {side.slice(0, 2).map((it) => (
           <NavItem key={it.label} {...it} active={it.exact ? pathname === it.href : pathname.startsWith(it.href)} />
         ))}
 
-        {/* raised centre cart */}
+        {/* raised centre cart — unchanged */}
         <Link
           href={cartHref}
           aria-label="Cart"
-          className="relative -mt-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--sf-accent)] text-white shadow-lg ring-4 ring-[var(--sf-bg)]"
+          className="relative -mt-6 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--sf-accent)] text-white shadow-lg ring-4 ring-neutral-900"
         >
           <ShoppingBag className="h-5 w-5" />
           {cart > 0 && (
@@ -89,7 +89,7 @@ function NavItem({
     <Link
       href={href}
       className={`relative flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] font-medium ${
-        active ? "text-[var(--sf-accent)]" : "text-[var(--sf-muted)]"
+        active ? "text-white" : "text-white/55"
       }`}
     >
       <span className="relative">
