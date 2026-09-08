@@ -240,11 +240,22 @@ export function renderInvoiceHtml(inv: AdminInvoice): string {
 </div>`.trim();
 }
 
+/** The base-14 PDF fonts only cover WinAnsi (Latin-1). Replace anything outside
+ *  it so a Taka / Rupee symbol or an emoji in a description can't 500 the PDF. */
+function winAnsiSafe(s: string): string {
+  return s.replace(/[^\x00-\xFF]/g, (c) => ({ "৳": "Tk", "₹": "Rs", "₨": "Rs", "€": "EUR", "—": "-", "–": "-", "‘": "'", "’": "'", "“": '"', "”": '"' })[c] ?? "?");
+}
+
+/** Money for the PDF — ISO code, never a non-Latin symbol. */
+function pdfMoney(n: number, code: string): string {
+  return `${code} ${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 /** Invoice as a one-page PDF (pdf-lib, no headless browser). */
 export async function buildInvoicePdf(inv: AdminInvoice): Promise<Uint8Array> {
   const items = effectiveItems(inv);
   const total = invoiceTotal(items);
-  const m = (n: number) => money(n, inv.currency);
+  const m = (n: number) => pdfMoney(n, inv.currency);
 
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]); // A4
@@ -257,9 +268,11 @@ export async function buildInvoicePdf(inv: AdminInvoice): Promise<Uint8Array> {
   const M = 48;
   let y = 842 - M;
   const text = (s: string, x: number, yy: number, size = 10, f = font, color = ink) =>
-    page.drawText(s, { x, y: yy, size, font: f, color });
-  const right = (s: string, xEnd: number, yy: number, size = 10, f = font, color = ink) =>
-    page.drawText(s, { x: xEnd - f.widthOfTextAtSize(s, size), y: yy, size, font: f, color });
+    page.drawText(winAnsiSafe(s), { x, y: yy, size, font: f, color });
+  const right = (s: string, xEnd: number, yy: number, size = 10, f = font, color = ink) => {
+    const safe = winAnsiSafe(s);
+    page.drawText(safe, { x: xEnd - f.widthOfTextAtSize(safe, size), y: yy, size, font: f, color });
+  };
 
   text(ZOTOMIC_BILLER.name, M, y, 16, bold);
   right("INVOICE", 595 - M, y, 18, bold);

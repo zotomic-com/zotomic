@@ -194,13 +194,20 @@ export async function sendInvoice(
   }
   if (!to) return { error: "No recipient email — add one to the invoice or type one in." };
 
-  const pdf = await buildInvoicePdf(inv);
+  let attachments;
+  try {
+    const pdf = await buildInvoicePdf(inv);
+    attachments = [{ filename: `${inv.invoiceNumber}.pdf`, content: pdf, contentType: "application/pdf" }];
+  } catch (e) {
+    console.error("invoice pdf build failed, sending without attachment:", (e as Error).message);
+  }
+
   const sent = await sendEmail({
     to,
     account: "invoice",
     subject: `Invoice ${inv.invoiceNumber} from Zotomic`,
     html: renderInvoiceHtml(inv),
-    attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdf, contentType: "application/pdf" }],
+    attachments,
   });
   if (!sent) return { error: "Email is not configured (MAIL_INVOICE_* missing) or the send failed." };
 
