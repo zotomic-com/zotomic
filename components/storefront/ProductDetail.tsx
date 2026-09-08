@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronLeft, ChevronRight, Flame, Maximize2, Ruler, Star, Truck } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Flame, Maximize2, Ruler, Star, Truck } from "lucide-react";
 import { money } from "@/lib/money";
 import { cldUrl } from "@/lib/cloudinary";
 import { isColourOpt, isSizeOpt, resolveSwatch } from "@/lib/storefront/colour";
@@ -91,6 +91,7 @@ export function ProductDetail({
   const [img, setImg] = useState(0);
   const [added, setAdded] = useState(false);
   const [sizePage, setSizePage] = useState(0); // mobile: 3 sizes per page
+  const [showReviews, setShowReviews] = useState(false); // desktop: reviews open on click
 
   // lock page scroll behind the full-screen mobile layer
   useEffect(() => {
@@ -570,6 +571,7 @@ export function ProductDetail({
 
         <div className="grid gap-10 md:grid-cols-2">
           {/* gallery */}
+          <div>
           <div className="flex gap-4">
             {images.length > 1 && (
               <div className="flex flex-col gap-2">
@@ -599,6 +601,30 @@ export function ProductDetail({
                 <Maximize2 className="h-4 w-4" />
               </span>
             </button>
+          </div>
+
+          {/* under-image strip: rating · sold · low stock */}
+          {(reviewCount > 0 || product.sold > 0 || lowStock) && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-4 py-3 text-sm">
+              {reviewCount > 0 ? (
+                <button onClick={() => setShowReviews(true)} className="text-[var(--sf-fg)]">
+                  <Stars value={reviewAverage} count={reviewCount} />
+                </button>
+              ) : (
+                <span className="text-[var(--sf-muted)]">No reviews yet</span>
+              )}
+              {product.sold > 0 && (
+                <span className="text-[var(--sf-muted)]">
+                  sold - <span className="font-semibold text-[var(--sf-fg)]">{product.sold}</span>
+                </span>
+              )}
+              {lowStock && (
+                <span className="font-semibold text-red-600">
+                  low stock - {String(stockLeft).padStart(2, "0")}
+                </span>
+              )}
+            </div>
+          )}
           </div>
 
           {/* info */}
@@ -693,7 +719,7 @@ export function ProductDetail({
           </div>
         </div>
 
-        {/* labelled sections — description & reviews side by side */}
+        {/* labelled sections — description (always open) & reviews (click to open) */}
         <div className="mt-14 grid gap-10 md:grid-cols-2">
           <section>
             <h2 className="text-lg font-extrabold tracking-tight">Description</h2>
@@ -703,13 +729,26 @@ export function ProductDetail({
           </section>
 
           <section>
-            <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowReviews((v) => !v)}
+              className="flex w-full items-center gap-2 text-left"
+              aria-expanded={showReviews}
+            >
               <h2 className="text-lg font-extrabold tracking-tight">Ratings &amp; reviews</h2>
               {reviewCount > 0 && <Stars value={reviewAverage} count={reviewCount} className="text-sm text-[var(--sf-fg)]" />}
-            </div>
-            <div className="mt-4">
-              <ReviewsList />
-            </div>
+              <ChevronDown className={`ml-auto h-5 w-5 shrink-0 text-[var(--sf-muted)] transition-transform ${showReviews ? "rotate-180" : ""}`} />
+            </button>
+            {showReviews ? (
+              <div className="mt-4">
+                <ReviewsList />
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-[var(--sf-muted)]">
+                {reviewCount > 0
+                  ? `Click to read ${reviewCount} customer review${reviewCount === 1 ? "" : "s"}.`
+                  : "No reviews yet."}
+              </p>
+            )}
           </section>
         </div>
       </div>
