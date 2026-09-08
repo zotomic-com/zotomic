@@ -3,7 +3,9 @@ import { cldUrl } from "@/lib/cloudinary";
 import type { Section } from "@/lib/storefront/config";
 import type { StoreCategory, StoreProduct } from "@/lib/storefront/store";
 import { ProductCard } from "./ProductCard";
+import { ProductCarousel } from "./ProductCarousel";
 import { CategoryChips } from "./CategoryChips";
+import { HeroSlides } from "./HeroSlides";
 
 interface Ctx {
   products: StoreProduct[];
@@ -53,7 +55,7 @@ function Grid({ products, ...ctx }: { products: StoreProduct[] } & Omit<Ctx, "pr
 
 function Hero({ section, ctx }: { section: Section; ctx: Ctx }) {
   const d = section.data;
-  const imgs = (Array.isArray(d.images) ? (d.images as unknown[]).filter((x) => typeof x === "string") : []) as string[];
+  const imgs = (Array.isArray(d.images) ? (d.images as unknown[]).filter((x) => typeof x === "string" && x) : []) as string[];
   const legacy = s(d, "imageUrl");
   const slides = (imgs.length ? imgs : legacy ? [legacy] : []).slice(0, 3);
   const style = s(d, "style", "full");
@@ -62,23 +64,6 @@ function Hero({ section, ctx }: { section: Section; ctx: Ctx }) {
   const sub = s(d, "subheading");
   const ctaLabel = s(d, "ctaLabel");
   const ctaHref = `${ctx.basePath}${s(d, "ctaHref", "/products")}`;
-
-  const slideCss = `.sf-hero-slide{opacity:0;animation:sfHeroFade 7.5s linear infinite}@keyframes sfHeroFade{0%,6%{opacity:1}36%,100%{opacity:0}}@media (prefers-reduced-motion:reduce){.sf-hero-slide{animation:none}.sf-hero-slide:first-child{opacity:1}}`;
-
-  const Slides = ({ className }: { className: string }) => (
-    <div aria-hidden className={className}>
-      {slides.map((src, i) => (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          key={src + i}
-          src={cldUrl(src, 1200)}
-          alt=""
-          className={slides.length > 1 ? "sf-hero-slide absolute inset-0 h-full w-full object-cover" : "h-full w-full object-cover"}
-          style={slides.length > 1 ? { animationDelay: `${i * (7.5 / slides.length)}s` } : undefined}
-        />
-      ))}
-    </div>
-  );
 
   const Cta = () =>
     ctaLabel ? (
@@ -91,15 +76,6 @@ function Hero({ section, ctx }: { section: Section; ctx: Ctx }) {
       </Link>
     ) : null;
 
-  const Dots = () =>
-    slides.length > 1 ? (
-      <div className="mt-4 flex gap-1.5">
-        {slides.map((_, i) => (
-          <span key={i} className={`h-1.5 rounded-full ${i === 0 ? "w-5 bg-[var(--sf-accent)]" : "w-1.5 bg-[var(--sf-line)]"}`} />
-        ))}
-      </div>
-    ) : null;
-
   if (style === "card") {
     const bg =
       tone === "dark"
@@ -109,17 +85,15 @@ function Hero({ section, ctx }: { section: Section; ctx: Ctx }) {
           : "bg-[var(--sf-card)] text-[var(--sf-fg)]";
     return (
       <section className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
-        {slides.length > 1 && <style dangerouslySetInnerHTML={{ __html: slideCss }} />}
         <div className={`grid overflow-hidden rounded-[var(--sf-radius-lg)] sm:grid-cols-2 ${bg}`}>
           <div className="flex flex-col justify-center p-8 sm:p-12">
             <h1 className="text-2xl font-extrabold tracking-tight sm:text-4xl">{heading}</h1>
             {sub && <p className={`mt-2 max-w-sm text-sm ${tone === "dark" ? "text-white/70" : "text-[var(--sf-muted)]"}`}>{sub}</p>}
             <Cta />
-            <Dots />
           </div>
-          <div className="relative min-h-[220px] sm:min-h-[320px]">
+          <div className="relative min-h-[220px] bg-[var(--sf-card)] sm:min-h-[340px]">
             {slides.length ? (
-              <Slides className="absolute inset-0" />
+              <HeroSlides images={slides} showDots />
             ) : (
               <div className="flex h-full items-center justify-center text-xs text-[var(--sf-muted)]">Add a banner image</div>
             )}
@@ -131,19 +105,13 @@ function Hero({ section, ctx }: { section: Section; ctx: Ctx }) {
 
   // full-bleed
   return (
-    <section className="relative overflow-hidden">
-      {slides.length > 1 && <style dangerouslySetInnerHTML={{ __html: slideCss }} />}
-      {slides.length > 0 && (
-        <>
-          <Slides className="absolute inset-0 -z-10" />
-          <div aria-hidden className="absolute inset-0 -z-10 bg-black/25" />
-        </>
-      )}
+    <section className="relative isolate overflow-hidden bg-[var(--sf-card)]">
+      {slides.length > 0 && <HeroSlides images={slides} className="absolute inset-0 z-0" showDots scrim />}
       <div
-        className={`mx-auto flex max-w-6xl flex-col items-start px-4 py-24 sm:px-6 sm:py-32 ${slides.length ? "text-white" : ""}`}
+        className={`relative z-10 mx-auto flex max-w-6xl flex-col items-start px-4 py-24 sm:px-6 sm:py-36 ${slides.length ? "text-white" : "text-[var(--sf-fg)]"}`}
       >
-        <h1 className="max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">{heading}</h1>
-        {sub && <p className={`mt-3 max-w-xl ${slides.length ? "text-white/80" : "text-[var(--sf-muted)]"}`}>{sub}</p>}
+        <h1 className="max-w-2xl text-3xl font-extrabold tracking-tight drop-shadow-sm sm:text-5xl">{heading}</h1>
+        {sub && <p className={`mt-3 max-w-xl ${slides.length ? "text-white/90" : "text-[var(--sf-muted)]"}`}>{sub}</p>}
         <Cta />
       </div>
     </section>
@@ -159,15 +127,13 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
     case "hero":
       return <Hero section={section} ctx={ctx} />;
 
-    case "featured_products": {
-      const limit = typeof d.limit === "number" ? d.limit : 4;
+    case "featured_products":
       return (
         <Wrap>
           <SectionHead title={s(d, "heading", "Featured")} seeAllHref={`${ctx.basePath}/products`} />
-          <Grid products={ctx.products.slice(0, limit)} {...gridCtx} />
+          <ProductCarousel products={ctx.products.slice(0, 10)} {...gridCtx} />
         </Wrap>
       );
-    }
 
     case "product_grid":
       return (
