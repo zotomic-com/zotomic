@@ -264,11 +264,12 @@ export function ProductDetail({
       </button>
     ) : null;
 
-  /** round filled colour circles; `overlay` = floating over the product image */
+  /** round filled colour circles. `overlay` = a compact row that floats over the
+   *  product image (smaller on narrow phones). */
   const ColourCircles = ({ overlay, light }: { overlay?: boolean; light?: boolean }) => {
     if (!colourOpt) return null;
     return (
-      <div className={overlay ? "flex flex-col gap-2" : "flex flex-wrap gap-2"}>
+      <div className="flex flex-wrap gap-2">
         {colourOpt.values.map((val) => {
           const active = choice[colourOpt.name] === val;
           const hex = resolveSwatch(val) ?? "#d1d5db";
@@ -277,8 +278,8 @@ export function ProductDetail({
               key={val}
               title={val}
               onClick={() => setChoice((c) => ({ ...c, [colourOpt.name]: val }))}
-              className={`h-8 w-8 rounded-full border-2 transition ${
-                overlay ? "shadow-md" : ""
+              className={`rounded-full border-2 transition ${
+                overlay ? "h-6 w-6 shadow-md min-[380px]:h-7 min-[380px]:w-7" : "h-8 w-8"
               } ${
                 active
                   ? "border-[var(--sf-accent)] ring-2 ring-[var(--sf-accent)]/40"
@@ -501,15 +502,16 @@ export function ProductDetail({
           </div>
         )}
 
-        {/* colour palette — left-centre, inside the image frame */}
+        {/* bottom stack: colour selector · info panel · buy bar */}
+        <div className="absolute inset-x-0 bottom-0 z-10">
         {colourOpt && (
-          <div className="absolute left-4 top-1/2 z-10 -translate-y-1/2">
+          <div className="px-4 pb-2.5">
             <ColourCircles overlay />
           </div>
         )}
 
         {/* solid info panel */}
-        <div className="absolute inset-x-2 bottom-[86px] z-10 max-h-[58%] overflow-y-auto rounded-2xl border border-[var(--sf-line)] bg-[var(--sf-bg)] p-4 text-[var(--sf-fg)] shadow-xl">
+        <div className="mx-2 max-h-[48vh] overflow-y-auto rounded-2xl border border-[var(--sf-line)] bg-[var(--sf-bg)] p-4 text-[var(--sf-fg)] shadow-xl">
           {product.badge && (
             <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${BADGE_BG[product.badge]}`}>
               {BADGE[product.badge]}
@@ -557,9 +559,10 @@ export function ProductDetail({
           </div>
         </div>
 
-        {/* buy bar — solid blue, overlaps the image bottom */}
-        <div className="absolute inset-x-0 bottom-0 z-10 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+        {/* buy bar — solid blue */}
+        <div className="px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
           <BuyBar />
+        </div>
         </div>
       </div>
 
@@ -571,7 +574,6 @@ export function ProductDetail({
 
         <div className="grid gap-10 md:grid-cols-2">
           {/* gallery */}
-          <div>
           <div className="flex gap-4">
             {images.length > 1 && (
               <div className="flex flex-col gap-2">
@@ -587,44 +589,46 @@ export function ProductDetail({
                 ))}
               </div>
             )}
-            <button
-              onClick={() => setZoom(true)}
-              className="group relative aspect-square flex-1 overflow-hidden rounded-[var(--sf-radius-lg)] bg-[var(--sf-card)]"
-            >
-              {images[img] ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={cldUrl(images[img], 1000)} alt={product.name} className="h-full w-full object-cover" />
-              ) : (
-                <span className="flex h-full items-center justify-center text-sm text-[var(--sf-muted)]">No image</span>
-              )}
-              <span className="absolute right-3 top-3 rounded-full bg-black/40 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                <Maximize2 className="h-4 w-4" />
-              </span>
-            </button>
-          </div>
 
-          {/* under-image strip: rating · sold · low stock */}
-          {(reviewCount > 0 || product.sold > 0 || lowStock) && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-4 py-3 text-sm">
-              {reviewCount > 0 ? (
-                <button onClick={() => setShowReviews(true)} className="text-[var(--sf-fg)]">
-                  <Stars value={reviewAverage} count={reviewCount} />
-                </button>
-              ) : (
-                <span className="text-[var(--sf-muted)]">No reviews yet</span>
-              )}
-              {product.sold > 0 && (
-                <span className="text-[var(--sf-muted)]">
-                  sold - <span className="font-semibold text-[var(--sf-fg)]">{product.sold}</span>
+            {/* image + a strip the exact width of the image below it */}
+            <div className="min-w-0 flex-1">
+              <button
+                onClick={() => setZoom(true)}
+                className="group relative block aspect-square w-full overflow-hidden rounded-[var(--sf-radius-lg)] bg-[var(--sf-card)]"
+              >
+                {images[img] ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={cldUrl(images[img], 1000)} alt={product.name} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full items-center justify-center text-sm text-[var(--sf-muted)]">No image</span>
+                )}
+                <span className="absolute right-3 top-3 rounded-full bg-black/40 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                  <Maximize2 className="h-4 w-4" />
                 </span>
-              )}
-              {lowStock && (
-                <span className="font-semibold text-red-600">
-                  low stock - {String(stockLeft).padStart(2, "0")}
-                </span>
+              </button>
+
+              {(reviewCount > 0 || product.sold > 0 || lowStock) && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-4 py-3 text-sm">
+                  {reviewCount > 0 ? (
+                    <button onClick={() => setShowReviews(true)} className="text-[var(--sf-fg)]">
+                      <Stars value={reviewAverage} count={reviewCount} />
+                    </button>
+                  ) : (
+                    <span className="text-[var(--sf-muted)]">No reviews yet</span>
+                  )}
+                  {product.sold > 0 && (
+                    <span className="text-[var(--sf-muted)]">
+                      sold - <span className="font-semibold text-[var(--sf-fg)]">{product.sold}</span>
+                    </span>
+                  )}
+                  {lowStock && (
+                    <span className="font-semibold text-red-600">
+                      low stock - {String(stockLeft).padStart(2, "0")}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
-          )}
           </div>
 
           {/* info */}
