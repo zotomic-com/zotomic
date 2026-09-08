@@ -13,8 +13,10 @@ const TONE: Record<Tone, { card: string; heading: string; sub: string; tag: stri
   accent: { card: "bg-[var(--sf-accent)]", heading: "text-white", sub: "text-white/85", tag: "bg-black/25 text-white" },
 };
 
-/** Hero banner. With images: they fill the card as a full background, heading /
- *  button sit on top, dots inside the card. Without images: a coloured card. */
+/** Hero banner. With images: they fill the frame as a full background, heading /
+ *  button sit on top. Full-bleed hero (`contained: false`) is edge-to-edge with
+ *  square corners and a small scoop curved up at the bottom-centre that cradles
+ *  the carousel dots. Without images: a coloured card. */
 export function HeroCard({
   heading,
   sub,
@@ -38,35 +40,56 @@ export function HeroCard({
 }) {
   const [i, setI] = useState(0);
   const hasImg = images.length > 0;
+  const multi = images.length > 1;
 
   useEffect(() => {
-    if (images.length < 2) return;
+    if (!multi) return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const t = setInterval(() => setI((v) => (v + 1) % images.length), 5000);
     return () => clearInterval(t);
-  }, [images.length]);
+  }, [multi, images.length]);
 
   const t = TONE[tone] ?? TONE.surface;
   const headingCls = hasImg ? "text-white [text-shadow:0_2px_10px_rgba(0,0,0,.55)]" : t.heading;
   const subCls = hasImg ? "text-white/90 [text-shadow:0_1px_6px_rgba(0,0,0,.5)]" : t.sub;
 
-  // Full-bleed hero: rounded top corners + a wide arched bottom edge (the
-  // carousel dots sit inside that arch). Contained hero: plain rounded card.
-  const archStyle = contained
-    ? undefined
-    : { borderRadius: "22px 22px 46% 46% / 22px 22px 60px 60px" };
+  // full-bleed hero shows its carousel dots inside a scoop cut into the bottom edge
+  const scoop = !contained && multi;
+
+  const dots = (
+    <div
+      className={`absolute left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 ${
+        scoop ? "bottom-1.5" : "bottom-3.5"
+      }`}
+    >
+      {images.map((_, n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => setI(n)}
+          aria-label={`Slide ${n + 1}`}
+          className={`h-1.5 rounded-full transition-all ${
+            n === i
+              ? scoop
+                ? "w-5 bg-[var(--sf-accent)]"
+                : "w-5 bg-white"
+              : scoop
+                ? "w-1.5 bg-[var(--sf-fg)]/30"
+                : "w-1.5 bg-white/60"
+          }`}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <section
-      className={`${
-        contained ? "mx-auto max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6" : "px-2.5 pt-2.5 sm:px-0 sm:pt-0"
-      } ${className}`}
+      className={`${contained ? "mx-auto max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6" : ""} ${className}`}
     >
       <div
         className={`relative min-h-[340px] overflow-hidden sm:min-h-[460px] ${
           contained ? "rounded-[var(--sf-radius-lg)]" : ""
         } ${hasImg ? "bg-[var(--sf-card)]" : t.card}`}
-        style={archStyle}
       >
         {/* image layer */}
         {images.map((src, n) => (
@@ -110,20 +133,21 @@ export function HeroCard({
           </div>
         )}
 
-        {/* carousel dots — inside the card */}
-        {images.length > 1 && (
-          <div className="absolute bottom-3.5 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
-            {images.map((_, n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setI(n)}
-                aria-label={`Slide ${n + 1}`}
-                className={`h-1.5 rounded-full transition-all ${n === i ? "w-5 bg-white" : "w-1.5 bg-white/60"}`}
-              />
-            ))}
-          </div>
+        {/* fixed-width scoop cut into the bottom-centre (fills with the page bg) */}
+        {scoop && (
+          <svg
+            viewBox="0 0 120 26"
+            aria-hidden
+            className="pointer-events-none absolute bottom-0 left-1/2 z-10 h-[26px] w-[120px] -translate-x-1/2"
+          >
+            <path
+              d="M0,26 C16,26 22,24 28,15 C35,5 46,3 60,3 C74,3 85,5 92,15 C98,24 104,26 120,26 Z"
+              fill="var(--sf-bg)"
+            />
+          </svg>
         )}
+
+        {multi && dots}
       </div>
     </section>
   );
