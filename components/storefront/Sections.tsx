@@ -6,6 +6,7 @@ import { ProductCard } from "./ProductCard";
 import { ProductCarousel } from "./ProductCarousel";
 import { CategoryChips } from "./CategoryChips";
 import { HeroSlides } from "./HeroSlides";
+import { HeroCard } from "./HeroCard";
 
 interface Ctx {
   products: StoreProduct[];
@@ -59,62 +60,46 @@ function Hero({ section, ctx }: { section: Section; ctx: Ctx }) {
   const legacy = s(d, "imageUrl");
   const slides = (imgs.length ? imgs : legacy ? [legacy] : []).slice(0, 3);
   const style = s(d, "style", "full");
-  const tone = s(d, "tone", "surface");
+  const tone = (["surface", "dark", "accent"].includes(s(d, "tone")) ? s(d, "tone") : "surface") as
+    | "surface"
+    | "dark"
+    | "accent";
   const heading = s(d, "heading", "Welcome");
   const sub = s(d, "subheading");
+  const tag = s(d, "tag");
   const ctaLabel = s(d, "ctaLabel");
   const ctaHref = `${ctx.basePath}${s(d, "ctaHref", "/products")}`;
 
-  const Cta = () =>
-    ctaLabel ? (
-      <Link
-        href={ctaHref}
-        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--sf-accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm"
-      >
-        {ctaLabel}
-        <span aria-hidden>→</span>
-      </Link>
-    ) : null;
+  const cardProps = { heading, sub, tag, ctaLabel, ctaHref, images: slides, tone };
 
+  // "card" layout — banner card on every breakpoint
   if (style === "card") {
-    const bg =
-      tone === "dark"
-        ? "bg-[#111418] text-white"
-        : tone === "accent"
-          ? "bg-[var(--sf-accent-soft)] text-[var(--sf-fg)]"
-          : "bg-[var(--sf-card)] text-[var(--sf-fg)]";
-    return (
-      <section className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
-        <div className={`grid overflow-hidden rounded-[var(--sf-radius-lg)] sm:grid-cols-2 ${bg}`}>
-          <div className="flex flex-col justify-center p-8 sm:p-12">
-            <h1 className="text-2xl font-extrabold tracking-tight sm:text-4xl">{heading}</h1>
-            {sub && <p className={`mt-2 max-w-sm text-sm ${tone === "dark" ? "text-white/70" : "text-[var(--sf-muted)]"}`}>{sub}</p>}
-            <Cta />
-          </div>
-          <div className="relative min-h-[220px] bg-[var(--sf-card)] sm:min-h-[340px]">
-            {slides.length ? (
-              <HeroSlides images={slides} showDots />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-[var(--sf-muted)]">Add a banner image</div>
-            )}
-          </div>
-        </div>
-      </section>
-    );
+    return <HeroCard {...cardProps} />;
   }
 
-  // full-bleed
+  // "full" layout — banner card on mobile, edge-to-edge background on desktop
   return (
-    <section className="relative isolate overflow-hidden bg-[var(--sf-card)]">
-      {slides.length > 0 && <HeroSlides images={slides} className="absolute inset-0 z-0" showDots scrim />}
-      <div
-        className={`relative z-10 mx-auto flex max-w-6xl flex-col items-start px-4 py-24 sm:px-6 sm:py-36 ${slides.length ? "text-white" : "text-[var(--sf-fg)]"}`}
-      >
-        <h1 className="max-w-2xl text-3xl font-extrabold tracking-tight drop-shadow-sm sm:text-5xl">{heading}</h1>
-        {sub && <p className={`mt-3 max-w-xl ${slides.length ? "text-white/90" : "text-[var(--sf-muted)]"}`}>{sub}</p>}
-        <Cta />
-      </div>
-    </section>
+    <>
+      <HeroCard {...cardProps} className="sm:hidden" />
+      <section className="relative isolate hidden overflow-hidden bg-[var(--sf-card)] sm:block">
+        {slides.length > 0 && <HeroSlides images={slides} className="absolute inset-0 z-0" showDots scrim />}
+        <div
+          className={`relative z-10 mx-auto flex max-w-6xl flex-col items-start px-6 py-36 ${slides.length ? "text-white" : "text-[var(--sf-fg)]"}`}
+        >
+          <h1 className="max-w-2xl text-5xl font-extrabold tracking-tight drop-shadow-sm">{heading}</h1>
+          {sub && <p className={`mt-3 max-w-xl ${slides.length ? "text-white/90" : "text-[var(--sf-muted)]"}`}>{sub}</p>}
+          {ctaLabel && (
+            <Link
+              href={ctaHref}
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-neutral-900 py-1.5 pl-4 pr-1.5 text-sm font-bold text-white"
+            >
+              {ctaLabel}
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900">→</span>
+            </Link>
+          )}
+        </div>
+      </section>
+    </>
   );
 }
 

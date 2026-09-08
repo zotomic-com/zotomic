@@ -150,9 +150,12 @@ export function defaultSection(type: SectionType): Section {
           subheading: "Quality you can feel, prices you'll like.",
           ctaLabel: "Shop now",
           ctaHref: "/products",
-          // "full" = edge-to-edge background; "card" = rounded banner with a side image
+          // small pill above the heading, e.g. "Limited offer"
+          tag: "",
+          // desktop layout — "full" = edge-to-edge background; "card" = rounded banner.
+          // mobile always uses the card.
           style: "full",
-          // card style only: "surface" | "dark" | "accent"
+          // card colour — "surface" | "dark" | "accent"
           tone: "surface",
           // 1 image = static; 2–3 = auto crossfade (plan-gated in the editor)
           images: [] as string[],

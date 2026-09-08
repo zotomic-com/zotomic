@@ -10,13 +10,14 @@ export interface FieldDef {
 /** Editable fields per section type (list-type data like FAQ items is edited as JSON textarea). */
 export const SECTION_FIELDS: Record<SectionType, FieldDef[]> = {
   hero: [
+    { key: "tag", label: "Tag pill (optional)", type: "text" },
     { key: "heading", label: "Heading", type: "text" },
     { key: "subheading", label: "Subheading", type: "text" },
     { key: "ctaLabel", label: "Button label", type: "text" },
     { key: "ctaHref", label: "Button link", type: "text" },
     {
       key: "style",
-      label: "Layout",
+      label: "Desktop layout (mobile always uses the card)",
       type: "select",
       options: [
         { value: "full", label: "Full-width background" },
@@ -25,12 +26,12 @@ export const SECTION_FIELDS: Record<SectionType, FieldDef[]> = {
     },
     {
       key: "tone",
-      label: "Card colour (card layout)",
+      label: "Card colour",
       type: "select",
       options: [
         { value: "surface", label: "Neutral" },
         { value: "dark", label: "Dark" },
-        { value: "accent", label: "Accent tint" },
+        { value: "accent", label: "Accent (solid)" },
       ],
     },
     { key: "images", label: "Banner images", type: "images" },
