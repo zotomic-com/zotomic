@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { requireAdmin, adminDb } from "@/lib/admin-server";
 import { money } from "@/lib/money";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +30,7 @@ export default async function AdminSubscriptionsPage() {
       .order("txn_submitted_at", { ascending: true }),
     db
       .from("subscriptions")
-      .select("id, plan, status, price, currency, current_period_end, businesses(name)")
+      .select("id, business_id, plan, status, price, currency, current_period_end, businesses(name)")
       .order("updated_at", { ascending: false }),
   ]);
 
@@ -47,6 +49,7 @@ export default async function AdminSubscriptionsPage() {
 
   const subRows = (subs ?? []).map((s) => ({
     id: s.id as string,
+    businessId: s.business_id as string,
     business: ((Array.isArray(s.businesses) ? s.businesses[0] : s.businesses) as { name?: string } | null)?.name ?? "—",
     plan: s.plan as string,
     status: s.status as keyof typeof STATUS_TONE,
@@ -57,7 +60,16 @@ export default async function AdminSubscriptionsPage() {
   }));
 
   const subCols: Column<(typeof subRows)[number]>[] = [
-    { key: "business", header: "Business", render: (r) => <span className="font-medium text-fg">{r.business}</span> },
+    {
+      key: "business",
+      header: "Business",
+      render: (r) => (
+        <Link href={`/admin/tenants/${r.businessId}`} className="group flex items-center gap-1.5 font-medium text-fg hover:text-primary">
+          {r.business}
+          <ChevronRight className="h-4 w-4 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        </Link>
+      ),
+    },
     { key: "plan", header: "Plan", render: (r) => <Badge tone={r.plan === "free" ? "neutral" : "primary"}>{r.plan}</Badge> },
     { key: "price", header: "Price", render: (r) => r.price },
     { key: "renews", header: "Renews", render: (r) => r.renews },

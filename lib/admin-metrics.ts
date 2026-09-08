@@ -15,7 +15,7 @@ export interface PlatformOverview {
     status: string;
     createdAt: string;
   }[];
-  topBusinesses: { name: string; revenue: number }[];
+  topBusinesses: { id: string; name: string; revenue: number }[];
   activity: { id: string; action: string; summary: string | null; createdAt: string }[];
   pendingConfirmations: number;
 }
@@ -127,7 +127,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
   const topBusinesses = [...revMap.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
-    .map(([id, revenue]) => ({ name: nameMap.get(id) ?? "—", revenue }));
+    .map(([id, revenue]) => ({ id, name: nameMap.get(id) ?? "—", revenue }));
 
   return {
     totalBusinesses: totalBusinesses ?? 0,

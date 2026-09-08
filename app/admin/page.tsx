@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-server";
 import { getPlatformOverview } from "@/lib/admin-metrics";
 import { money } from "@/lib/money";
@@ -14,8 +15,21 @@ export default async function AdminOverviewPage() {
   await requireAdmin();
   const o = await getPlatformOverview();
 
+  const isId = (s: string) => /^[0-9a-f-]{36}$/.test(s);
   const signupCols: Column<(typeof o.recentSignups)[number]>[] = [
-    { key: "business", header: "Business", render: (r) => <span className="font-medium text-fg">{r.business}</span> },
+    {
+      key: "business",
+      header: "Business",
+      render: (r) =>
+        isId(r.id) ? (
+          <Link href={`/admin/tenants/${r.id}`} className="group flex items-center gap-1.5 font-medium text-fg hover:text-primary">
+            {r.business}
+            <ChevronRight className="h-4 w-4 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+          </Link>
+        ) : (
+          <span className="font-medium text-fg">{r.business}</span>
+        ),
+    },
     { key: "owner", header: "Owner", render: (r) => r.owner },
     { key: "plan", header: "Plan", render: (r) => <Badge tone={r.plan === "free" ? "neutral" : "primary"}>{r.plan}</Badge> },
     {
@@ -110,9 +124,11 @@ export default async function AdminOverviewPage() {
                 {o.topBusinesses.map((b) => {
                   const max = o.topBusinesses[0].revenue || 1;
                   return (
-                    <li key={b.name}>
+                    <li key={b.id}>
                       <div className="flex justify-between text-sm">
-                        <span className="text-fg">{b.name}</span>
+                        <Link href={`/admin/tenants/${b.id}`} className="text-fg hover:text-primary hover:underline">
+                          {b.name}
+                        </Link>
                         <span className="font-medium text-fg">{money(b.revenue, "BDT")}</span>
                       </div>
                       <div className="mt-1 h-1.5 rounded-full bg-surface-2">

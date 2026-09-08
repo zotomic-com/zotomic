@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,7 +69,9 @@ export function CreditsAdminClient({ purchases, stores }: { purchases: PurchaseR
           {pendingRows.map((p) => (
             <div key={p.id} className="flex flex-wrap items-center gap-3 rounded-sm border border-border p-3 text-sm">
               <div className="flex-1">
-                <p className="font-semibold text-fg">{p.business}</p>
+                <Link href={`/admin/tenants/${p.businessId}`} className="flex items-center gap-1 font-semibold text-fg hover:text-primary">
+                  {p.business} <ChevronRight className="h-3.5 w-3.5 text-fg-subtle" />
+                </Link>
                 <p className="text-xs text-fg-muted">
                   {p.credits.toLocaleString("en-US")} credits · ৳{p.amount} · {p.method} · txn{" "}
                   <span className="font-mono">{p.txnId}</span> ·{" "}
@@ -109,8 +113,11 @@ export function CreditsAdminClient({ purchases, stores }: { purchases: PurchaseR
             </Select>
           </Field>
           {selected && (
-            <p className="text-xs text-fg-subtle">
+            <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-subtle">
               Balance {selected.balance} · bought {selected.purchased} · spent {selected.lifetimeSpent} lifetime
+              <Link href={`/admin/tenants/${selected.id}`} className="font-semibold text-primary hover:underline">
+                View credit history →
+              </Link>
             </p>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -153,7 +160,10 @@ export function CreditsAdminClient({ purchases, stores }: { purchases: PurchaseR
             {history.map((p) => (
               <div key={p.id} className="flex items-center justify-between border-b border-border py-1.5 last:border-0">
                 <span className="text-fg-muted">
-                  {p.business} · {p.credits.toLocaleString("en-US")} credits · ৳{p.amount}
+                  <Link href={`/admin/tenants/${p.businessId}`} className="font-medium text-fg hover:text-primary">
+                    {p.business}
+                  </Link>{" "}
+                  · {p.credits.toLocaleString("en-US")} credits · ৳{p.amount}
                 </span>
                 <Badge tone={p.status === "granted" ? "success" : "neutral"}>{p.status}</Badge>
               </div>

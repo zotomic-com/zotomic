@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { requireAdmin, adminDb } from "@/lib/admin-server";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,7 +79,19 @@ export default async function AdminAssistantActivityPage() {
     { key: "credits", header: "Credits (30d)", align: "right", render: (r) => r.credits.toLocaleString("en-US") },
   ];
   const bizCols: Column<(typeof bizRows)[number]>[] = [
-    { key: "business", header: "Business", render: (r) => <span className="font-medium text-fg">{r.business}</span> },
+    {
+      key: "business",
+      header: "Business",
+      render: (r) =>
+        r.business === "—" ? (
+          <span className="font-medium text-fg">{r.business}</span>
+        ) : (
+          <Link href={`/admin/tenants/${r.id}`} className="group flex items-center gap-1.5 font-medium text-fg hover:text-primary">
+            {r.business}
+            <ChevronRight className="h-4 w-4 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+          </Link>
+        ),
+    },
     { key: "aiTurns", header: "AI turns", align: "right", render: (r) => r.aiTurns.toLocaleString("en-US") },
     { key: "calls", header: "Tool calls", align: "right", render: (r) => r.calls.toLocaleString("en-US") },
     { key: "credits", header: "Credits (30d)", align: "right", render: (r) => r.credits.toLocaleString("en-US") },

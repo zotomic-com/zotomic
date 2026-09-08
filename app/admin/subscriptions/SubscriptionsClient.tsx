@@ -1,7 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -72,13 +74,19 @@ export function PendingQueue({ rows }: { rows: PendingRow[] }) {
               <dd className="text-fg">{r.submittedAt}</dd>
             </div>
           </dl>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={() => confirm(r.invoiceId)} disabled={pending}>
               Mark as paid
             </Button>
             <Button size="sm" variant="outline" onClick={() => reject(r.invoiceId)} disabled={pending}>
               Void
             </Button>
+            <Link
+              href={`/admin/financials/${r.invoiceId}`}
+              className="ml-auto flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            >
+              Full invoice <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </div>
       ))}

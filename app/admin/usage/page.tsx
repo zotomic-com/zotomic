@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { requireAdmin, adminDb } from "@/lib/admin-server";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -77,7 +79,16 @@ export default async function AdminUsagePage() {
   const totalCredits30 = rows.reduce((n, r) => n + r.credits, 0);
 
   const cols: Column<(typeof rows)[number]>[] = [
-    { key: "business", header: "Business", render: (r) => <span className="font-medium text-fg">{r.business}</span> },
+    {
+      key: "business",
+      header: "Business",
+      render: (r) => (
+        <Link href={`/admin/tenants/${r.id}`} className="group flex items-center gap-1.5 font-medium text-fg hover:text-primary">
+          {r.business}
+          <ChevronRight className="h-4 w-4 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        </Link>
+      ),
+    },
     { key: "balance", header: "Credits now", align: "right", render: (r) => r.balance.toLocaleString("en-US") },
     { key: "credits", header: "Spent 30d", align: "right", render: (r) => r.credits.toLocaleString("en-US") },
     { key: "aiTurns", header: "AI turns 30d", align: "right", render: (r) => r.aiTurns.toLocaleString("en-US") },
