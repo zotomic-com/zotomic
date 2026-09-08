@@ -20,14 +20,14 @@ export function StoreSearchBar({ basePath, initial }: { basePath: string; initia
         e.preventDefault();
         go(q);
       }}
-      className="relative mt-4 max-w-md"
+      className="relative max-w-md"
     >
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--sf-muted)]" />
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search products…"
-        className="h-10 w-full rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-bg)] pl-9 pr-9 text-sm"
+        className="h-11 w-full rounded-full border border-[var(--sf-line)] bg-[var(--sf-card)] pl-9 pr-9 text-sm outline-none focus:border-[var(--sf-accent)]"
       />
       {q && (
         <button

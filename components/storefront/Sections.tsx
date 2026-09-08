@@ -1,28 +1,43 @@
 import Link from "next/link";
+import { cldUrl } from "@/lib/cloudinary";
 import type { Section } from "@/lib/storefront/config";
-import type { StoreProduct } from "@/lib/storefront/store";
+import type { StoreCategory, StoreProduct } from "@/lib/storefront/store";
 import { ProductCard } from "./ProductCard";
+import { CategoryChips } from "./CategoryChips";
 
 interface Ctx {
   products: StoreProduct[];
+  categories: StoreCategory[];
   currency: string;
   basePath: string;
   storeSlug: string;
 }
 
 const Wrap = ({ children }: { children: React.ReactNode }) => (
-  <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">{children}</section>
+  <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">{children}</section>
 );
-const H = ({ children }: { children: React.ReactNode }) =>
-  children ? <h2 className="mb-6 text-2xl font-extrabold tracking-tight">{children}</h2> : null;
+
+function SectionHead({ title, seeAllHref }: { title?: string; seeAllHref?: string }) {
+  if (!title) return null;
+  return (
+    <div className="mb-6 flex items-end justify-between gap-3">
+      <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">{title}</h2>
+      {seeAllHref && (
+        <Link href={seeAllHref} className="shrink-0 text-sm font-semibold text-[var(--sf-accent)] hover:underline">
+          See all
+        </Link>
+      )}
+    </div>
+  );
+}
 
 const s = (d: Record<string, unknown>, k: string, fb = "") => (typeof d[k] === "string" ? (d[k] as string) : fb);
 
-function Grid({ products, ...ctx }: { products: StoreProduct[] } & Omit<Ctx, "products">) {
+function Grid({ products, ...ctx }: { products: StoreProduct[] } & Omit<Ctx, "products" | "categories">) {
   if (!products.length)
     return <p className="text-sm text-[var(--sf-muted)]">No products published yet.</p>;
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 lg:grid-cols-4">
       {products.map((p) => (
         <ProductCard
           key={p.id}
@@ -36,72 +51,120 @@ function Grid({ products, ...ctx }: { products: StoreProduct[] } & Omit<Ctx, "pr
   );
 }
 
+function Hero({ section, ctx }: { section: Section; ctx: Ctx }) {
+  const d = section.data;
+  const imgs = (Array.isArray(d.images) ? (d.images as unknown[]).filter((x) => typeof x === "string") : []) as string[];
+  const legacy = s(d, "imageUrl");
+  const slides = (imgs.length ? imgs : legacy ? [legacy] : []).slice(0, 3);
+  const style = s(d, "style", "full");
+  const tone = s(d, "tone", "surface");
+  const heading = s(d, "heading", "Welcome");
+  const sub = s(d, "subheading");
+  const ctaLabel = s(d, "ctaLabel");
+  const ctaHref = `${ctx.basePath}${s(d, "ctaHref", "/products")}`;
+
+  const slideCss = `.sf-hero-slide{opacity:0;animation:sfHeroFade 7.5s linear infinite}@keyframes sfHeroFade{0%,6%{opacity:1}36%,100%{opacity:0}}@media (prefers-reduced-motion:reduce){.sf-hero-slide{animation:none}.sf-hero-slide:first-child{opacity:1}}`;
+
+  const Slides = ({ className }: { className: string }) => (
+    <div aria-hidden className={className}>
+      {slides.map((src, i) => (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          key={src + i}
+          src={cldUrl(src, 1200)}
+          alt=""
+          className={slides.length > 1 ? "sf-hero-slide absolute inset-0 h-full w-full object-cover" : "h-full w-full object-cover"}
+          style={slides.length > 1 ? { animationDelay: `${i * (7.5 / slides.length)}s` } : undefined}
+        />
+      ))}
+    </div>
+  );
+
+  const Cta = () =>
+    ctaLabel ? (
+      <Link
+        href={ctaHref}
+        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--sf-accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm"
+      >
+        {ctaLabel}
+        <span aria-hidden>→</span>
+      </Link>
+    ) : null;
+
+  const Dots = () =>
+    slides.length > 1 ? (
+      <div className="mt-4 flex gap-1.5">
+        {slides.map((_, i) => (
+          <span key={i} className={`h-1.5 rounded-full ${i === 0 ? "w-5 bg-[var(--sf-accent)]" : "w-1.5 bg-[var(--sf-line)]"}`} />
+        ))}
+      </div>
+    ) : null;
+
+  if (style === "card") {
+    const bg =
+      tone === "dark"
+        ? "bg-[#111418] text-white"
+        : tone === "accent"
+          ? "bg-[var(--sf-accent-soft)] text-[var(--sf-fg)]"
+          : "bg-[var(--sf-card)] text-[var(--sf-fg)]";
+    return (
+      <section className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+        {slides.length > 1 && <style dangerouslySetInnerHTML={{ __html: slideCss }} />}
+        <div className={`grid overflow-hidden rounded-[var(--sf-radius-lg)] sm:grid-cols-2 ${bg}`}>
+          <div className="flex flex-col justify-center p-8 sm:p-12">
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-4xl">{heading}</h1>
+            {sub && <p className={`mt-2 max-w-sm text-sm ${tone === "dark" ? "text-white/70" : "text-[var(--sf-muted)]"}`}>{sub}</p>}
+            <Cta />
+            <Dots />
+          </div>
+          <div className="relative min-h-[220px] sm:min-h-[320px]">
+            {slides.length ? (
+              <Slides className="absolute inset-0" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-[var(--sf-muted)]">Add a banner image</div>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // full-bleed
+  return (
+    <section className="relative overflow-hidden">
+      {slides.length > 1 && <style dangerouslySetInnerHTML={{ __html: slideCss }} />}
+      {slides.length > 0 && (
+        <>
+          <Slides className="absolute inset-0 -z-10" />
+          <div aria-hidden className="absolute inset-0 -z-10 bg-black/25" />
+        </>
+      )}
+      <div
+        className={`mx-auto flex max-w-6xl flex-col items-start px-4 py-24 sm:px-6 sm:py-32 ${slides.length ? "text-white" : ""}`}
+      >
+        <h1 className="max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">{heading}</h1>
+        {sub && <p className={`mt-3 max-w-xl ${slides.length ? "text-white/80" : "text-[var(--sf-muted)]"}`}>{sub}</p>}
+        <Cta />
+      </div>
+    </section>
+  );
+}
+
 export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }) {
   if (!section.enabled) return null;
   const d = section.data;
+  const gridCtx = { currency: ctx.currency, basePath: ctx.basePath, storeSlug: ctx.storeSlug };
 
   switch (section.type) {
-    case "hero": {
-      const imgs = (Array.isArray(d.images) ? (d.images as unknown[]).filter((x) => typeof x === "string") : []) as string[];
-      const legacy = s(d, "imageUrl");
-      const slides = imgs.length ? imgs : legacy ? [legacy] : [];
-      const single = slides[0];
-      return (
-        <section className="relative overflow-hidden">
-          {slides.length > 1 && (
-            <>
-              <div aria-hidden className="absolute inset-0 -z-10">
-                {slides.slice(0, 3).map((src, i) => (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    key={src + i}
-                    src={src}
-                    alt=""
-                    className="sf-hero-slide absolute inset-0 h-full w-full object-cover"
-                    style={{ animationDelay: `${i * (6 / slides.slice(0, 3).length)}s` }}
-                  />
-                ))}
-              </div>
-              <style
-                dangerouslySetInnerHTML={{
-                  __html: `.sf-hero-slide{opacity:0;animation:sfHeroFade 6s linear infinite}@keyframes sfHeroFade{0%,8%{opacity:1}40%,100%{opacity:0}}@media (prefers-reduced-motion:reduce){.sf-hero-slide{animation:none}.sf-hero-slide:first-child{opacity:1}}`,
-                }}
-              />
-            </>
-          )}
-          <div
-            className="mx-auto flex max-w-6xl flex-col items-start gap-4 px-4 py-20 sm:px-6"
-            style={
-              slides.length === 1 && single
-                ? { backgroundImage: `url(${single})`, backgroundSize: "cover", backgroundPosition: "center" }
-                : undefined
-            }
-          >
-            <h1 className="max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">
-              {s(d, "heading", "Welcome")}
-            </h1>
-            {s(d, "subheading") && (
-              <p className="max-w-xl text-[var(--sf-muted)]">{s(d, "subheading")}</p>
-            )}
-            {s(d, "ctaLabel") && (
-              <Link
-                href={`${ctx.basePath}${s(d, "ctaHref", "/products")}`}
-                className="mt-2 rounded-[var(--sf-radius)] bg-[var(--sf-accent)] px-5 py-2.5 text-sm font-semibold text-white"
-              >
-                {s(d, "ctaLabel")}
-              </Link>
-            )}
-          </div>
-        </section>
-      );
-    }
+    case "hero":
+      return <Hero section={section} ctx={ctx} />;
 
     case "featured_products": {
       const limit = typeof d.limit === "number" ? d.limit : 4;
       return (
         <Wrap>
-          <H>{s(d, "heading", "Featured")}</H>
-          <Grid products={ctx.products.slice(0, limit)} currency={ctx.currency} basePath={ctx.basePath} storeSlug={ctx.storeSlug} />
+          <SectionHead title={s(d, "heading", "Featured")} seeAllHref={`${ctx.basePath}/products`} />
+          <Grid products={ctx.products.slice(0, limit)} {...gridCtx} />
         </Wrap>
       );
     }
@@ -109,27 +172,33 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
     case "product_grid":
       return (
         <Wrap>
-          <H>{s(d, "heading", "All products")}</H>
-          <Grid products={ctx.products} currency={ctx.currency} basePath={ctx.basePath} storeSlug={ctx.storeSlug} />
+          <SectionHead title={s(d, "heading", "All products")} seeAllHref={`${ctx.basePath}/products`} />
+          <Grid products={ctx.products} {...gridCtx} />
         </Wrap>
       );
 
     case "category_grid": {
-      const cats = [...new Set(ctx.products.map((p) => p.category).filter(Boolean))] as string[];
+      if (!ctx.categories.length) return null;
+      const hasPhotos = ctx.categories.some((c) => c.imageUrl);
       return (
         <Wrap>
-          <H>{s(d, "heading", "Shop by category")}</H>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {cats.map((c) => (
-              <Link
-                key={c}
-                href={`${ctx.basePath}/products?category=${encodeURIComponent(c)}`}
-                className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-card)] p-6 text-center text-sm font-semibold"
-              >
-                {c}
-              </Link>
-            ))}
-          </div>
+          <SectionHead title={s(d, "heading", "Shop by category")} seeAllHref={`${ctx.basePath}/products`} />
+          {hasPhotos ? (
+            <CategoryChips categories={ctx.categories} basePath={ctx.basePath} />
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {ctx.categories.map((c) => (
+                <Link
+                  key={c.slug}
+                  href={`${ctx.basePath}/products?category=${encodeURIComponent(c.name)}`}
+                  className="rounded-[var(--sf-radius-lg)] border border-[var(--sf-line)] bg-[var(--sf-card)] p-6 text-center text-sm font-semibold transition-colors hover:border-[var(--sf-accent)]"
+                >
+                  {c.name}
+                  <span className="mt-1 block text-xs font-normal text-[var(--sf-muted)]">{c.count} item{c.count === 1 ? "" : "s"}</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </Wrap>
       );
     }
@@ -138,15 +207,15 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
       const flip = Boolean(d.flip);
       return (
         <Wrap>
-          <div className={`grid items-center gap-8 md:grid-cols-2 ${flip ? "md:[direction:rtl]" : ""}`}>
-            <div className="md:[direction:ltr]">
+          <div className="grid items-center gap-8 md:grid-cols-2">
+            <div className={flip ? "md:order-2" : ""}>
               <h2 className="text-2xl font-extrabold tracking-tight">{s(d, "heading")}</h2>
               <p className="mt-3 whitespace-pre-line text-[var(--sf-muted)]">{s(d, "body")}</p>
             </div>
-            <div className="aspect-video overflow-hidden rounded-[var(--sf-radius)] bg-[var(--sf-card)] md:[direction:ltr]">
+            <div className={`aspect-[4/3] overflow-hidden rounded-[var(--sf-radius-lg)] bg-[var(--sf-card)] ${flip ? "md:order-1" : ""}`}>
               {s(d, "imageUrl") && (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={s(d, "imageUrl")} alt="" className="h-full w-full object-cover" loading="lazy" />
+                <img src={cldUrl(s(d, "imageUrl"), 900)} alt="" className="h-full w-full object-cover" loading="lazy" />
               )}
             </div>
           </div>
@@ -157,7 +226,7 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
     case "rich_text":
       return (
         <Wrap>
-          <H>{s(d, "heading")}</H>
+          <SectionHead title={s(d, "heading")} />
           <p className="max-w-2xl whitespace-pre-line text-[var(--sf-muted)]">{s(d, "body")}</p>
         </Wrap>
       );
@@ -167,11 +236,11 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
       if (!items.length) return null;
       return (
         <Wrap>
-          <H>{s(d, "heading", "What customers say")}</H>
+          <SectionHead title={s(d, "heading", "What customers say")} />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((t, i) => (
-              <blockquote key={i} className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] p-5">
-                <p className="text-sm">&ldquo;{t.quote}&rdquo;</p>
+              <blockquote key={i} className="rounded-[var(--sf-radius-lg)] border border-[var(--sf-line)] bg-[var(--sf-elevated)] p-5 shadow-[var(--sf-shadow)]">
+                <p className="text-sm leading-relaxed">&ldquo;{t.quote}&rdquo;</p>
                 <footer className="mt-3 text-xs font-semibold text-[var(--sf-muted)]">— {t.name}</footer>
               </blockquote>
             ))}
@@ -184,8 +253,8 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
       const items = (Array.isArray(d.items) ? d.items : []) as { q: string; a: string }[];
       return (
         <Wrap>
-          <H>{s(d, "heading", "Questions")}</H>
-          <div className="max-w-2xl space-y-3">
+          <SectionHead title={s(d, "heading", "Questions")} />
+          <div className="max-w-2xl space-y-2.5">
             {items.map((f, i) => (
               <details key={i} className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] p-4">
                 <summary className="cursor-pointer text-sm font-semibold">{f.q}</summary>
@@ -200,19 +269,17 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
     case "newsletter":
       return (
         <Wrap>
-          <div className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-card)] p-8 text-center">
-            <h2 className="text-xl font-extrabold">{s(d, "heading", "Join our list")}</h2>
+          <div className="rounded-[var(--sf-radius-lg)] border border-[var(--sf-line)] bg-[var(--sf-card)] p-8 text-center sm:p-12">
+            <h2 className="text-xl font-extrabold sm:text-2xl">{s(d, "heading", "Join our list")}</h2>
             {s(d, "subheading") && <p className="mt-1 text-sm text-[var(--sf-muted)]">{s(d, "subheading")}</p>}
-            <form className="mx-auto mt-4 flex max-w-sm gap-2">
+            <form className="mx-auto mt-5 flex max-w-sm gap-2">
               <input
                 type="email"
                 required
                 placeholder="you@example.com"
-                className="h-10 flex-1 rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-bg)] px-3 text-sm"
+                className="h-11 flex-1 rounded-full border border-[var(--sf-line)] bg-[var(--sf-bg)] px-4 text-sm"
               />
-              <button className="rounded-[var(--sf-radius)] bg-[var(--sf-accent)] px-4 text-sm font-semibold text-white">
-                Sign up
-              </button>
+              <button className="rounded-full bg-[var(--sf-accent)] px-5 text-sm font-semibold text-white">Sign up</button>
             </form>
           </div>
         </Wrap>
@@ -223,10 +290,10 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
       if (!logos.length) return null;
       return (
         <Wrap>
-          <div className="flex flex-wrap items-center justify-center gap-8 opacity-70">
+          <div className="flex flex-wrap items-center justify-center gap-8 opacity-60">
             {logos.map((l, i) => (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img key={i} src={l} alt="" className="h-8 w-auto" loading="lazy" />
+              <img key={i} src={l} alt="" className="h-7 w-auto sm:h-8" loading="lazy" />
             ))}
           </div>
         </Wrap>
@@ -236,7 +303,7 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
     case "contact":
       return (
         <Wrap>
-          <H>{s(d, "heading", "Visit us")}</H>
+          <SectionHead title={s(d, "heading", "Visit us")} />
           <p className="text-sm text-[var(--sf-muted)]">
             See the <Link href={`${ctx.basePath}/contact`} className="underline">contact page</Link>.
           </p>

@@ -26,7 +26,7 @@ export default async function ProductsPage() {
       .order("position"),
     db
       .from("product_categories")
-      .select("id, name, slug, sort")
+      .select("*")
       .eq("business_id", tenant.businessId)
       .order("sort"),
   ]);
@@ -53,6 +53,7 @@ export default async function ProductsPage() {
     name: c.name as string,
     slug: c.slug as string,
     sort: c.sort as number,
+    imageUrl: (c.image_url as string) ?? null,
     productCount: catCounts.get(c.name as string) ?? 0,
   }));
 

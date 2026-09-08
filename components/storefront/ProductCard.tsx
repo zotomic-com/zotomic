@@ -22,7 +22,7 @@ export function ProductCard({
   const stockLeft = product.trackInventory ? product.stockQty : null;
 
   return (
-    <div className="group overflow-hidden rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-bg)]">
+    <div className="group flex flex-col">
       <ProductCardMedia
         product={{
           id: product.id,
@@ -37,28 +37,32 @@ export function ProductCard({
           sold: product.sold,
           stockLeft,
           badge: badgeFor(product),
+          hasVariants: product.hasVariants,
         }}
         currency={currency}
         href={href}
         storeSlug={storeSlug}
       />
 
-      <Link href={href} className="block px-3 pt-3">
+      <Link href={href} className="mt-4 block">
         <p className="line-clamp-1 text-sm font-medium">{product.name}</p>
+        {product.category && (
+          <p className="mt-0.5 text-xs text-[var(--sf-muted)]">{product.category}</p>
+        )}
         <p className="mt-1 text-sm">
           {onSale ? (
             <>
-              <span className="font-semibold">{money(product.salePrice!, currency)}</span>{" "}
-              <span className="text-[var(--sf-muted)] line-through">{money(product.price, currency)}</span>
+              <span className="font-bold">{money(product.salePrice!, currency)}</span>{" "}
+              <span className="text-xs text-[var(--sf-muted)] line-through">{money(product.price, currency)}</span>
             </>
           ) : (
-            <span className="font-semibold">{money(product.price, currency)}</span>
+            <span className="font-bold">{money(product.price, currency)}</span>
           )}
         </p>
       </Link>
 
-      <div className="px-3 pb-3">
-        {storeSlug ? (
+      {storeSlug ? (
+        <div className="mt-2">
           <QuickAdd
             product={{ id: product.id, name: product.name, price, image: product.imageUrls[0] ?? null, slug: product.slug }}
             currency={currency}
@@ -67,8 +71,8 @@ export function ProductCard({
             hasVariants={product.hasVariants}
             soldOut={soldOut}
           />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

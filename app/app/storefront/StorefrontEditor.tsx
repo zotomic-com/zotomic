@@ -317,6 +317,15 @@ export function StorefrontEditor({
               <NumberRow label="Flat shipping" value={config.commerce.shippingFlatRate} onChange={(v) => update((c) => ((c.commerce.shippingFlatRate = v), c))} />
               <NumberRow label="Free shipping over (0 = off)" value={config.commerce.freeShippingOver ?? 0} onChange={(v) => update((c) => ((c.commerce.freeShippingOver = v || null), c))} />
               <NumberRow label="Minimum order" value={config.commerce.minOrder} onChange={(v) => update((c) => ((c.commerce.minOrder = v), c))} />
+              <div>
+                <p className="mb-1 text-xs font-medium text-fg">Size chart image (optional)</p>
+                <ImageUploader
+                  value={config.commerce.sizeChartUrl ? [config.commerce.sizeChartUrl] : []}
+                  onChange={(urls) => update((c) => ((c.commerce.sizeChartUrl = urls[0] ?? null), c))}
+                  max={1}
+                />
+                <p className="mt-1 text-xs text-fg-subtle">Shown from a &ldquo;Size chart&rdquo; link on product pages that have a size option.</p>
+              </div>
             </Panel>
             <Panel title="Contact">
               <TextRow label="Phone" value={config.contact.phone} onChange={(v) => update((c) => ((c.contact.phone = v), c))} />
@@ -468,6 +477,21 @@ function SectionCard({
               <TextareaRow key={f.key} label={f.label} value={String(section.data[f.key] ?? "")} onChange={(v) => onField(f.key, v)} />
             ) : f.type === "number" ? (
               <NumberRow key={f.key} label={f.label} value={Number(section.data[f.key] ?? 0)} onChange={(v) => onField(f.key, v)} />
+            ) : f.type === "select" ? (
+              <label key={f.key} className="block text-xs font-medium text-fg">
+                {f.label}
+                <select
+                  value={String(section.data[f.key] ?? f.options?.[0]?.value ?? "")}
+                  onChange={(e) => onField(f.key, e.target.value)}
+                  className="mt-1 h-9 w-full rounded-sm border border-border bg-surface px-2 text-sm text-fg"
+                >
+                  {(f.options ?? []).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             ) : f.type === "images" ? (
               <div key={f.key}>
                 <p className="mb-1 text-xs font-medium text-fg">

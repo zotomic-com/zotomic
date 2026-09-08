@@ -14,6 +14,7 @@ interface V {
   soldOut: boolean;
 }
 
+/** Card-level "Buy now" (add-to-cart is the floating + on the image). */
 export function QuickAdd({
   product,
   currency,
@@ -21,7 +22,6 @@ export function QuickAdd({
   basePath = "",
   hasVariants,
   soldOut,
-  showBuyNow = true,
 }: {
   product: { id: string; name: string; price: number; image: string | null; slug: string };
   currency: string;
@@ -29,24 +29,16 @@ export function QuickAdd({
   basePath?: string;
   hasVariants: boolean;
   soldOut: boolean;
-  showBuyNow?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [intent, setIntent] = useState<"cart" | "buy">("cart");
   const [variants, setVariants] = useState<V[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [chosen, setChosen] = useState("");
-  const [done, setDone] = useState(false);
-
-  const flash = () => {
-    setDone(true);
-    setTimeout(() => setDone(false), 1400);
-  };
 
   const goCheckout = () => router.push(`${basePath}/checkout`);
 
-  const addSimple = (buy: boolean) => {
+  const buySimple = () => {
     addToCart(storeSlug, {
       id: product.id,
       productId: product.id,
@@ -57,12 +49,10 @@ export function QuickAdd({
     });
     pixel.track("AddToCart", { content_name: product.name, value: product.price, currency });
     storefrontEvent(storeSlug, "add_to_cart", { productId: product.id, value: product.price });
-    if (buy) goCheckout();
-    else flash();
+    goCheckout();
   };
 
-  const openPicker = async (buy: boolean) => {
-    setIntent(buy ? "buy" : "cart");
+  const openPicker = async () => {
     setOpen(true);
     if (variants) return;
     setLoading(true);
@@ -79,7 +69,7 @@ export function QuickAdd({
     }
   };
 
-  const addVariant = () => {
+  const buyVariant = () => {
     const v = variants?.find((x) => x.id === chosen);
     if (!v) return;
     const unit = v.salePrice ?? v.price;
@@ -95,23 +85,19 @@ export function QuickAdd({
     });
     pixel.track("AddToCart", { content_name: product.name, value: unit, currency });
     storefrontEvent(storeSlug, "add_to_cart", { productId: product.id, value: unit });
-    setOpen(false);
-    if (intent === "buy") goCheckout();
-    else flash();
+    goCheckout();
   };
 
   if (soldOut) {
-    return <span className="mt-2 block text-center text-xs font-semibold text-[var(--sf-muted)]">Sold out</span>;
+    return <span className="block text-center text-xs font-semibold text-[var(--sf-muted)]">Sold out</span>;
   }
 
   const btn =
-    "mt-2 w-full rounded-[var(--sf-radius)] border border-[var(--sf-line)] py-2 text-xs font-semibold hover:border-[var(--sf-accent)] hover:text-[var(--sf-accent)]";
-  const buyBtn =
-    "mt-1.5 w-full rounded-[var(--sf-radius)] bg-[var(--sf-accent)] py-2 text-xs font-semibold text-white hover:opacity-90";
+    "w-full rounded-[var(--sf-radius)] bg-[var(--sf-accent)] py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90";
 
-  if (open) {
+  if (open && hasVariants) {
     return (
-      <div className="mt-2 space-y-1.5">
+      <div className="space-y-1.5">
         {loading ? (
           <p className="text-center text-xs text-[var(--sf-muted)]">Loading…</p>
         ) : (
@@ -129,8 +115,8 @@ export function QuickAdd({
                 </option>
               ))}
             </select>
-            <button onClick={addVariant} disabled={!chosen} className={`${btn} mt-0 disabled:opacity-50`}>
-              {intent === "buy" ? "Buy now" : "Add to cart"}
+            <button onClick={buyVariant} disabled={!chosen} className={`${btn} disabled:opacity-50`}>
+              Buy now
             </button>
           </>
         )}
@@ -139,15 +125,8 @@ export function QuickAdd({
   }
 
   return (
-    <>
-      <button onClick={() => (hasVariants ? openPicker(false) : addSimple(false))} className={btn}>
-        {done ? "Added ✓" : hasVariants ? "Choose options" : "Add to cart"}
-      </button>
-      {showBuyNow && (
-        <button onClick={() => (hasVariants ? openPicker(true) : addSimple(true))} className={buyBtn}>
-          Buy now
-        </button>
-      )}
-    </>
+    <button onClick={() => (hasVariants ? openPicker() : buySimple())} className={btn}>
+      Buy now
+    </button>
   );
 }

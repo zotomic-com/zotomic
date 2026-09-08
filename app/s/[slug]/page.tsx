@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getStoreBySlug, getStoreProducts } from "@/lib/storefront/store";
+import { getStoreBySlug, getStoreCategories, getStoreProducts } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { SectionRenderer } from "@/components/storefront/Sections";
 
@@ -21,8 +21,11 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
     );
   }
 
-  const products = await getStoreProducts(store.businessId);
-  const ctx = { products, currency: store.currency, basePath, storeSlug: store.slug };
+  const [products, categories] = await Promise.all([
+    getStoreProducts(store.businessId),
+    getStoreCategories(store.businessId),
+  ]);
+  const ctx = { products, categories, currency: store.currency, basePath, storeSlug: store.slug };
 
   return (
     <>

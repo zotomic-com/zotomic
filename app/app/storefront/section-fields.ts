@@ -3,7 +3,8 @@ import type { SectionType } from "@/lib/storefront/config";
 export interface FieldDef {
   key: string;
   label: string;
-  type: "text" | "textarea" | "number" | "url" | "bool" | "images";
+  type: "text" | "textarea" | "number" | "url" | "bool" | "images" | "select";
+  options?: { value: string; label: string }[];
 }
 
 /** Editable fields per section type (list-type data like FAQ items is edited as JSON textarea). */
@@ -13,6 +14,25 @@ export const SECTION_FIELDS: Record<SectionType, FieldDef[]> = {
     { key: "subheading", label: "Subheading", type: "text" },
     { key: "ctaLabel", label: "Button label", type: "text" },
     { key: "ctaHref", label: "Button link", type: "text" },
+    {
+      key: "style",
+      label: "Layout",
+      type: "select",
+      options: [
+        { value: "full", label: "Full-width background" },
+        { value: "card", label: "Banner card + side image" },
+      ],
+    },
+    {
+      key: "tone",
+      label: "Card colour (card layout)",
+      type: "select",
+      options: [
+        { value: "surface", label: "Neutral" },
+        { value: "dark", label: "Dark" },
+        { value: "accent", label: "Accent tint" },
+      ],
+    },
     { key: "images", label: "Banner images", type: "images" },
   ],
   featured_products: [

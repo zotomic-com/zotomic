@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { FONT_STACKS, RADIUS_PX, type StorefrontConfig } from "@/lib/storefront/config";
+import { FONT_STACKS, RADIUS_PX, RADIUS_LG_PX, type StorefrontConfig } from "@/lib/storefront/config";
 import { GA4, MetaPixel } from "@/components/tracking/Pixel";
 import { StorefrontTracker } from "./StorefrontTracker";
 import { HeaderActions } from "./HeaderActions";
+import { HeaderSearch } from "./HeaderSearch";
 import { AccountLink } from "./AccountLink";
 import { MobileNav } from "./MobileNav";
 
-/** Storefront chrome. Scopes accent/font/radius via CSS vars so it never
+/** Storefront chrome. Scopes accent/font/radius/shadow via CSS vars so it never
  *  collides with the Zotomic app styles. */
 export function StoreShell({
   config,
@@ -27,12 +28,18 @@ export function StoreShell({
 
   const style = {
     ["--sf-accent" as string]: brand.accent,
+    ["--sf-accent-soft" as string]: `color-mix(in srgb, ${brand.accent} 12%, transparent)`,
     ["--sf-radius" as string]: RADIUS_PX[brand.radius],
+    ["--sf-radius-lg" as string]: RADIUS_LG_PX[brand.radius],
     ["--sf-bg" as string]: dark ? "#0b0f14" : "#ffffff",
     ["--sf-fg" as string]: dark ? "#e7eaee" : "#14181d",
     ["--sf-muted" as string]: dark ? "#9aa4af" : "#5b6570",
-    ["--sf-line" as string]: dark ? "#232a32" : "#e7e9ec",
-    ["--sf-card" as string]: dark ? "#11161c" : "#f7f8f9",
+    ["--sf-line" as string]: dark ? "#232a32" : "#e9ebee",
+    ["--sf-card" as string]: dark ? "#11161c" : "#f6f7f8",
+    ["--sf-elevated" as string]: dark ? "#141a21" : "#ffffff",
+    ["--sf-shadow" as string]: dark
+      ? "0 1px 2px rgba(0,0,0,.4), 0 12px 32px -14px rgba(0,0,0,.6)"
+      : "0 1px 2px rgba(16,24,40,.04), 0 12px 28px -14px rgba(16,24,40,.14)",
     fontFamily: FONT_STACKS[brand.font],
   } as React.CSSProperties;
 
@@ -51,9 +58,9 @@ export function StoreShell({
         </div>
       )}
 
-      <header className="sticky top-0 z-40 border-b border-[var(--sf-line)] bg-[var(--sf-bg)]/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href={href("/")} className="flex items-center gap-2 font-extrabold tracking-tight">
+      <header className="sticky top-0 z-40 border-b border-[var(--sf-line)] bg-[var(--sf-bg)]/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
+          <Link href={href("/")} className="flex shrink-0 items-center gap-2 font-extrabold tracking-tight">
             {brand.logoUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={brand.logoUrl} alt={brand.storeName} className="h-8 w-auto" />
@@ -61,35 +68,44 @@ export function StoreShell({
               <span className="text-lg">{brand.storeName}</span>
             )}
           </Link>
-          <nav className="hidden items-center gap-1 sm:flex">
+
+          <nav className="hidden items-center gap-0.5 md:flex">
             {nav.map((n) => (
               <Link
                 key={n.href + n.label}
                 href={href(n.href)}
-                className="rounded-[var(--sf-radius)] px-3 py-2 text-sm text-[var(--sf-muted)] hover:text-[var(--sf-fg)]"
+                className="rounded-[var(--sf-radius)] px-3 py-2 text-sm text-[var(--sf-muted)] transition-colors hover:text-[var(--sf-fg)]"
               >
                 {n.label}
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-1">
-            {storeSlug ? <AccountLink storeSlug={storeSlug} basePath={basePath} /> : null}
-            {storeSlug ? (
-              <HeaderActions storeSlug={storeSlug} basePath={basePath} />
-            ) : (
-              <Link href={href("/cart")} className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-3 py-1.5 text-sm font-medium">
-                Cart
-              </Link>
-            )}
+
+          <div className="ml-auto flex items-center gap-1">
+            {storeSlug ? <HeaderSearch basePath={basePath} /> : null}
+            {/* cart/saved/account live in the floating bottom nav on mobile */}
+            <div className="hidden items-center gap-1 sm:flex">
+              {storeSlug ? <AccountLink storeSlug={storeSlug} basePath={basePath} /> : null}
+              {storeSlug ? (
+                <HeaderActions storeSlug={storeSlug} basePath={basePath} />
+              ) : (
+                <Link
+                  href={href("/cart")}
+                  className="rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-3 py-1.5 text-sm font-medium"
+                >
+                  Cart
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      <main className={`flex-1 ${storeSlug ? "pb-16 sm:pb-0" : ""}`}>{children}</main>
+      <main className={`flex-1 ${storeSlug ? "pb-24 sm:pb-0" : ""}`}>{children}</main>
 
       {storeSlug ? <MobileNav storeSlug={storeSlug} basePath={basePath} /> : null}
 
-      <footer className="mt-16 border-t border-[var(--sf-line)] bg-[var(--sf-card)]">
+      <footer className="mt-20 border-t border-[var(--sf-line)] bg-[var(--sf-card)]">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
           <div>
             <p className="font-extrabold">{brand.storeName}</p>
@@ -101,7 +117,7 @@ export function StoreShell({
               <ul className="mt-3 space-y-2">
                 {c.links.map((l) => (
                   <li key={l.href + l.label}>
-                    <Link href={href(l.href)} className="text-sm text-[var(--sf-muted)] hover:text-[var(--sf-fg)]">
+                    <Link href={href(l.href)} className="text-sm text-[var(--sf-muted)] transition-colors hover:text-[var(--sf-fg)]">
                       {l.label}
                     </Link>
                   </li>

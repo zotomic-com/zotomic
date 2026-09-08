@@ -231,6 +231,44 @@ export const getStoreProducts = cache(async function getStoreProducts(
   return enrichProducts(businessId, (data ?? []).map(mapProduct));
 });
 
+export interface StoreCategory {
+  name: string;
+  slug: string;
+  imageUrl: string | null;
+  count: number;
+}
+
+/** Categories that have at least one visible product, ordered by the owner's sort
+ *  then by name. Falls back to distinct free-text values when the table is empty. */
+export const getStoreCategories = cache(async function getStoreCategories(
+  businessId: string,
+): Promise<StoreCategory[]> {
+  const db = getAdminSupabase();
+  // select("*") so a not-yet-applied `image_url` migration can't break the storefront
+  const [{ data: cats }, products] = await Promise.all([
+    db.from("product_categories").select("*").eq("business_id", businessId).order("sort"),
+    getStoreProducts(businessId),
+  ]);
+
+  const counts = new Map<string, number>();
+  for (const p of products) if (p.category) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
+
+  if (cats?.length) {
+    return cats
+      .map((c) => ({
+        name: c.name as string,
+        slug: c.slug as string,
+        imageUrl: (c.image_url as string) ?? null,
+        count: counts.get(c.name as string) ?? 0,
+      }))
+      .filter((c) => c.count > 0);
+  }
+
+  return [...counts.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([name, count]) => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), imageUrl: null, count }));
+});
+
 export interface StorePaymentOption {
   id: string; // 'cod' | provider id
   label: string;

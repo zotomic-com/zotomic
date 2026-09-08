@@ -25,10 +25,13 @@ export function ImageUploader({
   value,
   onChange,
   max = 6,
+  compact = false,
 }: {
   value: string[];
   onChange: (urls: string[]) => void;
   max?: number;
+  /** single tiny thumbnail that is itself the upload/replace trigger */
+  compact?: boolean;
 }) {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +92,30 @@ export function ImageUploader({
       if (inputRef.current) inputRef.current.value = "";
     }
   };
+
+  if (compact) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-sm border border-dashed border-border-strong text-fg-subtle hover:border-primary"
+          title={value[0] ? "Replace image" : "Add image"}
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : value[0] ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={value[0]} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <ImagePlus className="h-3.5 w-3.5" />
+          )}
+        </button>
+        <input ref={inputRef} type="file" accept="image/*" hidden onChange={(e) => e.target.files && upload(e.target.files)} />
+      </>
+    );
+  }
 
   return (
     <div>

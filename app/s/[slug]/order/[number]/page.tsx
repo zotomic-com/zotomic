@@ -47,7 +47,7 @@ export default async function OrderPage({
         contact you to confirm delivery.
       </p>
 
-      <div className="mt-8 rounded-[var(--sf-radius)] border border-[var(--sf-line)] p-5 text-left text-sm">
+      <div className="mt-8 rounded-[var(--sf-radius-lg)] border border-[var(--sf-line)] bg-[var(--sf-card)] p-5 text-left text-sm">
         <ul className="space-y-2">
           {items.map((i, idx) => (
             <li key={idx} className="flex justify-between">
@@ -66,7 +66,7 @@ export default async function OrderPage({
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <Link
           href={basePath || "/"}
-          className="inline-block rounded-[var(--sf-radius)] bg-[var(--sf-accent)] px-5 py-2.5 text-sm font-semibold text-white"
+          className="inline-block rounded-full bg-[var(--sf-accent)] px-6 py-2.5 text-sm font-semibold text-white"
         >
           Continue shopping
         </Link>
@@ -74,7 +74,7 @@ export default async function OrderPage({
           href={`${basePath}/order/${order.order_number}/invoice`}
           target="_blank"
           rel="noreferrer"
-          className="inline-block rounded-[var(--sf-radius)] border border-[var(--sf-line)] px-5 py-2.5 text-sm font-semibold"
+          className="inline-block rounded-full border border-[var(--sf-line)] px-6 py-2.5 text-sm font-semibold"
         >
           Download invoice (PDF)
         </a>

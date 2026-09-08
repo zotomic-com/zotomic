@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { normalizeConfig } from "@/lib/storefront/config";
-import { getStoreProducts } from "@/lib/storefront/store";
+import { getStoreCategories, getStoreProducts } from "@/lib/storefront/store";
 import { StoreShell } from "@/components/storefront/StoreShell";
 import { SectionRenderer } from "@/components/storefront/Sections";
 
@@ -24,8 +24,17 @@ export default async function StorefrontPreviewPage() {
     .single();
 
   const config = normalizeConfig(row?.draft_json, tenant.business.name);
-  const products = await getStoreProducts(tenant.businessId);
-  const ctx = { products, currency: tenant.business.currency ?? "BDT", basePath: "/storefront-preview", storeSlug: "" };
+  const [products, categories] = await Promise.all([
+    getStoreProducts(tenant.businessId),
+    getStoreCategories(tenant.businessId),
+  ]);
+  const ctx = {
+    products,
+    categories,
+    currency: tenant.business.currency ?? "BDT",
+    basePath: "/storefront-preview",
+    storeSlug: "",
+  };
 
   return (
     <StoreShell config={config} basePath="/storefront-preview">

@@ -7,13 +7,15 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { createCategory, deleteCategory, renameCategory, reorderCategory } from "./category-actions";
+import { ImageUploader } from "@/components/app/ImageUploader";
+import { createCategory, deleteCategory, renameCategory, reorderCategory, setCategoryImage } from "./category-actions";
 
 export interface CategoryRow {
   id: string;
   name: string;
   slug: string;
   sort: number;
+  imageUrl: string | null;
   productCount: number;
 }
 
@@ -67,6 +69,12 @@ export function CategoryManager({
           <ul className="divide-y divide-border rounded-sm border border-border">
             {categories.map((c, i) => (
               <li key={c.id} className="flex items-center gap-2 px-3 py-2">
+                <ImageUploader
+                  value={c.imageUrl ? [c.imageUrl] : []}
+                  onChange={(urls) => run(() => setCategoryImage(c.id, urls[0] ?? null))}
+                  max={1}
+                  compact
+                />
                 {editId === c.id ? (
                   <>
                     <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 flex-1" />

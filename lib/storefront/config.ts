@@ -61,6 +61,8 @@ export interface StorefrontConfig {
     shippingFlatRate: number;
     freeShippingOver: number | null;
     minOrder: number;
+    /** optional size-chart image shown from a link on product pages with size options */
+    sizeChartUrl: string | null;
   };
   seo: {
     titleSuffix: string;
@@ -113,6 +115,13 @@ export const RADIUS_PX: Record<StorefrontConfig["brand"]["radius"], string> = {
   round: "18px",
 };
 
+/** Larger radius for cards / banners / images — still reads "sharp" when the store picks sharp. */
+export const RADIUS_LG_PX: Record<StorefrontConfig["brand"]["radius"], string> = {
+  sharp: "4px",
+  soft: "18px",
+  round: "28px",
+};
+
 export const SECTION_LABELS: Record<SectionType, string> = {
   hero: "Hero banner",
   featured_products: "Featured products",
@@ -141,7 +150,11 @@ export function defaultSection(type: SectionType): Section {
           subheading: "Quality you can feel, prices you'll like.",
           ctaLabel: "Shop now",
           ctaHref: "/products",
-          // 1 image = static banner; 2–3 = auto crossfade slideshow (plan-gated in the editor)
+          // "full" = edge-to-edge background; "card" = rounded banner with a side image
+          style: "full",
+          // card style only: "surface" | "dark" | "accent"
+          tone: "surface",
+          // 1 image = static; 2–3 = auto crossfade (plan-gated in the editor)
           images: [] as string[],
           imageUrl: null, // legacy single-image field, still honoured by the renderer
         },
@@ -223,7 +236,7 @@ export function makeDefaultConfig(storeName: string): StorefrontConfig {
     },
     contact: { address: "", phone: "", whatsapp: "", email: "", hours: "", mapEmbedUrl: "" },
     social: { facebook: "", instagram: "", youtube: "", tiktok: "" },
-    commerce: { codEnabled: true, shippingFlatRate: 60, freeShippingOver: null, minOrder: 0 },
+    commerce: { codEnabled: true, shippingFlatRate: 60, freeShippingOver: null, minOrder: 0, sizeChartUrl: null },
     seo: {
       titleSuffix: ` — ${storeName}`,
       description: `Shop ${storeName}.`,
@@ -290,13 +303,15 @@ export function normalizeConfig(stored: unknown, storeName: string): StorefrontC
       .filter((s) => s && typeof s.type === "string" && s.id)
       .map((s) => {
         const data = isObj(s.data) ? { ...s.data } : {};
-        // hero: fold the legacy single `imageUrl` into the `images` array
+        // hero: fold the legacy single `imageUrl` into the `images` array + defaults
         if (s.type === "hero") {
           const imgs = Array.isArray(data.images)
             ? (data.images as unknown[]).filter((x): x is string => typeof x === "string")
             : [];
           if (!imgs.length && typeof data.imageUrl === "string" && data.imageUrl) imgs.push(data.imageUrl);
           data.images = imgs;
+          if (data.style !== "card" && data.style !== "full") data.style = "full";
+          if (!["surface", "dark", "accent"].includes(data.tone as string)) data.tone = "surface";
         }
         return { ...s, data };
       });

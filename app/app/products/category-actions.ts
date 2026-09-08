@@ -99,6 +99,18 @@ export async function deleteCategory(id: string): Promise<{ ok: true } | { error
   return { ok: true };
 }
 
+export async function setCategoryImage(id: string, url: string | null): Promise<{ ok: true } | { error: string }> {
+  const { businessId, db } = await requireBusiness();
+  const { error } = await db
+    .from("product_categories")
+    .update({ image_url: url || null })
+    .eq("business_id", businessId)
+    .eq("id", id);
+  if (error) return { error: "Could not save the image." };
+  revalidatePath("/app/products");
+  return { ok: true };
+}
+
 export async function reorderCategory(id: string, direction: "up" | "down"): Promise<{ ok: true } | { error: string }> {
   const { businessId, db } = await requireBusiness();
   const { data: all } = await db
