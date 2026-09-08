@@ -306,9 +306,9 @@ export function ProductDetail({
   /** only rendered when the item is actually low on stock */
   const LowStock = () =>
     lowStock ? (
-      <p className="flex items-center gap-1.5 font-bold text-red-500">
-        <Flame className="h-4 w-4" />
-        Only <span className="text-lg leading-none">{stockLeft}</span> left
+      <p className="flex items-center gap-1 whitespace-nowrap text-sm font-bold text-red-500">
+        <Flame className="h-3.5 w-3.5 shrink-0" />
+        Only {stockLeft} left
       </p>
     ) : null;
 
@@ -544,11 +544,14 @@ export function ProductDetail({
             </div>
           )}
 
-          <div className="mt-3 space-y-2">
-            <LowStock />
-            <div className="flex items-center justify-between">
-              <Price big />
-              <div className="flex items-center gap-2">
+          <div className="mt-3 flex items-end justify-between gap-3">
+            <Price big />
+            <div className="text-right">
+              {/* low-stock sits right above the qty stepper */}
+              <div className="flex justify-end">
+                <LowStock />
+              </div>
+              <div className="mt-1 flex items-center justify-end gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-[var(--sf-muted)]">Qty</span>
                 <Qty />
               </div>
@@ -628,9 +631,7 @@ export function ProductDetail({
                     </span>
                   )}
                   {lowStock && (
-                    <span className="font-semibold text-red-600">
-                      low stock - {String(stockLeft).padStart(2, "0")}
-                    </span>
+                    <span className="font-semibold text-red-600">Only {stockLeft} left</span>
                   )}
                 </div>
               )}
