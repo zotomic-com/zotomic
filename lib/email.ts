@@ -93,11 +93,15 @@ export interface SendArgs {
   attachments?: EmailAttachment[];
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo, from, account, attachments }: SendArgs): Promise<boolean> {
+/** Detailed send — returns why it failed so callers can surface it. */
+export async function sendEmailResult(
+  { to, subject, html, text, replyTo, from, account, attachments }: SendArgs,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const { t, from: accountFrom } = transportFor(account);
   if (!t) {
-    console.info(`[email skipped — not configured] account=${account ?? "default"} to=${to} subject="${subject}"`);
-    return false;
+    const key = account ? `MAIL_${account.toUpperCase()}_USER / _PASS` : "GMAIL_USER / GMAIL_APP_PASSWORD";
+    console.info(`[email skipped — not configured] account=${account ?? "default"} to=${to}`);
+    return { ok: false, error: `Mail account not configured (${key}).` };
   }
   try {
     await t.sendMail({
@@ -113,11 +117,16 @@ export async function sendEmail({ to, subject, html, text, replyTo, from, accoun
         contentType: a.contentType,
       })),
     });
-    return true;
+    return { ok: true };
   } catch (e) {
-    console.error("email send failed:", (e as Error).message);
-    return false;
+    const msg = (e as Error).message || String(e);
+    console.error("email send failed:", msg);
+    return { ok: false, error: `SMTP: ${msg}` };
   }
+}
+
+export async function sendEmail(args: SendArgs): Promise<boolean> {
+  return (await sendEmailResult(args)).ok;
 }
 
 export const NOTIFICATION_EMAIL =

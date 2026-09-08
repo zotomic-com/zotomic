@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-server";
 import { getAdminSupabase } from "@/lib/supabase";
-import { sendEmail } from "@/lib/email";
+import { sendEmailResult } from "@/lib/email";
 import {
   buildInvoicePdf,
   getInvoice,
@@ -202,14 +202,14 @@ export async function sendInvoice(
     console.error("invoice pdf build failed, sending without attachment:", (e as Error).message);
   }
 
-  const sent = await sendEmail({
+  const sent = await sendEmailResult({
     to,
     account: "invoice",
     subject: `Invoice ${inv.invoiceNumber} from Zotomic`,
     html: renderInvoiceHtml(inv),
     attachments,
   });
-  if (!sent) return { error: "Email is not configured (MAIL_INVOICE_* missing) or the send failed." };
+  if (!sent.ok) return { error: sent.error };
 
   await db
     .from("invoices")
