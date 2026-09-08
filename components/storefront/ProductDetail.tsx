@@ -468,7 +468,7 @@ export function ProductDetail({
 
         {/* colour palette — left-centre, inside the image frame */}
         {colourOpt && (
-          <div className="absolute left-3 top-1/2 z-10 -translate-y-1/2">
+          <div className="absolute left-4 top-1/2 z-10 -translate-y-1/2">
             <ColourCircles overlay />
           </div>
         )}
