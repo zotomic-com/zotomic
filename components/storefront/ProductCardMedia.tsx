@@ -57,6 +57,7 @@ export function ProductCardMedia({
   const [quick, setQuick] = useState(false);
   const [added, setAdded] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [imgDark, setImgDark] = useState(true); // is the photo dark? → white overlay text
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!quick) return;
@@ -65,12 +66,36 @@ export function ProductCardMedia({
     return () => document.removeEventListener("keydown", onKey);
   }, [quick]);
 
+  // sample the image brightness so the corner text is always readable
+  useEffect(() => {
+    if (!product.image) return;
+    const im = new Image();
+    im.crossOrigin = "anonymous";
+    im.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = c.height = 12;
+        const ctx = c.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(im, 0, 0, 12, 12);
+        const { data } = ctx.getImageData(0, 0, 12, 12);
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        setImgDark(sum / (data.length / 4) < 145);
+      } catch {
+        /* cross-origin blocked — keep the default */
+      }
+    };
+    im.src = cldUrl(product.image, 40);
+  }, [product.image]);
+
   const soldOut = product.stockLeft === 0;
   const price = product.salePrice ?? product.price;
   const lowStock = product.stockLeft != null && product.stockLeft > 0 && product.stockLeft <= 5;
 
+  const overlayText = imgDark ? "text-white [text-shadow:0_1px_3px_rgba(0,0,0,.5)]" : "text-neutral-900 [text-shadow:0_1px_2px_rgba(255,255,255,.6)]";
   const iconBtn =
-    "flex h-8 w-8 items-center justify-center rounded-full bg-[var(--sf-bg)]/90 text-[var(--sf-fg)] shadow-sm backdrop-blur transition-colors hover:text-[var(--sf-accent)]";
+    "flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-900 shadow-md ring-1 ring-black/5 transition-colors hover:text-[var(--sf-accent)]";
 
   const quickAdd = () => {
     if (soldOut) return;
@@ -141,25 +166,23 @@ export function ProductCardMedia({
         </span>
       ) : null}
 
-      {/* bottom-left: rating · sold · low stock */}
+      {/* bottom-left: rating · sold · low stock — plain text, colour tracks the photo */}
       {(product.reviewCount > 0 || product.sold > 0 || lowStock) && (
-        <div className="pointer-events-none absolute bottom-2.5 left-2.5 flex flex-wrap items-center gap-1.5">
+        <div className={`pointer-events-none absolute bottom-2.5 left-2.5 flex flex-wrap items-center gap-2 text-[11px] font-semibold ${overlayText}`}>
           {product.reviewCount > 0 && (
-            <span className="flex items-center gap-0.5 rounded-full bg-[var(--sf-bg)]/90 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--sf-fg)] backdrop-blur">
+            <span className="flex items-center gap-0.5">
               <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
               {product.rating.toFixed(1)}
             </span>
           )}
           {product.sold > 0 && (
-            <span className="flex items-center gap-0.5 rounded-full bg-[var(--sf-bg)]/90 px-1.5 py-0.5 text-[11px] font-medium text-[var(--sf-muted)] backdrop-blur">
+            <span className="flex items-center gap-0.5">
               <Flame className="h-3 w-3" />
-              {product.sold}
+              {product.sold} sold
             </span>
           )}
           {lowStock && (
-            <span className="rounded-full bg-red-600/95 px-1.5 py-0.5 text-[11px] font-semibold text-white">
-              {product.stockLeft} left
-            </span>
+            <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-white [text-shadow:none]">{product.stockLeft} left</span>
           )}
         </div>
       )}

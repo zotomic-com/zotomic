@@ -272,12 +272,9 @@ export function ProductDetail({
     </div>
   );
 
-  /** single rounded pill split into Add to cart | Buy now — blue glass */
-  const BuyBar = ({ glass }: { glass?: boolean }) => {
+  /** single rounded pill split into Add to cart | Buy now — solid blue */
+  const BuyBar = () => {
     const disabled = soldOut || selected?.soldOut;
-    const pill =
-      "flex w-full overflow-hidden rounded-full text-white shadow-lg " +
-      (glass ? "border border-white/25 bg-[var(--sf-accent)]/85 backdrop-blur-xl" : "bg-[var(--sf-accent)]");
     if (disabled) {
       return (
         <div className="w-full rounded-full bg-[var(--sf-line)] py-3.5 text-center text-sm font-semibold text-[var(--sf-muted)]">
@@ -289,16 +286,14 @@ export function ProductDetail({
       return (
         <button
           onClick={() => setSheet(null)}
-          className={`w-full rounded-full py-3.5 text-center text-sm font-bold text-white shadow-lg ${
-            glass ? "border border-white/25 bg-[var(--sf-accent)]/85 backdrop-blur-xl" : "bg-[var(--sf-accent)]"
-          }`}
+          className="w-full rounded-full bg-[var(--sf-accent)] py-3.5 text-center text-sm font-bold text-white shadow-lg"
         >
           Select {options.map((o) => o.name.toLowerCase()).join(" & ")}
         </button>
       );
     }
     return (
-      <div className={pill} style={glass ? { WebkitBackdropFilter: "blur(16px)" } : undefined}>
+      <div className="flex w-full overflow-hidden rounded-full bg-[var(--sf-accent)] text-white shadow-lg">
         <button onClick={() => add(false)} className="flex-1 py-3.5 text-sm font-bold">
           {added ? "Added ✓" : "Add to cart"}
         </button>
@@ -368,28 +363,30 @@ export function ProductDetail({
           )}
         </div>
 
-        {/* top bar — theme-adaptive glass buttons */}
+        {/* top bar — solid white circular buttons */}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between p-3">
-          <button onClick={back} aria-label="Back" className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sf-bg)]/75 text-[var(--sf-fg)] shadow backdrop-blur-md">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="pointer-events-auto flex items-center gap-2">
-            <button onClick={() => setZoom(true)} aria-label="Zoom" className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sf-bg)]/75 text-[var(--sf-fg)] shadow backdrop-blur-md">
-              <Maximize2 className="h-4 w-4" />
-            </button>
-            <WishlistHeart
-              storeSlug={storeSlug}
-              item={{ id: product.id, name: product.name, price, image: images[0] ?? null, slug: product.slug }}
-              size={18}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sf-bg)]/75 text-[var(--sf-fg)] shadow backdrop-blur-md"
-            />
-            <MenuDrawer
-              nav={nav}
-              basePath={basePath}
-              storeSlug={storeSlug}
-              triggerClassName="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sf-bg)]/75 text-[var(--sf-fg)] shadow backdrop-blur-md"
-            />
-          </div>
+          {(() => {
+            const b = "flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-900 shadow-md ring-1 ring-black/5";
+            return (
+              <>
+                <button onClick={back} aria-label="Back" className={`pointer-events-auto ${b}`}>
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <div className="pointer-events-auto flex items-center gap-2">
+                  <button onClick={() => setZoom(true)} aria-label="Zoom" className={b}>
+                    <Maximize2 className="h-4 w-4" />
+                  </button>
+                  <WishlistHeart
+                    storeSlug={storeSlug}
+                    item={{ id: product.id, name: product.name, price, image: images[0] ?? null, slug: product.slug }}
+                    size={18}
+                    className={b}
+                  />
+                  <MenuDrawer nav={nav} basePath={basePath} storeSlug={storeSlug} triggerClassName={b} />
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* image dots */}
@@ -401,11 +398,8 @@ export function ProductDetail({
           </div>
         )}
 
-        {/* glass info panel — frosted, adapts to theme, always legible */}
-        <div
-          style={{ WebkitBackdropFilter: "blur(20px)" }}
-          className="absolute inset-x-2 bottom-[86px] z-10 max-h-[58%] overflow-y-auto rounded-2xl border border-[var(--sf-line)]/50 bg-[var(--sf-bg)]/75 p-4 text-[var(--sf-fg)] shadow-xl backdrop-blur-xl"
-        >
+        {/* solid info panel */}
+        <div className="absolute inset-x-2 bottom-[86px] z-10 max-h-[58%] overflow-y-auto rounded-2xl border border-[var(--sf-line)] bg-[var(--sf-bg)] p-4 text-[var(--sf-fg)] shadow-xl">
           {product.badge && (
             <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${BADGE_BG[product.badge]}`}>
               {BADGE[product.badge]}
@@ -443,9 +437,9 @@ export function ProductDetail({
           </div>
         </div>
 
-        {/* blue-glass buy bar — overlaps the image bottom */}
+        {/* buy bar — solid blue, overlaps the image bottom */}
         <div className="absolute inset-x-0 bottom-0 z-10 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
-          <BuyBar glass />
+          <BuyBar />
         </div>
       </div>
 

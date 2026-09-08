@@ -24,8 +24,9 @@ export function ImageZoom({
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const lastTap = useRef(0);
-  const swipe = useRef<number | null>(null);
+  const gesture = useRef<{ x: number; y: number } | null>(null);
   const [swipeY, setSwipeY] = useState(0);
+  const [swipeX, setSwipeX] = useState(0);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -59,21 +60,36 @@ export function ImageZoom({
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (scale > 1) drag.current = { x: e.clientX, y: e.clientY, ox: pos.x, oy: pos.y };
-    else swipe.current = e.clientY;
+    else gesture.current = { x: e.clientX, y: e.clientY };
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (drag.current) {
       setPos({ x: drag.current.ox + (e.clientX - drag.current.x), y: drag.current.oy + (e.clientY - drag.current.y) });
-    } else if (swipe.current != null) {
-      const dy = e.clientY - swipe.current;
-      if (dy > 0) setSwipeY(dy);
+      return;
+    }
+    if (!gesture.current) return;
+    const dx = e.clientX - gesture.current.x;
+    const dy = e.clientY - gesture.current.y;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      setSwipeX(dx);
+      setSwipeY(0);
+    } else if (dy > 0) {
+      setSwipeY(dy);
+      setSwipeX(0);
     }
   };
   const onPointerUp = () => {
-    if (swipe.current != null && swipeY > 120) onClose();
+    if (gesture.current) {
+      if (Math.abs(swipeX) > 60 && images.length > 1) {
+        setI((v) => (swipeX < 0 ? Math.min(images.length - 1, v + 1) : Math.max(0, v - 1)));
+      } else if (swipeY > 110) {
+        onClose();
+      }
+    }
     drag.current = null;
-    swipe.current = null;
+    gesture.current = null;
     setSwipeY(0);
+    setSwipeX(0);
   };
   const onTap = () => {
     const now = Date.now();
@@ -106,8 +122,8 @@ export function ImageZoom({
         draggable={false}
         className="max-h-full max-w-full object-contain"
         style={{
-          transform: `translate(${pos.x}px, ${pos.y + swipeY}px) scale(${scale})`,
-          transition: drag.current || swipe.current != null ? "none" : "transform .28s ease",
+          transform: `translate(${pos.x + swipeX * 0.4}px, ${pos.y + swipeY}px) scale(${scale})`,
+          transition: drag.current || gesture.current ? "none" : "transform .28s ease",
           cursor: scale > 1 ? "grab" : "zoom-in",
         }}
       />

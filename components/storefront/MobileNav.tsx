@@ -44,7 +44,7 @@ export function MobileNav({ storeSlug, basePath }: { storeSlug: string; basePath
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:hidden">
-      <div className="relative flex w-full max-w-sm items-center justify-around rounded-full border border-[var(--sf-line)] bg-[var(--sf-bg)]/95 px-2 py-1.5 shadow-[var(--sf-shadow)] backdrop-blur">
+      <div className="relative flex w-full max-w-sm items-center justify-around rounded-full border border-[var(--sf-line)] bg-[var(--sf-bg)] px-2 py-1.5 shadow-[var(--sf-shadow)]">
         {side.slice(0, 2).map((it) => (
           <NavItem key={it.label} {...it} active={it.exact ? pathname === it.href : pathname.startsWith(it.href)} />
         ))}

@@ -63,7 +63,7 @@ export function StoreShell({
         </div>
       )}
 
-      <header className="sticky top-0 z-40 border-b border-[var(--sf-line)] bg-[var(--sf-bg)]/90 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-[var(--sf-line)] bg-[var(--sf-bg)]">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
           <Link href={href("/")} className="flex shrink-0 items-center gap-2 font-extrabold tracking-tight">
             {brand.logoUrl ? (
