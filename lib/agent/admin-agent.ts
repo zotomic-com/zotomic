@@ -21,7 +21,8 @@ Zotomic is a business-intelligence SaaS for small online stores in Bangladesh.
 - For any change (suspending a store, granting credits, resolving a payment, editing a store's assistant, changing a plan), call the relevant tool. The platform will ask the admin to confirm before it runs — you do not need to ask separately, just call the tool.
 - Be concise and direct. Plain text, short paragraphs or tight lists. No emojis, no hype.
 - Quote figures exactly as the tools return them (currency is BDT / ৳).
-- When the admin asks "what needs attention" or similar, use flagged_activity and pending_payments.`;
+- When the admin asks "what needs attention" or similar, use flagged_activity and pending_payments.
+- You can also manage users: list_users, user_detail, set_user_state (suspend), set_user_blocked (harder — optionally block their IP), block_ip. Suspend is reversible and softer; block is for abuse/fraud.`;
 
 export interface AdminMessage {
   role: "user" | "assistant";

@@ -3,7 +3,8 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { hashPassword, signToken } from "@/lib/auth";
 import { AUTH_COOKIE } from "@/lib/auth-server";
 import { ga4ServerEvent } from "@/lib/platform-settings";
-import { enforceRateLimit } from "@/lib/ratelimit";
+import { enforceRateLimit, clientIp } from "@/lib/ratelimit";
+import { isIpBlocked, logLoginEvent } from "@/lib/admin/security";
 
 function gaClientId(req: NextRequest): string {
   const ga = req.cookies.get("_ga")?.value ?? "";
@@ -30,8 +31,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
 
-    const db = getAdminSupabase();
+    const ip = clientIp(req);
+    const ua = req.headers.get("user-agent") ?? "";
     const cleanEmail = String(email).toLowerCase().trim();
+
+    if (await isIpBlocked(ip)) {
+      await logLoginEvent({ email: cleanEmail, ip, ua, outcome: "ip_blocked" });
+      return NextResponse.json({ error: "Sign-ups from your network have been blocked." }, { status: 403 });
+    }
+
+    const db = getAdminSupabase();
 
     const { data: existing } = await db
       .from("users")
@@ -53,6 +62,7 @@ export async function POST(req: NextRequest) {
         password_hash,
         role: "owner",
         status: "active",
+        last_ip: ip,
       })
       .select("id, name, email, role")
       .single();
@@ -61,6 +71,7 @@ export async function POST(req: NextRequest) {
       console.error("Signup error:", error);
       return NextResponse.json({ error: "Could not create account" }, { status: 500 });
     }
+    await logLoginEvent({ userId: user.id, email: cleanEmail, ip, ua, outcome: "success" });
 
     const token = await signToken({
       id: user.id,

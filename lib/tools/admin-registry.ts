@@ -59,6 +59,40 @@ async function writeAudit(businessId: string, adminId: string, action: string, s
   });
 }
 
+async function writeUserAudit(adminId: string, action: string, summary: string, userId?: string) {
+  await getAdminSupabase().from("audit_logs").insert({
+    actor_id: adminId,
+    actor_type: "admin",
+    action,
+    target_type: "user",
+    target_id: userId ?? null,
+    summary: `Admin assistant: ${summary}`,
+  });
+}
+
+async function resolveUser(
+  ref: string,
+): Promise<{ id: string; name: string; email: string; role: string; status: string; blocked: boolean; last_ip: string | null } | { error: string }> {
+  const db = getAdminSupabase();
+  const r = ref.trim();
+  if (!r) return { error: "Give a user email or id." };
+  const uuid = /^[0-9a-f-]{36}$/i.test(r);
+  const q = db.from("users").select("id, name, email, role, status, blocked, last_ip");
+  const { data } = uuid ? await q.eq("id", r).limit(2) : await q.ilike("email", `%${r}%`).limit(5);
+  if (!data?.length) return { error: `No user matches "${ref}".` };
+  if (data.length > 1) return { error: `Several users match: ${data.map((u) => u.email).join(", ")}. Be specific.` };
+  const u = data[0];
+  return {
+    id: u.id as string,
+    name: u.name as string,
+    email: u.email as string,
+    role: u.role as string,
+    status: u.status as string,
+    blocked: !!u.blocked,
+    last_ip: (u.last_ip as string) ?? null,
+  };
+}
+
 /* ─────────────────────────────  read tools  ───────────────────────────── */
 
 const platform_overview: AdminToolDef = {
@@ -721,9 +755,171 @@ const message_store_owner: AdminToolDef = {
   },
 };
 
+/* ────────────────────────  user management  ──────────────────────── */
+
+const list_users: AdminToolDef = {
+  name: "list_users",
+  description:
+    "Find platform users (store owners, staff, admins). Filter by email/name text, role (owner/staff/admin) or state (active/suspended/blocked). Returns role, state, stores and last login.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string" },
+      role: { type: "string", enum: ["owner", "staff", "admin"] },
+      state: { type: "string", enum: ["active", "suspended", "blocked"] },
+      limit: { type: "number" },
+    },
+  },
+  async handler(_a, args) {
+    const db = getAdminSupabase();
+    let q = db
+      .from("users")
+      .select("id, name, email, role, status, blocked, last_login, last_ip")
+      .order("created_at", { ascending: false });
+    if (s(args.query)) q = q.or(`email.ilike.%${s(args.query)}%,name.ilike.%${s(args.query)}%`);
+    if (s(args.role)) q = q.eq("role", s(args.role));
+    const { data } = await q.limit(Math.min(nz(args.limit) ?? 25, 100));
+    let rows = (data ?? []).map((u) => ({
+      email: u.email as string,
+      name: u.name as string,
+      role: u.role as string,
+      state: u.blocked ? "blocked" : (u.status as string) === "suspended" ? "suspended" : "active",
+      lastLogin: u.last_login ?? null,
+      lastIp: (u.last_ip as string) ?? null,
+    }));
+    if (s(args.state)) rows = rows.filter((r) => r.state === s(args.state));
+    return { users: rows };
+  },
+};
+
+const user_detail: AdminToolDef = {
+  name: "user_detail",
+  description: "Everything about ONE user (by email or id): role, state, stores they belong to, last login + IP, and their recent login attempts.",
+  risk: "read",
+  parameters: { type: "object", properties: { user: { type: "string" } }, required: ["user"] },
+  async handler(_a, args) {
+    const u = await resolveUser(s(args.user));
+    if ("error" in u) return u;
+    const db = getAdminSupabase();
+    const [{ data: members }, { data: events }, { data: full }] = await Promise.all([
+      db.from("business_members").select("role, businesses(name)").eq("user_id", u.id),
+      db.from("user_login_events").select("outcome, ip, created_at").eq("user_id", u.id).order("created_at", { ascending: false }).limit(10),
+      db.from("users").select("blocked_reason, notes, last_login, created_at").eq("id", u.id).single(),
+    ]);
+    return {
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      state: u.blocked ? "blocked" : u.status === "suspended" ? "suspended" : "active",
+      blockedReason: full?.blocked_reason ?? null,
+      notes: full?.notes ?? null,
+      joined: full?.created_at,
+      lastLogin: full?.last_login ?? null,
+      lastIp: u.last_ip,
+      stores: (members ?? []).map((m) => ({
+        name: ((Array.isArray(m.businesses) ? m.businesses[0] : m.businesses) as { name?: string } | null)?.name ?? "—",
+        role: m.role,
+      })),
+      recentLogins: (events ?? []).map((e) => ({ outcome: e.outcome, ip: e.ip, at: e.created_at })),
+    };
+  },
+};
+
+const set_user_state: AdminToolDef = {
+  name: "set_user_state",
+  description: "Suspend or reactivate a user account (by email or id). Suspended users can't sign in.",
+  risk: "consequential",
+  parameters: {
+    type: "object",
+    properties: { user: { type: "string" }, state: { type: "string", enum: ["active", "suspended"] } },
+    required: ["user", "state"],
+  },
+  async handler(adminId, args) {
+    const u = await resolveUser(s(args.user));
+    if ("error" in u) return u;
+    if (u.id === adminId) return { error: "That's your own account." };
+    const status = s(args.state) === "suspended" ? "suspended" : "active";
+    await getAdminSupabase().from("users").update({ status, updated_at: new Date().toISOString() }).eq("id", u.id);
+    await writeUserAudit(adminId, "user.status", `${u.email} → ${status}`, u.id);
+    return { user: u.email, state: status };
+  },
+};
+
+const set_user_blocked: AdminToolDef = {
+  name: "set_user_blocked",
+  description:
+    "Block or unblock a user (harder than suspend — an active session ends on the next request). Optionally also block the IP address they last logged in from.",
+  risk: "consequential",
+  parameters: {
+    type: "object",
+    properties: {
+      user: { type: "string" },
+      blocked: { type: "boolean" },
+      reason: { type: "string" },
+      alsoBlockIp: { type: "boolean" },
+    },
+    required: ["user", "blocked"],
+  },
+  async handler(adminId, args) {
+    const u = await resolveUser(s(args.user));
+    if ("error" in u) return u;
+    if (u.id === adminId) return { error: "That's your own account." };
+    const blocked = args.blocked === true;
+    const db = getAdminSupabase();
+    await db
+      .from("users")
+      .update({
+        blocked,
+        blocked_reason: blocked ? s(args.reason) || "Blocked by Zotomic." : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", u.id);
+    let ip: string | null = null;
+    if (blocked && args.alsoBlockIp === true && u.last_ip) {
+      await db.from("blocked_ips").upsert({ ip: u.last_ip, reason: `User ${u.email}`, blocked_by: adminId }, { onConflict: "ip" });
+      const { invalidateBlockedIpCache } = await import("@/lib/admin/security");
+      invalidateBlockedIpCache();
+      ip = u.last_ip;
+    }
+    await writeUserAudit(adminId, "user.blocked", `${u.email} ${blocked ? "blocked" : "unblocked"}${ip ? ` + IP ${ip}` : ""}`, u.id);
+    return { user: u.email, blocked, blockedIp: ip };
+  },
+};
+
+const block_ip: AdminToolDef = {
+  name: "block_ip",
+  description: "Block an IPv4 address or CIDR range (e.g. 203.0.113.4 or 203.0.113.0/24) from signing in or signing up. Pass unblock:true to remove it.",
+  risk: "consequential",
+  parameters: {
+    type: "object",
+    properties: { ip: { type: "string" }, reason: { type: "string" }, unblock: { type: "boolean" } },
+    required: ["ip"],
+  },
+  async handler(adminId, args) {
+    const ip = s(args.ip);
+    if (!/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(ip)) return { error: "Not a valid IPv4 address or CIDR." };
+    const db = getAdminSupabase();
+    if (args.unblock === true) {
+      await db.from("blocked_ips").delete().ilike("ip", ip);
+    } else {
+      await db.from("blocked_ips").upsert({ ip, reason: s(args.reason) || null, blocked_by: adminId }, { onConflict: "ip" });
+    }
+    const { invalidateBlockedIpCache } = await import("@/lib/admin/security");
+    invalidateBlockedIpCache();
+    await writeUserAudit(adminId, args.unblock ? "ip.unblocked" : "ip.blocked", `${args.unblock ? "Unblocked" : "Blocked"} IP ${ip}`);
+    return { ip, blocked: args.unblock !== true };
+  },
+};
+
 /* ─────────────────────────────  registry  ───────────────────────────── */
 
 export const ADMIN_TOOLS: AdminToolDef[] = [
+  list_users,
+  user_detail,
+  set_user_state,
+  set_user_blocked,
+  block_ip,
   platform_overview,
   list_stores,
   store_detail,
