@@ -48,7 +48,10 @@ export async function createProduct(formData: FormData) {
       slug,
       status: String(formData.get("status") ?? "draft"),
       category: String(formData.get("category") ?? "") || null,
+      description: String(formData.get("description") ?? "").trim().slice(0, 5000) || null,
+      sku: String(formData.get("sku") ?? "").trim().slice(0, 60) || null,
       price: num(formData.get("price")) ?? 0,
+      sale_price: num(formData.get("sale_price")),
       buying_price: num(formData.get("buying_price")),
       marketing_cost: num(formData.get("marketing_cost")) ?? 0,
       stock_qty: num(formData.get("stock_qty")) ?? 0,
@@ -67,7 +70,7 @@ export async function createProduct(formData: FormData) {
     summary: `Created product "${name}"`,
   });
   revalidatePath("/app/products");
-  return { ok: true };
+  return { ok: true, id: data.id as string };
 }
 
 export async function updateProduct(id: string, formData: FormData) {
@@ -216,4 +219,136 @@ export async function deleteProduct(
   await writeAudit(businessId, user.id, "product.deleted", { targetType: "product", targetId: id, summary: `Deleted "${p.name}"` });
   revalidatePath("/app/products");
   return { ok: true };
+}
+
+/* ─── Detail-page inline editor + bulk actions ─────────────────────────────── */
+
+const ALLOWED_FIELDS = new Set([
+  "name",
+  "description",
+  "category",
+  "sku",
+  "status",
+  "price",
+  "sale_price",
+  "buying_price",
+  "marketing_cost",
+  "is_hot",
+  "hide_badges",
+  "image_urls",
+]);
+const NUM_FIELDS = new Set(["price", "sale_price", "buying_price", "marketing_cost"]);
+
+/** Partial update from the product detail page — one section at a time. */
+export async function updateProductFields(
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<{ error: string } | { ok: true }> {
+  const { businessId, user, db } = await requireBusiness();
+  const { productImages } = await getPlanLimits(businessId);
+
+  const { data: before } = await db
+    .from("products")
+    .select("id, name, status")
+    .eq("business_id", businessId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!before) return { error: "Product not found" };
+
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (!ALLOWED_FIELDS.has(k)) continue;
+    if (k === "image_urls") {
+      clean[k] = Array.isArray(v) ? (v as unknown[]).filter((s) => typeof s === "string").slice(0, productImages) : [];
+    } else if (NUM_FIELDS.has(k)) {
+      const n = v === "" || v == null ? null : Number(v);
+      clean[k] = Number.isFinite(n as number) ? n : null;
+    } else if (k === "is_hot" || k === "hide_badges") {
+      clean[k] = !!v;
+    } else if (k === "status") {
+      clean[k] = ["active", "draft", "archived"].includes(String(v)) ? v : before.status;
+    } else {
+      clean[k] = String(v ?? "").trim().slice(0, k === "description" ? 5000 : 200) || null;
+    }
+  }
+  if (clean.name === null) delete clean.name; // name can't be blanked
+
+  if (!Object.keys(clean).length) return { ok: true };
+
+  const { error } = await db.from("products").update(clean).eq("business_id", businessId).eq("id", id);
+  if (error) return { error: "Could not save changes." };
+
+  await writeAudit(businessId, user.id, "product.updated", {
+    targetType: "product",
+    targetId: id,
+    summary: `Edited ${Object.keys(clean).join(", ")}`,
+  });
+  revalidatePath("/app/products");
+  revalidatePath(`/app/products/${id}`);
+  return { ok: true };
+}
+
+export async function bulkUpdateProducts(
+  ids: string[],
+  patch: { status?: string; category?: string | null },
+): Promise<{ error: string } | { ok: true; count: number }> {
+  const { businessId, user, db } = await requireBusiness();
+  const list = (ids ?? []).filter(Boolean).slice(0, 500);
+  if (!list.length) return { error: "Nothing selected." };
+
+  const clean: Record<string, unknown> = {};
+  if (patch.status && ["active", "draft", "archived"].includes(patch.status)) {
+    clean.status = patch.status;
+    if (patch.status === "archived") clean.visible = false;
+    if (patch.status === "active") clean.visible = true;
+  }
+  if (patch.category !== undefined) clean.category = patch.category ? String(patch.category).slice(0, 80) : null;
+  if (!Object.keys(clean).length) return { error: "No change to apply." };
+
+  const { error } = await db.from("products").update(clean).eq("business_id", businessId).in("id", list);
+  if (error) return { error: "Bulk update failed." };
+
+  await writeAudit(businessId, user.id, "products.bulk_updated", {
+    targetType: "product",
+    summary: `${list.length} products — ${Object.entries(clean).map(([k, v]) => `${k}=${v}`).join(", ")}`,
+  });
+  revalidatePath("/app/products");
+  return { ok: true, count: list.length };
+}
+
+/** Delete selected products; any with order history is archived instead. */
+export async function bulkRemoveProducts(
+  ids: string[],
+): Promise<{ error: string } | { ok: true; deleted: number; archived: number }> {
+  const { businessId, user, db } = await requireBusiness();
+  const list = [...new Set((ids ?? []).filter(Boolean))].slice(0, 200);
+  if (!list.length) return { error: "Nothing selected." };
+
+  const { data: sold } = await db
+    .from("order_items")
+    .select("product_id")
+    .eq("business_id", businessId)
+    .in("product_id", list);
+  const hasOrders = new Set((sold ?? []).map((r) => r.product_id as string));
+
+  const toArchive = list.filter((id) => hasOrders.has(id));
+  const toDelete = list.filter((id) => !hasOrders.has(id));
+
+  if (toArchive.length) {
+    await db
+      .from("products")
+      .update({ status: "archived", visible: false })
+      .eq("business_id", businessId)
+      .in("id", toArchive);
+  }
+  if (toDelete.length) {
+    await db.from("products").delete().eq("business_id", businessId).in("id", toDelete);
+  }
+
+  await writeAudit(businessId, user.id, "products.bulk_removed", {
+    targetType: "product",
+    summary: `${toDelete.length} deleted, ${toArchive.length} archived (had orders)`,
+  });
+  revalidatePath("/app/products");
+  return { ok: true, deleted: toDelete.length, archived: toArchive.length };
 }
