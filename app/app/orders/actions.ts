@@ -107,3 +107,30 @@ export async function bookCourier(orderId: string, provider: string) {
   revalidatePath(`/app/orders/${orderId}`);
   return { ok: true, tracking: res.trackingCode ?? res.consignmentId };
 }
+
+export async function bulkSetOrderStatus(
+  ids: string[],
+  status: string,
+): Promise<{ error: string } | { ok: true; count: number }> {
+  if (!STATUSES.includes(status)) return { error: "Invalid status" };
+  const { businessId, user, db } = await requireBusiness();
+  const list = [...new Set((ids ?? []).filter(Boolean))].slice(0, 200);
+  if (!list.length) return { error: "Nothing selected." };
+
+  const patch: Record<string, unknown> = { status };
+  if (status === "delivered") {
+    patch.delivered_at = new Date().toISOString();
+    patch.payment_status = "paid";
+  }
+  if (status === "cancelled") patch.cancelled_at = new Date().toISOString();
+
+  const { error } = await db.from("orders").update(patch).eq("business_id", businessId).in("id", list);
+  if (error) return { error: "Bulk update failed." };
+
+  await writeAudit(businessId, user.id, "orders.bulk_status_changed", {
+    targetType: "order",
+    summary: `${list.length} orders → ${status}`,
+  });
+  revalidatePath("/app/orders");
+  return { ok: true, count: list.length };
+}
