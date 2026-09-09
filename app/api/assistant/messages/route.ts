@@ -35,6 +35,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: budget.reason }, { status: 429 });
   }
 
+  // admin kill switch (set from the Admin Assistant)
+  const { data: bizFlags } = await db
+    .from("businesses")
+    .select("assistant_suspended, assistant_suspended_reason")
+    .eq("id", tenant.businessId)
+    .maybeSingle();
+  if (bizFlags?.assistant_suspended) {
+    return NextResponse.json(
+      { error: (bizFlags.assistant_suspended_reason as string) || "Your assistant has been paused. Contact Zotomic support." },
+      { status: 403 },
+    );
+  }
+
   const billing = await getBilling(tenant.businessId);
   const plan = billing.plan;
 
