@@ -204,6 +204,12 @@ export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send(input);
+                }
+              }}
               placeholder="Ask about a product or order…"
               maxLength={1000}
               className="min-w-0 flex-1 rounded-full border border-[var(--sf-line)] bg-[var(--sf-bg)] px-4 py-2 text-sm outline-none focus:border-[var(--sf-accent)]"
