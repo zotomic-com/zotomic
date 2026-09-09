@@ -393,6 +393,484 @@ const get_store_assistant_config: AdminToolDef = {
   },
 };
 
+/* ───────────────  per-store operational data (read-only)  ─────────────── */
+
+const DAY = 86_400_000;
+
+async function soldByProduct(businessId: string, ids: string[], sinceIso: string) {
+  const db = getAdminSupabase();
+  const map = new Map<string, { units: number; revenue: number }>();
+  if (!ids.length) return map;
+  const { data } = await db
+    .from("order_items")
+    .select("product_id, qty, line_total, orders!inner(placed_at, status, business_id)")
+    .eq("business_id", businessId)
+    .in("product_id", ids)
+    .gte("orders.placed_at", sinceIso);
+  for (const it of data ?? []) {
+    const o = (Array.isArray(it.orders) ? it.orders[0] : it.orders) as { status?: string } | null;
+    if (o?.status === "cancelled") continue;
+    const cur = map.get(it.product_id as string) ?? { units: 0, revenue: 0 };
+    cur.units += Number(it.qty);
+    cur.revenue += Number(it.line_total);
+    map.set(it.product_id as string, cur);
+  }
+  return map;
+}
+
+const store_products: AdminToolDef = {
+  name: "store_products",
+  description:
+    "List a store's products (by store name or id). Optional: query text, status (active/draft/archived), lowStock. Returns price, cost, margin %, stock and units sold in the last 30 days.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: {
+      store: { type: "string" },
+      query: { type: "string" },
+      status: { type: "string", enum: ["active", "draft", "archived"] },
+      lowStock: { type: "boolean" },
+      limit: { type: "number" },
+    },
+    required: ["store"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    let q = db
+      .from("products")
+      .select("id, name, sku, status, category, price, sale_price, buying_price, stock_qty, track_inventory, has_variants")
+      .eq("business_id", st.id)
+      .order("created_at", { ascending: false });
+    if (s(args.status)) q = q.eq("status", s(args.status));
+    if (s(args.query)) q = q.or(`name.ilike.%${s(args.query)}%,sku.ilike.%${s(args.query)}%,category.ilike.%${s(args.query)}%`);
+    const { data } = await q.limit(Math.min(nz(args.limit) ?? 40, 100));
+    let rows = data ?? [];
+    if (args.lowStock === true) rows = rows.filter((p) => p.track_inventory && Number(p.stock_qty) < 10);
+    const sold = await soldByProduct(st.id, rows.map((p) => p.id as string), new Date(Date.now() - 30 * DAY).toISOString());
+    return {
+      store: st.name,
+      products: rows.map((p) => {
+        const eff = p.sale_price != null && p.sale_price < p.price ? Number(p.sale_price) : Number(p.price);
+        const cost = p.buying_price != null ? Number(p.buying_price) : null;
+        return {
+          id: p.id,
+          name: p.name,
+          sku: p.sku ?? null,
+          status: p.status,
+          category: p.category ?? null,
+          price: money(Number(p.price), st.currency),
+          salePrice: p.sale_price != null ? money(Number(p.sale_price), st.currency) : null,
+          cost: cost != null ? money(cost, st.currency) : null,
+          marginPct: cost != null && eff > 0 ? Math.round(((eff - cost) / eff) * 100) : null,
+          stock: p.track_inventory ? Number(p.stock_qty) : "not tracked",
+          hasVariants: !!p.has_variants,
+          sold30d: sold.get(p.id as string)?.units ?? 0,
+        };
+      }),
+    };
+  },
+};
+
+const store_product_detail: AdminToolDef = {
+  name: "store_product_detail",
+  description: "Full detail for ONE product in a store: description, pricing + cost + margin, stock, variants, 30-day sales, and its review summary.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: { store: { type: "string" }, product: { type: "string", description: "product name or id" } },
+    required: ["store", "product"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    const ref = s(args.product);
+    const uuid = /^[0-9a-f-]{36}$/i.test(ref);
+    const pq = db
+      .from("products")
+      .select("id, name, sku, slug, description, status, category, price, sale_price, buying_price, marketing_cost, stock_qty, track_inventory, has_variants, is_hot")
+      .eq("business_id", st.id);
+    const { data: matches } = uuid ? await pq.eq("id", ref).limit(2) : await pq.ilike("name", `%${ref}%`).limit(5);
+    if (!matches?.length) return { error: `No product matches "${ref}".` };
+    if (matches.length > 1) return { error: `Several match: ${matches.map((m) => m.name).join(", ")}.` };
+    const p = matches[0];
+    const [{ data: variants }, sold, { data: reviews }] = await Promise.all([
+      db.from("product_variants").select("name, sku, options, price, sale_price, buying_price, stock_qty, active").eq("product_id", p.id).order("position"),
+      soldByProduct(st.id, [p.id as string], new Date(Date.now() - 30 * DAY).toISOString()),
+      db.from("product_reviews").select("rating, status").eq("business_id", st.id).eq("product_id", p.id),
+    ]);
+    const approved = (reviews ?? []).filter((r) => r.status === "approved");
+    const eff = p.sale_price != null && p.sale_price < p.price ? Number(p.sale_price) : Number(p.price);
+    const cost = p.buying_price != null ? Number(p.buying_price) : null;
+    const s30 = sold.get(p.id as string) ?? { units: 0, revenue: 0 };
+    return {
+      store: st.name,
+      name: p.name,
+      sku: p.sku ?? null,
+      handle: p.slug,
+      status: p.status,
+      category: p.category ?? null,
+      description: p.description ?? null,
+      price: money(Number(p.price), st.currency),
+      salePrice: p.sale_price != null ? money(Number(p.sale_price), st.currency) : null,
+      cost: cost != null ? money(cost, st.currency) : null,
+      marketingCost: p.marketing_cost != null ? money(Number(p.marketing_cost), st.currency) : null,
+      marginPct: cost != null && eff > 0 ? Math.round(((eff - cost) / eff) * 100) : null,
+      stock: p.track_inventory ? Number(p.stock_qty) : "not tracked",
+      isHot: !!p.is_hot,
+      variants: (variants ?? []).map((v) => ({
+        label: v.name,
+        sku: v.sku ?? null,
+        options: v.options ?? {},
+        price: v.price != null ? money(Number(v.price), st.currency) : null,
+        stock: Number(v.stock_qty),
+        active: !!v.active,
+      })),
+      last30Days: { unitsSold: s30.units, revenue: money(s30.revenue, st.currency) },
+      reviews: { approved: approved.length, pending: (reviews ?? []).length - approved.length, average: approved.length ? Number((approved.reduce((n, r) => n + Number(r.rating), 0) / approved.length).toFixed(1)) : null },
+    };
+  },
+};
+
+const store_categories: AdminToolDef = {
+  name: "store_categories",
+  description: "A store's product categories with how many active products are in each.",
+  risk: "read",
+  parameters: { type: "object", properties: { store: { type: "string" } }, required: ["store"] },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    const [{ data: cats }, { data: prods }] = await Promise.all([
+      db.from("product_categories").select("name, slug").eq("business_id", st.id).order("sort"),
+      db.from("products").select("category").eq("business_id", st.id).eq("status", "active"),
+    ]);
+    const count = new Map<string, number>();
+    for (const p of prods ?? []) if (p.category) count.set(p.category as string, (count.get(p.category as string) ?? 0) + 1);
+    const named = (cats ?? []).map((c) => ({ name: c.name as string, products: count.get(c.name as string) ?? 0 }));
+    // include free-text categories not in the table
+    for (const [name, n] of count) if (!named.some((x) => x.name === name)) named.push({ name, products: n });
+    return { store: st.name, categories: named };
+  },
+};
+
+const store_inventory: AdminToolDef = {
+  name: "store_inventory",
+  description:
+    "A store's inventory position: total units on hand, inventory value at cost, and the low-stock (<10) and out-of-stock lists. Optional filter: low | out.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: { store: { type: "string" }, filter: { type: "string", enum: ["low", "out"] } },
+    required: ["store"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    const { data } = await db
+      .from("products")
+      .select("name, sku, stock_qty, track_inventory, buying_price, status")
+      .eq("business_id", st.id)
+      .neq("status", "archived");
+    const tracked = (data ?? []).filter((p) => p.track_inventory);
+    const units = tracked.reduce((n, p) => n + Number(p.stock_qty), 0);
+    const value = tracked.reduce((n, p) => n + Number(p.stock_qty) * Number(p.buying_price ?? 0), 0);
+    const low = tracked.filter((p) => Number(p.stock_qty) > 0 && Number(p.stock_qty) < 10).map((p) => ({ name: p.name, sku: p.sku ?? null, stock: Number(p.stock_qty) }));
+    const out = tracked.filter((p) => Number(p.stock_qty) <= 0).map((p) => ({ name: p.name, sku: p.sku ?? null }));
+    const base = { store: st.name, unitsOnHand: units, inventoryValue: money(value, st.currency), untracked: (data ?? []).length - tracked.length };
+    if (s(args.filter) === "low") return { ...base, lowStock: low };
+    if (s(args.filter) === "out") return { ...base, outOfStock: out };
+    return { ...base, lowStockCount: low.length, outOfStockCount: out.length, lowStock: low.slice(0, 20), outOfStock: out.slice(0, 20) };
+  },
+};
+
+const store_orders: AdminToolDef = {
+  name: "store_orders",
+  description:
+    "A store's recent orders (by store name or id). Optional: status, payment (paid/unpaid/cod), query (order number or customer), limit. Newest first.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: {
+      store: { type: "string" },
+      status: { type: "string" },
+      payment: { type: "string", enum: ["paid", "unpaid", "cod"] },
+      query: { type: "string" },
+      limit: { type: "number" },
+    },
+    required: ["store"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    let q = db
+      .from("orders")
+      .select("id, order_number, status, payment_method, payment_status, total, placed_at, customers(name, phone), order_items(qty)")
+      .eq("business_id", st.id)
+      .order("placed_at", { ascending: false });
+    if (s(args.status)) q = q.eq("status", s(args.status));
+    if (s(args.payment) === "paid") q = q.eq("payment_status", "paid");
+    else if (s(args.payment) === "unpaid") q = q.eq("payment_status", "unpaid");
+    else if (s(args.payment) === "cod") q = q.eq("payment_method", "cod");
+    if (s(args.query)) q = q.ilike("order_number", `%${s(args.query)}%`);
+    const { data } = await q.limit(Math.min(nz(args.limit) ?? 25, 100));
+    return {
+      store: st.name,
+      orders: (data ?? []).map((o) => {
+        const c = (Array.isArray(o.customers) ? o.customers[0] : o.customers) as { name?: string; phone?: string } | null;
+        return {
+          number: o.order_number,
+          customer: c?.name ?? "Guest",
+          phone: c?.phone ?? null,
+          items: (o.order_items ?? []).reduce((n: number, i: { qty: number }) => n + Number(i.qty), 0),
+          total: money(Number(o.total), st.currency),
+          status: o.status,
+          payment: o.payment_status,
+          placed: o.placed_at,
+        };
+      }),
+    };
+  },
+};
+
+const store_order_detail: AdminToolDef = {
+  name: "store_order_detail",
+  description: "Full detail for ONE order in a store (by order number): line items, amounts, the customer, delivery address, payment, status, any courier shipment and any linked return.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: { store: { type: "string" }, order: { type: "string", description: "order number, e.g. ZF-AB12CD" } },
+    required: ["store", "order"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    const { data: o } = await db
+      .from("orders")
+      .select("id, order_number, status, payment_method, payment_status, subtotal, shipping, discount, total, currency, address, notes, placed_at, delivered_at, cancelled_at, cancel_reason, customers(name, phone, email, city, total_orders, total_spent)")
+      .eq("business_id", st.id)
+      .ilike("order_number", s(args.order))
+      .maybeSingle();
+    if (!o) return { error: `No order "${s(args.order)}" in ${st.name}.` };
+    const [{ data: items }, { data: ship }, { data: ret }] = await Promise.all([
+      db.from("order_items").select("name, variant_label, qty, unit_price, line_total").eq("order_id", o.id),
+      db.from("shipments").select("provider, status, tracking_code, consignment_id, cost").eq("order_id", o.id).maybeSingle(),
+      db.from("returns").select("return_number, status, refund_amount").eq("order_id", o.id),
+    ]);
+    const c = (Array.isArray(o.customers) ? o.customers[0] : o.customers) as Record<string, unknown> | null;
+    const cur = (o.currency as string) || st.currency;
+    return {
+      store: st.name,
+      number: o.order_number,
+      status: o.status,
+      payment: { method: o.payment_method, status: o.payment_status },
+      placed: o.placed_at,
+      deliveredAt: o.delivered_at ?? null,
+      cancelledAt: o.cancelled_at ?? null,
+      cancelReason: o.cancel_reason ?? null,
+      customer: c ? { name: c.name, phone: c.phone, email: c.email, city: c.city, lifetimeOrders: c.total_orders, lifetimeSpent: money(Number(c.total_spent ?? 0), st.currency) } : null,
+      address: o.address ?? null,
+      items: (items ?? []).map((i) => ({
+        name: i.variant_label ? `${i.name} (${i.variant_label})` : i.name,
+        qty: Number(i.qty),
+        unitPrice: money(Number(i.unit_price), cur),
+        lineTotal: money(Number(i.line_total), cur),
+      })),
+      totals: {
+        subtotal: money(Number(o.subtotal), cur),
+        shipping: money(Number(o.shipping), cur),
+        discount: money(Number(o.discount ?? 0), cur),
+        total: money(Number(o.total), cur),
+      },
+      shipment: ship ? { provider: ship.provider, status: ship.status, tracking: ship.tracking_code ?? null, consignment: ship.consignment_id ?? null, cost: ship.cost != null ? money(Number(ship.cost), cur) : null } : null,
+      returns: (ret ?? []).map((r) => ({ number: r.return_number, status: r.status, refund: money(Number(r.refund_amount), cur) })),
+      notes: o.notes ?? null,
+    };
+  },
+};
+
+const store_returns: AdminToolDef = {
+  name: "store_returns",
+  description: "A store's returns/refunds. Optional: status (requested/approved/received/refunded/rejected), limit.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: { store: { type: "string" }, status: { type: "string" }, limit: { type: "number" } },
+    required: ["store"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    let q = db
+      .from("returns")
+      .select("return_number, status, reason, refund_amount, refund_method, restock, created_at, processed_at, orders(order_number, customers(name))")
+      .eq("business_id", st.id)
+      .order("created_at", { ascending: false });
+    if (s(args.status)) q = q.eq("status", s(args.status));
+    const { data } = await q.limit(Math.min(nz(args.limit) ?? 25, 100));
+    return {
+      store: st.name,
+      returns: (data ?? []).map((r) => {
+        const o = (Array.isArray(r.orders) ? r.orders[0] : r.orders) as { order_number?: string; customers?: unknown } | null;
+        const c = o ? ((Array.isArray(o.customers) ? o.customers[0] : o.customers) as { name?: string } | null) : null;
+        return {
+          number: r.return_number,
+          order: o?.order_number ?? null,
+          customer: c?.name ?? "—",
+          status: r.status,
+          reason: r.reason ?? null,
+          refund: money(Number(r.refund_amount), st.currency),
+          method: r.refund_method ?? null,
+          restock: !!r.restock,
+          requested: r.created_at,
+          processed: r.processed_at ?? null,
+        };
+      }),
+    };
+  },
+};
+
+const store_customers: AdminToolDef = {
+  name: "store_customers",
+  description:
+    "A store's customers. Optional: query (name/phone/email), segment (repeat = >1 order, inactive = no order in 90 days), limit. Sorted by lifetime spend.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: {
+      store: { type: "string" },
+      query: { type: "string" },
+      segment: { type: "string", enum: ["repeat", "inactive"] },
+      limit: { type: "number" },
+    },
+    required: ["store"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    let q = db
+      .from("customers")
+      .select("name, phone, email, city, total_orders, total_spent, first_order_at, last_order_at")
+      .eq("business_id", st.id)
+      .order("total_spent", { ascending: false });
+    if (s(args.query)) q = q.or(`name.ilike.%${s(args.query)}%,phone.ilike.%${s(args.query)}%,email.ilike.%${s(args.query)}%`);
+    const { data } = await q.limit(Math.min(nz(args.limit) ?? 30, 100));
+    const cutoff = Date.now() - 90 * DAY;
+    let rows = (data ?? []).map((c) => ({
+      name: c.name ?? "Guest",
+      phone: c.phone ?? null,
+      email: c.email ?? null,
+      city: c.city ?? null,
+      orders: Number(c.total_orders ?? 0),
+      spent: money(Number(c.total_spent ?? 0), st.currency),
+      lastOrder: c.last_order_at ?? null,
+      _last: c.last_order_at ? new Date(c.last_order_at as string).getTime() : 0,
+    }));
+    if (s(args.segment) === "repeat") rows = rows.filter((r) => r.orders > 1);
+    if (s(args.segment) === "inactive") rows = rows.filter((r) => r._last && r._last < cutoff);
+    return { store: st.name, customers: rows.map(({ _last, ...r }) => { void _last; return r; }) };
+  },
+};
+
+const store_customer_detail: AdminToolDef = {
+  name: "store_customer_detail",
+  description: "Full detail for ONE customer in a store (by phone, email or name): lifetime stats, their order history and any returns.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: { store: { type: "string" }, customer: { type: "string" } },
+    required: ["store", "customer"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    const ref = s(args.customer);
+    const { data: matches } = await db
+      .from("customers")
+      .select("id, name, phone, email, city, notes, total_orders, total_spent, first_order_at, last_order_at, created_at")
+      .eq("business_id", st.id)
+      .or(`name.ilike.%${ref}%,phone.ilike.%${ref}%,email.ilike.%${ref}%`)
+      .limit(5);
+    if (!matches?.length) return { error: `No customer matches "${ref}" in ${st.name}.` };
+    if (matches.length > 1) return { error: `Several match: ${matches.map((m) => `${m.name} (${m.phone})`).join(", ")}.` };
+    const c = matches[0];
+    const [{ data: orders }, { data: returns }] = await Promise.all([
+      db.from("orders").select("order_number, status, total, placed_at").eq("business_id", st.id).eq("customer_id", c.id).order("placed_at", { ascending: false }).limit(50),
+      db.from("returns").select("return_number, status, refund_amount, created_at, orders!inner(customer_id)").eq("business_id", st.id).eq("orders.customer_id", c.id).limit(20),
+    ]);
+    return {
+      store: st.name,
+      name: c.name,
+      phone: c.phone,
+      email: c.email ?? null,
+      city: c.city ?? null,
+      notes: c.notes ?? null,
+      lifetime: {
+        orders: Number(c.total_orders ?? 0),
+        spent: money(Number(c.total_spent ?? 0), st.currency),
+        avgOrder: Number(c.total_orders ?? 0) ? money(Number(c.total_spent ?? 0) / Number(c.total_orders), st.currency) : money(0, st.currency),
+        first: c.first_order_at ?? null,
+        last: c.last_order_at ?? null,
+      },
+      orders: (orders ?? []).map((o) => ({ number: o.order_number, status: o.status, total: money(Number(o.total), st.currency), placed: o.placed_at })),
+      returns: (returns ?? []).map((r) => ({ number: r.return_number, status: r.status, refund: money(Number(r.refund_amount), st.currency), at: r.created_at })),
+    };
+  },
+};
+
+const store_reviews: AdminToolDef = {
+  name: "store_reviews",
+  description: "A store's product reviews. Optional: status (pending/approved/hidden), minRating, limit. Includes the store's overall average.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: {
+      store: { type: "string" },
+      status: { type: "string", enum: ["pending", "approved", "hidden"] },
+      minRating: { type: "number" },
+      limit: { type: "number" },
+    },
+    required: ["store"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    let q = db
+      .from("product_reviews")
+      .select("rating, title, body, reviewer_name, status, created_at, products(name)")
+      .eq("business_id", st.id)
+      .order("created_at", { ascending: false });
+    if (s(args.status)) q = q.eq("status", s(args.status));
+    if (nz(args.minRating) != null) q = q.gte("rating", nz(args.minRating)!);
+    const { data } = await q.limit(Math.min(nz(args.limit) ?? 25, 100));
+    const { data: all } = await db.from("product_reviews").select("rating").eq("business_id", st.id).eq("status", "approved");
+    const avg = (all ?? []).length ? Number(((all ?? []).reduce((n, r) => n + Number(r.rating), 0) / (all ?? []).length).toFixed(1)) : null;
+    return {
+      store: st.name,
+      overallAverage: avg,
+      approvedCount: (all ?? []).length,
+      reviews: (data ?? []).map((r) => ({
+        product: ((Array.isArray(r.products) ? r.products[0] : r.products) as { name?: string } | null)?.name ?? "—",
+        rating: Number(r.rating),
+        title: r.title ?? null,
+        body: r.body ?? null,
+        by: r.reviewer_name ?? "Verified buyer",
+        status: r.status,
+        at: r.created_at,
+      })),
+    };
+  },
+};
+
 /* ────────────────────────  action tools (confirmed)  ──────────────────── */
 
 const set_store_status: AdminToolDef = {
@@ -927,6 +1405,16 @@ export const ADMIN_TOOLS: AdminToolDef[] = [
   pending_payments,
   flagged_activity,
   get_store_assistant_config,
+  store_products,
+  store_product_detail,
+  store_categories,
+  store_inventory,
+  store_orders,
+  store_order_detail,
+  store_returns,
+  store_customers,
+  store_customer_detail,
+  store_reviews,
   set_store_status,
   set_owner_assistant,
   set_storefront_assistant,
