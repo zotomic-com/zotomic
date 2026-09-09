@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Field, Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { DataTable, type Column } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
-import { createReturn, setReturnStatus } from "./actions";
+import { DataGrid, type GridColumn } from "@/components/app/DataGrid";
+import { ListToolbar } from "@/components/app/ListToolbar";
+import { createReturn } from "./actions";
 
 export interface OrderOption {
   id: string;
@@ -24,8 +24,8 @@ export interface ReturnRow {
   id: string;
   number: string;
   orderNumber: string;
+  customer: string;
   status: string;
-  reason: string;
   refund: string;
   restock: boolean;
   date: string;
@@ -40,16 +40,7 @@ const TONE: Record<string, "neutral" | "warning" | "success" | "danger" | "prima
   cancelled: "neutral",
 };
 
-const NEXT: Record<string, { label: string; to: string }[]> = {
-  requested: [
-    { label: "Approve", to: "approved" },
-    { label: "Reject", to: "rejected" },
-  ],
-  approved: [{ label: "Mark received", to: "received" }],
-  received: [{ label: "Mark refunded", to: "refunded" }],
-};
-
-export function ReturnsClient({
+export function ReturnsGrid({
   rows,
   orders,
   currency,
@@ -61,6 +52,8 @@ export function ReturnsClient({
   const router = useRouter();
   const { toast } = useToast();
   const [pending, start] = useTransition();
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("all");
   const [creating, setCreating] = useState(false);
 
   const [orderId, setOrderId] = useState("");
@@ -68,8 +61,19 @@ export function ReturnsClient({
   const [reason, setReason] = useState("");
   const [refund, setRefund] = useState("0");
   const [restock, setRestock] = useState(true);
-
   const order = orders.find((o) => o.id === orderId);
+
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return rows.filter(
+      (r) =>
+        (status === "all" || r.status === status) &&
+        (!t || r.number.toLowerCase().includes(t) || r.orderNumber.toLowerCase().includes(t) || r.customer.toLowerCase().includes(t)),
+    );
+  }, [rows, q, status]);
+
+  const counts: Record<string, number> = {};
+  for (const r of rows) counts[r.status] = (counts[r.status] ?? 0) + 1;
 
   const openCreate = () => {
     setOrderId(orders[0]?.id ?? "");
@@ -78,12 +82,6 @@ export function ReturnsClient({
     setRefund("0");
     setRestock(true);
     setCreating(true);
-  };
-
-  const suggestRefund = (next: Record<string, number>) => {
-    if (!order) return;
-    const total = order.items.reduce((s, it) => s + (next[it.id] ?? 0) * it.unitPrice, 0);
-    setRefund(String(total));
   };
 
   const submit = () =>
@@ -95,65 +93,61 @@ export function ReturnsClient({
         restock,
         items: Object.entries(qty).map(([orderItemId, q]) => ({ orderItemId, qty: q })),
       });
-      if ("error" in res) toast(res.error, "error");
-      else {
-        toast("Return created", "success");
-        setCreating(false);
-        router.refresh();
-      }
+      if ("error" in res) return toast(res.error, "error");
+      toast("Return created", "success");
+      setCreating(false);
+      router.push(`/app/returns/${res.id}`);
     });
 
-  const move = (id: string, to: string) =>
-    start(async () => {
-      const res = await setReturnStatus(id, to as never);
-      if ("error" in res) toast(res.error, "error");
-      else {
-        toast(`Marked ${to}`, "success");
-        router.refresh();
-      }
-    });
-
-  const cols: Column<ReturnRow>[] = [
+  const cols: GridColumn<ReturnRow>[] = [
     { key: "number", header: "Return", render: (r) => <span className="font-medium text-fg">{r.number}</span> },
     { key: "order", header: "Order", render: (r) => `#${r.orderNumber}` },
+    { key: "customer", header: "Customer", render: (r) => r.customer },
     { key: "refund", header: "Refund", align: "right", render: (r) => r.refund },
-    {
-      key: "restock",
-      header: "Restock",
-      render: (r) => (r.restock ? <Badge tone="neutral">yes</Badge> : <Badge tone="neutral">no</Badge>),
-    },
-    { key: "date", header: "Date", render: (r) => r.date },
-    {
-      key: "status",
-      header: "Status",
-      align: "right",
-      render: (r) => (
-        <div className="flex items-center justify-end gap-2">
-          <Badge tone={TONE[r.status] ?? "neutral"}>{r.status}</Badge>
-          {(NEXT[r.status] ?? []).map((n) => (
-            <Button key={n.to} size="sm" variant="ghost" disabled={pending} onClick={() => move(r.id, n.to)}>
-              {n.label}
-            </Button>
-          ))}
-        </div>
-      ),
-    },
+    { key: "restock", header: "Restock", render: (r) => (r.restock ? "Yes" : "No") },
+    { key: "date", header: "Date", align: "right", render: (r) => r.date },
+    { key: "status", header: "Status", align: "right", render: (r) => <Badge tone={TONE[r.status] ?? "neutral"}>{r.status}</Badge> },
   ];
 
   return (
-    <>
-      <div className="flex justify-end">
-        <Button onClick={openCreate} disabled={!orders.length}>
-          <Plus className="h-4 w-4" /> New return
-        </Button>
-      </div>
+    <div className="space-y-4">
+      <ListToolbar
+        search={q}
+        onSearch={setQ}
+        searchPlaceholder="Return, order # or customer…"
+        actions={
+          <Button onClick={openCreate} disabled={!orders.length}>
+            <Plus className="h-4 w-4" /> New return
+          </Button>
+        }
+        filters={[
+          {
+            key: "status",
+            value: status,
+            onChange: setStatus,
+            options: [
+              { value: "all", label: "All", count: rows.length },
+              ...["requested", "approved", "received", "refunded", "rejected"]
+                .filter((s) => counts[s])
+                .map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1), count: counts[s] })),
+            ],
+          },
+        ]}
+      />
+
       {!orders.length && (
-        <p className="text-sm text-fg-subtle">No eligible orders yet — returns are created against delivered orders.</p>
+        <p className="text-sm text-fg-subtle">No eligible orders yet — returns are created against shipped/delivered orders.</p>
       )}
 
-      <Card>
-        <DataTable columns={cols} rows={rows} rowKey={(r) => r.id} empty={{ title: "No returns" }} />
-      </Card>
+      <div className="card">
+        <DataGrid
+          columns={cols}
+          rows={shown}
+          rowKey={(r) => r.id}
+          rowHref={(r) => `/app/returns/${r.id}`}
+          empty={{ title: "No returns" }}
+        />
+      </div>
 
       <Modal open={creating} onClose={() => setCreating(false)} title="New return" size="lg">
         <div className="space-y-3">
@@ -193,7 +187,7 @@ export function ReturnsClient({
                     onChange={(e) => {
                       const next = { ...qty, [it.id]: Math.min(it.qty, Math.max(0, Number(e.target.value) || 0)) };
                       setQty(next);
-                      suggestRefund(next);
+                      setRefund(String(order.items.reduce((s, x) => s + (next[x.id] ?? 0) * x.unitPrice, 0)));
                     }}
                   />
                 </div>
@@ -219,6 +213,6 @@ export function ReturnsClient({
           </Button>
         </div>
       </Modal>
-    </>
+    </div>
   );
 }

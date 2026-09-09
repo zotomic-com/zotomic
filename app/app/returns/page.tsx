@@ -3,7 +3,7 @@ import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { money } from "@/lib/money";
 import { PageHeader } from "@/components/app/PageHeader";
-import { ReturnsClient, type ReturnRow, type OrderOption } from "./ReturnsClient";
+import { ReturnsGrid, type ReturnRow, type OrderOption } from "./ReturnsGrid";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export default async function ReturnsPage() {
   const [{ data: returns }, { data: orders }] = await Promise.all([
     db
       .from("returns")
-      .select("id, return_number, order_id, status, reason, refund_amount, restock, created_at, orders(order_number)")
+      .select("id, return_number, order_id, status, reason, refund_amount, restock, created_at, orders(order_number, customers(name))")
       .eq("business_id", tenant.businessId)
       .order("created_at", { ascending: false })
       .limit(100),
@@ -64,23 +64,27 @@ export default async function ReturnsPage() {
     }))
     .filter((o) => o.items.length > 0);
 
-  const rows: ReturnRow[] = (returns ?? []).map((r) => ({
-    id: r.id as string,
-    number: r.return_number as string,
-    orderNumber:
-      ((Array.isArray(r.orders) ? r.orders[0] : r.orders) as { order_number?: string } | null)
-        ?.order_number ?? "—",
-    status: r.status as string,
-    reason: (r.reason as string) ?? "",
-    refund: money(Number(r.refund_amount), currency),
-    restock: !!r.restock,
-    date: new Date(r.created_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-  }));
+  const rows: ReturnRow[] = (returns ?? []).map((r) => {
+    const ord = (Array.isArray(r.orders) ? r.orders[0] : r.orders) as
+      | { order_number?: string; customers?: { name?: string } | { name?: string }[] }
+      | null;
+    const c = (Array.isArray(ord?.customers) ? ord?.customers[0] : ord?.customers) as { name?: string } | null;
+    return {
+      id: r.id as string,
+      number: r.return_number as string,
+      orderNumber: ord?.order_number ?? "—",
+      customer: c?.name ?? "Guest",
+      status: r.status as string,
+      refund: money(Number(r.refund_amount), currency),
+      restock: !!r.restock,
+      date: new Date(r.created_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    };
+  });
 
   return (
     <div className="space-y-5">
       <PageHeader title="Returns" subtitle={`${rows.length} return${rows.length === 1 ? "" : "s"}`} />
-      <ReturnsClient rows={rows} orders={orderOptions} currency={currency} />
+      <ReturnsGrid rows={rows} orders={orderOptions} currency={currency} />
     </div>
   );
 }
