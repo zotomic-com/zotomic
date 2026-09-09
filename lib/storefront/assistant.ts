@@ -19,6 +19,21 @@ export const SF_CHAT_QUOTA: Record<PlanId, number> = {
   pro: 10_000,
 };
 
+/** Campaign top-up packs — extra conversations, submit→admin-confirm like credits. */
+export interface SfChatPack {
+  id: string;
+  conversations: number;
+  price: number; // BDT
+}
+export const SF_CHAT_PACKS: SfChatPack[] = [
+  { id: "sf-500", conversations: 500, price: 300 },
+  { id: "sf-2000", conversations: 2_000, price: 1_000 },
+  { id: "sf-5000", conversations: 5_000, price: 2_200 },
+];
+export function sfChatPack(id: string): SfChatPack | null {
+  return SF_CHAT_PACKS.find((p) => p.id === id) ?? null;
+}
+
 /** Per-visitor guard rails (enforced in the route via the rate limiter). */
 export const SF_VISITOR_LIMITS = {
   burst: { limit: 4, windowMs: 20_000 },

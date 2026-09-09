@@ -114,6 +114,98 @@ export async function adminImpersonate(businessId: string) {
   return { ok: true, redirect: "/app" };
 }
 
+/* ───────────────────────  Storefront Assistant  ─────────────────────── */
+
+export async function adminSetStorefrontAssistantSuspended(
+  businessId: string,
+  suspended: boolean,
+  reason: string,
+) {
+  const admin = await requireAdmin();
+  const db = getAdminSupabase();
+  await db.from("storefront_assistant_config").upsert(
+    {
+      business_id: businessId,
+      suspended,
+      suspended_reason: suspended ? reason.trim().slice(0, 300) || "Suspended by Zotomic." : null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "business_id" },
+  );
+  await audit(
+    businessId,
+    admin.id,
+    "admin.storefront_assistant_suspended",
+    suspended ? `Suspended storefront assistant — ${reason}` : "Un-suspended storefront assistant",
+  );
+  revalidatePath(`/admin/tenants/${businessId}`);
+  return { ok: true };
+}
+
+export async function adminGrantStorefrontConversations(businessId: string, amount: number) {
+  const admin = await requireAdmin();
+  const n = Math.round(Number(amount));
+  if (!Number.isFinite(n) || n === 0) return { error: "Enter a non-zero amount." };
+  const db = getAdminSupabase();
+  const { data: cfg } = await db
+    .from("storefront_assistant_config")
+    .select("extra_conversations")
+    .eq("business_id", businessId)
+    .maybeSingle();
+  const next = Math.max(0, Number(cfg?.extra_conversations ?? 0) + n);
+  await db.from("storefront_assistant_config").upsert(
+    { business_id: businessId, extra_conversations: next, updated_at: new Date().toISOString() },
+    { onConflict: "business_id" },
+  );
+  await audit(
+    businessId,
+    admin.id,
+    "admin.storefront_conversations_granted",
+    `${n > 0 ? "+" : ""}${n} storefront-chat conversations (pool now ${next})`,
+  );
+  revalidatePath(`/admin/tenants/${businessId}`);
+  return { ok: true };
+}
+
+export async function adminResolveStorefrontChatTopup(
+  purchaseId: string,
+  action: "grant" | "reject",
+) {
+  const admin = await requireAdmin();
+  const db = getAdminSupabase();
+  const { data: p } = await db
+    .from("storefront_chat_purchases")
+    .select("id, business_id, conversations, amount, method, status")
+    .eq("id", purchaseId)
+    .maybeSingle();
+  if (!p || p.status !== "submitted") return { error: "Already resolved." };
+
+  if (action === "grant") {
+    const { data: cfg } = await db
+      .from("storefront_assistant_config")
+      .select("extra_conversations")
+      .eq("business_id", p.business_id)
+      .maybeSingle();
+    const next = Number(cfg?.extra_conversations ?? 0) + Number(p.conversations);
+    await db.from("storefront_assistant_config").upsert(
+      { business_id: p.business_id, extra_conversations: next, updated_at: new Date().toISOString() },
+      { onConflict: "business_id" },
+    );
+  }
+  await db
+    .from("storefront_chat_purchases")
+    .update({ status: action === "grant" ? "granted" : "rejected", resolved_by: admin.id, resolved_at: new Date().toISOString() })
+    .eq("id", purchaseId);
+  await audit(
+    p.business_id as string,
+    admin.id,
+    "admin.storefront_chat_topup_resolved",
+    `${action === "grant" ? "Granted" : "Rejected"} ${p.conversations} conversations (৳${p.amount}, ${p.method})`,
+  );
+  revalidatePath(`/admin/tenants/${p.business_id}`);
+  return { ok: true };
+}
+
 export async function adminDeleteBusiness(businessId: string, confirmName: string) {
   const admin = await requireAdmin();
   const db = getAdminSupabase();

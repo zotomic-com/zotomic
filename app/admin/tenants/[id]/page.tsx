@@ -7,6 +7,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TenantAdminClient } from "./TenantAdminClient";
+import { StorefrontAssistantAdmin } from "./StorefrontAssistantAdmin";
+import { SF_CHAT_QUOTA, utcPeriod } from "@/lib/storefront/assistant";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +43,9 @@ export default async function AdminTenantDetailPage({ params }: { params: Promis
     { data: invoices },
     { data: reports },
     { data: messages },
+    { data: sfaCfg },
+    { data: sfaUsage },
+    { data: sfaTopups },
   ] = await Promise.all([
     db.from("subscriptions").select("plan, status, current_period_end").eq("business_id", id).maybeSingle(),
     db.from("business_members").select("users(name, email)").eq("business_id", id).eq("role", "owner").maybeSingle(),
@@ -53,6 +58,9 @@ export default async function AdminTenantDetailPage({ params }: { params: Promis
     db.from("invoices").select("id, invoice_number, amount, currency, status, created_at, paid_at").eq("business_id", id).order("created_at", { ascending: false }).limit(8),
     db.from("reports").select("id, status, period_start, period_end, generated_at").eq("business_id", id).order("period_end", { ascending: false }).limit(8),
     db.from("assistant_messages").select("role, content, model, created_at").eq("business_id", id).order("created_at", { ascending: false }).limit(8),
+    db.from("storefront_assistant_config").select("enabled, name, suspended, suspended_reason, extra_conversations").eq("business_id", id).maybeSingle(),
+    db.from("storefront_assistant_usage").select("conversations, messages, blocked").eq("business_id", id).eq("period", utcPeriod()).maybeSingle(),
+    db.from("storefront_chat_purchases").select("id, conversations, amount, method, txn_id, status, submitted_at").eq("business_id", id).eq("status", "submitted").order("submitted_at", { ascending: false }),
   ]);
 
   const revenue = (orders ?? []).filter((o) => o.status !== "cancelled").reduce((n, o) => n + Number(o.total), 0);
@@ -190,6 +198,26 @@ export default async function AdminTenantDetailPage({ params }: { params: Promis
           ))}
         </ul>
       </Card>
+
+      <StorefrontAssistantAdmin
+        businessId={biz.id as string}
+        enabled={!!sfaCfg?.enabled}
+        suspended={!!sfaCfg?.suspended}
+        suspendedReason={(sfaCfg?.suspended_reason as string) ?? ""}
+        extra={Number(sfaCfg?.extra_conversations ?? 0)}
+        quota={SF_CHAT_QUOTA[(subscription.plan as "free" | "business" | "pro") ?? "free"] ?? SF_CHAT_QUOTA.free}
+        used={Number(sfaUsage?.conversations ?? 0)}
+        messages={Number(sfaUsage?.messages ?? 0)}
+        blocked={Number(sfaUsage?.blocked ?? 0)}
+        topups={(sfaTopups ?? []).map((t) => ({
+          id: t.id as string,
+          conversations: Number(t.conversations),
+          amount: Number(t.amount),
+          method: t.method as string,
+          txnId: t.txn_id as string,
+          at: d(t.submitted_at as string),
+        }))}
+      />
 
       <TenantAdminClient
         businessId={biz.id as string}
