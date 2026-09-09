@@ -17,6 +17,33 @@ const STARTERS = [
   "Which storefront assistants are turning shoppers away?",
 ];
 
+const LS_KEY = "zt_admin_chat";
+const TTL = 7 * 24 * 60 * 60 * 1000; // keep the admin chat for a week
+
+function loadCache(): { convId: string | null; messages: Msg[] } {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return { convId: null, messages: [] };
+    const p = JSON.parse(raw) as { at: number; convId: string | null; messages: Msg[] };
+    if (!p?.at || Date.now() - p.at > TTL || !Array.isArray(p.messages)) {
+      localStorage.removeItem(LS_KEY);
+      return { convId: null, messages: [] };
+    }
+    return { convId: p.convId ?? null, messages: p.messages };
+  } catch {
+    return { convId: null, messages: [] };
+  }
+}
+
+function saveCache(convId: string | null, messages: Msg[]) {
+  try {
+    if (!messages.length) return localStorage.removeItem(LS_KEY);
+    localStorage.setItem(LS_KEY, JSON.stringify({ at: Date.now(), convId, messages: messages.slice(-60) }));
+  } catch {
+    /* private mode / quota */
+  }
+}
+
 export function AdminChat() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -27,8 +54,18 @@ export function AdminChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const c = loadCache();
+    convId.current = c.convId;
+    if (c.messages.length) setMessages(c.messages);
+  }, []);
+
+  useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, busy, pending]);
+
+  useEffect(() => {
+    saveCache(convId.current, messages);
+  }, [messages]);
 
   const call = useCallback(async (payload: Record<string, unknown>) => {
     setError(null);
@@ -75,6 +112,18 @@ export function AdminChat() {
     if (data?.reply) setMessages((m) => [...m, { role: "assistant", content: data.reply as string }]);
   };
 
+  const newChat = () => {
+    setMessages([]);
+    setPending(null);
+    setError(null);
+    convId.current = null;
+    try {
+      localStorage.removeItem(LS_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
     <Card className="flex flex-col" >
       <CardHeader>
@@ -83,7 +132,14 @@ export function AdminChat() {
             <Bot className="h-4 w-4 text-primary" /> Zotomic — your admin assistant
           </span>
         </CardTitle>
-        <span className="text-xs text-fg-subtle">Acts through tools · confirms every change</span>
+        <span className="flex items-center gap-3 text-xs text-fg-subtle">
+          {messages.length > 0 && (
+            <button onClick={newChat} className="font-medium text-primary hover:underline">
+              New chat
+            </button>
+          )}
+          <span>Acts through tools · confirms every change</span>
+        </span>
       </CardHeader>
 
       <CardBody className="flex h-[460px] flex-col p-0">

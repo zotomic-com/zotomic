@@ -67,6 +67,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/websites", label: "Websites", icon: Globe },
   { href: "/admin/reports", label: "Reports", icon: BarChart3 },
   { href: "/admin/assistants", label: "Assistants", icon: Bot },
+  { href: "/admin/abandoned-carts", label: "Abandoned Carts", icon: ShoppingCart },
   { href: "/admin/content-library", label: "Pages & Legal", icon: ScrollText },
   { href: "/admin/integrations", label: "Integrations", icon: Plug },
   { href: "/admin/marketing", label: "Marketing", icon: Megaphone },

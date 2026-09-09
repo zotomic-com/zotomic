@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
+import { getStoreAccount } from "@/lib/storefront/account";
 
 const TYPES = new Set(["page_view", "product_view", "add_to_cart", "add_to_wishlist", "begin_checkout"]);
+const CART_TYPES = new Set(["add_to_cart", "begin_checkout"]);
 
 /** Lightweight storefront analytics → storefront_events (feeds the intelligence layer). */
 export async function POST(req: NextRequest) {
@@ -21,9 +23,21 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (!cfg) return NextResponse.json({ ok: false }, { status: 404 });
 
+  // attribute cart events to a signed-in shopper (guests stay anonymous)
+  let storeAccountId: string | null = null;
+  if (CART_TYPES.has(b.type)) {
+    try {
+      const acct = await getStoreAccount(cfg.business_id as string);
+      storeAccountId = acct?.id ?? null;
+    } catch {
+      /* ignore */
+    }
+  }
+
   await db.from("storefront_events").insert({
     business_id: cfg.business_id,
     session_id: (b.sessionId ?? "").slice(0, 64) || null,
+    store_account_id: storeAccountId,
     type: b.type,
     path: (b.path ?? "").slice(0, 200) || null,
     product_id: b.productId ?? null,

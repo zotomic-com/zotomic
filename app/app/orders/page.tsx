@@ -4,9 +4,9 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { money } from "@/lib/money";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StatCard } from "@/components/ui/stat-card";
-import { getAbandonedCartSummary, getRecentCarts } from "@/lib/storefront/abandoned-cart";
+import { getAbandonedCartSummary } from "@/lib/storefront/abandoned-cart";
 import { OrdersGrid, type OrderRow } from "./OrdersGrid";
-import { AbandonedCarts } from "./AbandonedCarts";
+import { AbandonedCartsCard } from "./AbandonedCartsCard";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,8 @@ export default async function OrdersPage() {
   const db = getAdminSupabase();
 
   const now = Date.now();
-  const [{ data }, { data: week }, cart7d, cart30d, recentCarts] = await Promise.all([
+  const isPaid = tenant.billing.plan !== "free";
+  const [{ data }, { data: week }, cart7d] = await Promise.all([
     db
       .from("orders")
       .select("id, order_number, total, status, payment_method, payment_status, placed_at, customers(name), order_items(qty)")
@@ -31,8 +32,6 @@ export default async function OrdersPage() {
       .eq("business_id", tenant.businessId)
       .gte("placed_at", new Date(now - 7 * 86400000).toISOString()),
     getAbandonedCartSummary(tenant.businessId, new Date(now - 7 * 86400000), new Date(now)),
-    getAbandonedCartSummary(tenant.businessId, new Date(now - 30 * 86400000), new Date(now)),
-    getRecentCarts(tenant.businessId, 7, 20),
   ]);
 
   const rows: OrderRow[] = (data ?? []).map((o) => ({
@@ -64,12 +63,7 @@ export default async function OrdersPage() {
         <StatCard label="Awaiting confirmation" value={pending.toLocaleString("en-US")} invert />
       </div>
 
-      <AbandonedCarts
-        currency={currency}
-        week={cart7d}
-        month={cart30d}
-        recent={recentCarts}
-      />
+      <AbandonedCartsCard currency={currency} week={cart7d} isPaid={isPaid} />
 
       <OrdersGrid orders={rows} currency={currency} counts={counts} />
     </div>

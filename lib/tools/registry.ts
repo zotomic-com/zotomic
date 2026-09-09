@@ -1021,30 +1021,50 @@ const send_report_email: ToolDef = {
 const get_abandoned_carts: ToolDef = {
   name: "get_abandoned_carts",
   description:
-    "Abandoned-cart stats from storefront analytics: how many shoppers added to cart or reached checkout but didn't place an order, the abandon rate, and the estimated value left in those carts. Period: 7d (default), 14d, 30d, 90d.",
+    "Abandoned-cart stats from storefront analytics: how many shoppers added to cart or reached checkout but didn't place an order, the abandon rate, and the estimated value left. Set list:true to also get the recent abandoned carts with the shopper's name/phone/email when they were signed in (guests stay anonymous). Period: 7d (default), 14d, 30d, 90d. Business plan or higher.",
   risk: "read",
+  requiredPlan: "business",
   creditCost: 0,
   parameters: {
     type: "object",
-    properties: { period: { type: "string", enum: ["7d", "14d", "30d", "90d"] } },
+    properties: {
+      period: { type: "string", enum: ["7d", "14d", "30d", "90d"] },
+      list: { type: "boolean", description: "include the recent abandoned carts with shopper details" },
+    },
   },
   async handler(ctx, a) {
-    const { getAbandonedCartSummary } = await import("@/lib/storefront/abandoned-cart");
+    const { getAbandonedCartSummary, getRecentCarts } = await import("@/lib/storefront/abandoned-cart");
     const days = { "7d": 7, "14d": 14, "30d": 30, "90d": 90 }[s(a.period) ?? "7d"] ?? 7;
     const r = await getAbandonedCartSummary(ctx.businessId, new Date(Date.now() - days * DAY), new Date());
-    return {
+    const out: Record<string, unknown> = {
       period: `last ${days} days`,
       cartSessions: r.cartSessions,
       reachedCheckout: r.checkoutSessions,
+      registeredShoppers: r.registeredCartSessions,
       ordersPlaced: r.orders,
       abandonedCarts: r.abandonedCarts,
       abandonedAtCheckout: r.abandonedCheckouts,
       cartAbandonRate: r.cartAbandonRate != null ? `${r.cartAbandonRate}%` : null,
-      checkoutAbandonRate: r.checkoutAbandonRate != null ? `${r.checkoutAbandonRate}%` : null,
       averageCartValue: money(r.avgCartValue, ctx.currency),
       estimatedValueLeftInCarts: money(r.estimatedLostValue, ctx.currency),
       note: "Carts live only in the shopper's browser; this is derived from add-to-cart / checkout events vs orders placed.",
     };
+    if (a.list === true) {
+      const carts = await getRecentCarts(ctx.businessId, Math.min(days, 14), 30, true);
+      out.recentCarts = carts
+        .filter((c) => c.likelyAbandoned)
+        .map((c) => ({
+          shopper:
+            c.shopper.type === "registered"
+              ? { name: c.shopper.name, phone: c.shopper.phone ?? null, email: c.shopper.email ?? null }
+              : "guest",
+          items: c.items,
+          value: money(c.value, ctx.currency),
+          reachedCheckout: c.reachedCheckout,
+          lastActive: c.lastActivity,
+        }));
+    }
+    return out;
   },
 };
 

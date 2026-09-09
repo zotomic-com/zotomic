@@ -874,24 +874,25 @@ const store_reviews: AdminToolDef = {
 const store_abandoned_carts: AdminToolDef = {
   name: "store_abandoned_carts",
   description:
-    "A store's abandoned-cart stats (by store name or id): cart sessions vs orders, abandon rate, sessions left at checkout, and estimated cart value not purchased. Optional days (default 7).",
+    "A store's abandoned carts (by store name or id): cart sessions vs orders, abandon rate, sessions left at checkout, estimated cart value not purchased. Set list:true for the recent abandoned carts with the shopper's name/phone/email (when signed in — guests stay anonymous). Optional days (default 7).",
   risk: "read",
   parameters: {
     type: "object",
-    properties: { store: { type: "string" }, days: { type: "number" } },
+    properties: { store: { type: "string" }, days: { type: "number" }, list: { type: "boolean" } },
     required: ["store"],
   },
   async handler(_a, args) {
     const st = await resolveStore(s(args.store));
     if ("error" in st) return st;
-    const { getAbandonedCartSummary } = await import("@/lib/storefront/abandoned-cart");
+    const { getAbandonedCartSummary, getRecentCarts } = await import("@/lib/storefront/abandoned-cart");
     const days = Math.min(Math.max(Math.round(nz(args.days) ?? 7), 1), 90);
     const r = await getAbandonedCartSummary(st.id, new Date(Date.now() - days * DAY), new Date());
-    return {
+    const out: Record<string, unknown> = {
       store: st.name,
       period: `last ${days} days`,
       cartSessions: r.cartSessions,
       reachedCheckout: r.checkoutSessions,
+      registeredShoppers: r.registeredCartSessions,
       ordersPlaced: r.orders,
       abandonedCarts: r.abandonedCarts,
       abandonedAtCheckout: r.abandonedCheckouts,
@@ -899,6 +900,22 @@ const store_abandoned_carts: AdminToolDef = {
       averageCartValue: money(r.avgCartValue, st.currency),
       estimatedValueLeftInCarts: money(r.estimatedLostValue, st.currency),
     };
+    if (args.list === true) {
+      const carts = await getRecentCarts(st.id, Math.min(days, 14), 30, true);
+      out.recentCarts = carts
+        .filter((c) => c.likelyAbandoned)
+        .map((c) => ({
+          shopper:
+            c.shopper.type === "registered"
+              ? { name: c.shopper.name, phone: c.shopper.phone ?? null, email: c.shopper.email ?? null }
+              : "guest",
+          items: c.items,
+          value: money(c.value, st.currency),
+          reachedCheckout: c.reachedCheckout,
+          lastActive: c.lastActivity,
+        }));
+    }
+    return out;
   },
 };
 
