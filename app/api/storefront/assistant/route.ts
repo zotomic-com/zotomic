@@ -184,8 +184,14 @@ export async function POST(req: NextRequest) {
   );
 
   // Persist both turns.
-  await db.from("storefront_conversation_messages").insert([
-    { conversation_id: conversationId, business_id: store.businessId, role: "user", content: message },
+  const msgErr = await db.from("storefront_conversation_messages").insert([
+    {
+      conversation_id: conversationId,
+      business_id: store.businessId,
+      role: "user",
+      content: message,
+      tool_calls: [],
+    },
     {
       conversation_id: conversationId,
       business_id: store.businessId,
@@ -194,6 +200,7 @@ export async function POST(req: NextRequest) {
       tool_calls: outcome.traces,
     },
   ]);
+  if (msgErr.error) console.error("sf-assistant message insert failed", msgErr.error.message);
   await db
     .from("storefront_conversations")
     .update({
