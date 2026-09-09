@@ -4,7 +4,8 @@ import { AssistantActivityPanel } from "../assistant-activity/AssistantActivityP
 import { StorefrontAssistantsPanel } from "../storefront-assistants/StorefrontAssistantsPanel";
 import { AdminChat } from "./AdminChat";
 import { TelegramBots } from "./TelegramBots";
-import { listTelegramBots } from "./actions";
+import { WebSearchKeys } from "./WebSearchKeys";
+import { listTelegramBots, listSearchKeys } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,13 @@ export default async function AdminAssistantsPage({
   const { tab: raw } = await searchParams;
   const tab: Tab = TABS.some((t) => t.value === raw) ? (raw as Tab) : "chat";
 
-  const { bots, webhookUrl } = tab === "chat" ? await listTelegramBots() : { bots: [], webhookUrl: "" };
+  const [{ bots, webhookUrl }, searchKeys] =
+    tab === "chat"
+      ? await Promise.all([listTelegramBots(), listSearchKeys()])
+      : ([
+          { bots: [], webhookUrl: "" },
+          { keys: [], providers: [] },
+        ] as [Awaited<ReturnType<typeof listTelegramBots>>, Awaited<ReturnType<typeof listSearchKeys>>]);
 
   return (
     <div className="space-y-5">
@@ -53,6 +60,7 @@ export default async function AdminAssistantsPage({
       {tab === "chat" && (
         <div className="space-y-5">
           <AdminChat />
+          <WebSearchKeys keys={searchKeys.keys} providers={searchKeys.providers} />
           <TelegramBots bots={bots} webhookUrl={webhookUrl} />
         </div>
       )}

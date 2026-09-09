@@ -12,9 +12,16 @@ export function newWebhookSecret(): string {
   return randomBytes(24).toString("hex");
 }
 
+function siteBase(): string {
+  return (process.env.NEXT_PUBLIC_SITE_URL || "https://zotomic.com").replace(/\/$/, "");
+}
+
 export function adminWebhookUrl(): string {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || "https://zotomic.com").replace(/\/$/, "");
-  return `${base}/api/telegram/webhook`;
+  return `${siteBase()}/api/telegram/webhook`;
+}
+
+export function ownerWebhookUrl(): string {
+  return `${siteBase()}/api/telegram/owner-webhook`;
 }
 
 export async function tgGetMe(token: string): Promise<{ ok: boolean; username?: string; error?: string }> {
@@ -47,13 +54,14 @@ export async function tgSend(token: string, chatId: string, text: string): Promi
 export async function tgSetWebhook(
   token: string,
   secret: string,
+  url: string = adminWebhookUrl(),
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch(`${API}${token}/setWebhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        url: adminWebhookUrl(),
+        url,
         secret_token: secret,
         allowed_updates: ["message"],
         drop_pending_updates: true,

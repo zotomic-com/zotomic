@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CreditMeter } from "@/components/app/CreditMeter";
 import { AssistantChat } from "./AssistantChat";
+import { OwnerTelegramBots } from "./OwnerTelegramBots";
+import { listOwnerTelegramBots } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +38,11 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
     .select("id, title, updated_at")
     .eq("business_id", tenant.businessId)
     .eq("user_id", tenant.user.id)
+    .eq("channel", "web")
     .order("updated_at", { ascending: false })
     .limit(20);
+
+  const { bots: tgBots, webhookUrl: tgWebhookUrl } = await listOwnerTelegramBots();
 
   const conversations = (convs ?? []).map((x) => ({
     id: x.id as string,
@@ -80,6 +85,8 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
           readOnly={tenant.billing.readOnly}
         />
       </Suspense>
+
+      <OwnerTelegramBots bots={tgBots} webhookUrl={tgWebhookUrl} />
     </div>
   );
 }
