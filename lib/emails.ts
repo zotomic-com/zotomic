@@ -4,6 +4,44 @@ import { money } from "./money";
 const esc = (s: string) =>
   String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
+const SITE = () => process.env.NEXT_PUBLIC_SITE_URL ?? "https://zotomic.com";
+
+/* ── platform account welcome (a store owner signs up) ───────────────────── */
+export async function sendWelcomeEmail(args: { to: string; name: string }): Promise<boolean> {
+  if (!args.to) return false;
+  return sendEmail({
+    to: args.to,
+    account: "support",
+    subject: "Welcome to Zotomic",
+    html: emailLayout(`
+      <h1 style="font-size:18px;margin:0 0 6px">Welcome, ${esc(args.name || "there")} 👋</h1>
+      <p style="color:#475569;line-height:1.6;margin:0 0 16px">Your Zotomic account is ready. Finish setting up your store and your Weekly Intelligence report starts building automatically.</p>
+      <a href="${SITE()}/app" style="display:inline-block;background:#15803d;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:600;font-size:14px">Open your dashboard →</a>
+      <p style="margin:16px 0 0;color:#94a3b8;font-size:12px">If you didn't create this account, contact support@zotomic.com.</p>
+    `),
+  });
+}
+
+/* ── storefront customer welcome (a shopper creates an account) ──────────── */
+export async function sendStoreAccountWelcome(args: {
+  to: string;
+  name: string;
+  storeName: string;
+  accountUrl: string;
+}): Promise<boolean> {
+  if (!args.to) return false;
+  return sendEmail({
+    to: args.to,
+    account: "info",
+    subject: `Your ${args.storeName} account is ready`,
+    html: emailLayout(`
+      <h1 style="font-size:18px;margin:0 0 6px">Welcome to ${esc(args.storeName)}</h1>
+      <p style="color:#475569;line-height:1.6;margin:0 0 16px">Hi ${esc(args.name || "there")}, your account is set up. You can track orders and check out faster next time.</p>
+      <a href="${esc(args.accountUrl)}" style="display:inline-block;background:#15803d;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:600;font-size:14px">View your account →</a>
+    `),
+  });
+}
+
 /* ── order confirmation (to the customer) ─────────────────────────────────── */
 export async function sendOrderConfirmation(args: {
   to: string;

@@ -29,6 +29,18 @@ export async function registerAction(slug: string, form: FormData) {
   });
   if ("error" in res) return res;
   await setStoreSession({ ...res.account, businessId: store.businessId });
+
+  void import("@/lib/emails")
+    .then(({ sendStoreAccountWelcome }) =>
+      sendStoreAccountWelcome({
+        to: res.account.email,
+        name: res.account.name,
+        storeName: store.name,
+        accountUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://zotomic.com"}/s/${slug}/account`,
+      }),
+    )
+    .catch(() => {});
+
   return { ok: true };
 }
 

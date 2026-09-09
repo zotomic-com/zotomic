@@ -73,6 +73,10 @@ export async function POST(req: NextRequest) {
     }
     await logLoginEvent({ userId: user.id, email: cleanEmail, ip, ua, outcome: "success" });
 
+    void import("@/lib/emails").then(({ sendWelcomeEmail }) =>
+      sendWelcomeEmail({ to: cleanEmail, name: String(name).trim() }),
+    ).catch(() => {});
+
     const token = await signToken({
       id: user.id,
       email: user.email,
