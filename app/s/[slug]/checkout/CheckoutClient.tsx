@@ -6,6 +6,7 @@ import Link from "next/link";
 import { money } from "@/lib/money";
 import { readCart, writeCart, type CartItem } from "@/components/storefront/cart-store";
 import { QtyStepper } from "@/components/storefront/QtyStepper";
+import { StockLine, useLineStock } from "@/components/storefront/StockLine";
 
 export function CheckoutClient({
   storeSlug,
@@ -26,6 +27,7 @@ export function CheckoutClient({
 }) {
   const router = useRouter();
   const [items, setItems] = useState<CartItem[] | null>(null);
+  const stock = useLineStock(storeSlug, (items ?? []).map((i) => i.variantId ?? i.productId));
   const [form, setForm] = useState(
     prefill ?? { name: "", phone: "", email: "", address: "", city: "", note: "" },
   );
@@ -55,6 +57,11 @@ export function CheckoutClient({
   const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
   const ship = freeOver && subtotal >= freeOver ? 0 : shipping;
   const total = subtotal + ship;
+
+  const stockIssue = items.some((i) => {
+    const s = stock[i.variantId ?? i.productId];
+    return s?.tracked && (s.stock <= 0 || i.qty > s.stock);
+  });
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +144,7 @@ export function CheckoutClient({
             <li key={i.id} className="flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[var(--sf-fg)]">{i.name}</p>
+                <StockLine info={stock[i.variantId ?? i.productId]} qty={i.qty} />
                 <div className="mt-1">
                   <QtyStepper qty={i.qty} onChange={(n) => updateQty(i.id, n)} min={0} size="sm" />
                 </div>
@@ -151,9 +159,14 @@ export function CheckoutClient({
           <div className="flex justify-between text-base font-bold"><span>Total</span><span>{money(total, currency)}</span></div>
         </div>
         {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
+        {stockIssue && (
+          <p className="mt-3 text-xs font-semibold text-red-600">
+            Some items are low or out of stock — adjust the quantities above.
+          </p>
+        )}
         <button
           type="submit"
-          disabled={status === "placing"}
+          disabled={status === "placing" || stockIssue}
           className="mt-4 w-full rounded-full bg-[var(--sf-accent)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
         >
           {status === "placing" ? "Placing order…" : "Place order"}

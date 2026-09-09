@@ -7,6 +7,7 @@ import { money } from "@/lib/money";
 import { cldUrl } from "@/lib/cloudinary";
 import { readCart, writeCart, type CartItem } from "@/components/storefront/cart-store";
 import { QtyStepper } from "@/components/storefront/QtyStepper";
+import { StockLine, useLineStock } from "@/components/storefront/StockLine";
 
 export function CartClient({
   storeSlug,
@@ -22,6 +23,7 @@ export function CartClient({
   freeOver: number | null;
 }) {
   const [items, setItems] = useState<CartItem[] | null>(null);
+  const stock = useLineStock(storeSlug, (items ?? []).map((i) => i.variantId ?? i.productId));
 
   useEffect(() => {
     setItems(readCart(storeSlug));
@@ -69,6 +71,7 @@ export function CartClient({
             <div className="flex min-w-0 flex-1 flex-col">
               <p className="text-sm font-medium">{i.name}</p>
               <p className="mt-0.5 text-sm text-[var(--sf-muted)]">{money(i.price, currency)}</p>
+              <StockLine info={stock[i.variantId ?? i.productId]} qty={i.qty} />
               <div className="mt-auto flex items-center gap-3 pt-2">
                 <QtyStepper qty={i.qty} onChange={(n) => update(i.id, n)} min={0} size="sm" />
                 <button
