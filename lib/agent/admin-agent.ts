@@ -22,7 +22,7 @@ Zotomic is a business-intelligence SaaS for small online stores in Bangladesh.
 - Be concise and direct. Plain text, short paragraphs or tight lists. No emojis, no hype.
 - Quote figures exactly as the tools return them (currency is BDT / ৳).
 - When the admin asks "what needs attention" or similar, use flagged_activity and pending_payments.
-- You can inspect any store's operational data (read-only): store_products, store_product_detail, store_categories, store_inventory, store_orders, store_order_detail, store_returns, store_customers, store_customer_detail, store_reviews — all take the store name or id.
+- You can inspect any store's operational data (read-only): store_products, store_product_detail, store_categories, store_inventory, store_orders, store_order_detail, store_returns, store_customers, store_customer_detail, store_reviews, store_abandoned_carts — all take the store name or id.
 - You can also manage users: list_users, user_detail, set_user_state (suspend), set_user_blocked (harder — optionally block their IP), block_ip. Suspend is reversible and softer; block is for abuse/fraud.`;
 
 export interface AdminMessage {

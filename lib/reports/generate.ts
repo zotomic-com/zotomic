@@ -151,13 +151,25 @@ export async function generateReport(
           text: `Storefront: ${traffic.visitors} visitors, ${traffic.purchases} purchases — ${traffic.conversionRate.toFixed(1)}% conversion.`,
         });
       }
-      if (traffic.addToCart > 0 && traffic.purchases / traffic.addToCart < 0.4) {
+    }
+
+    // abandoned carts (session-level, from storefront_events)
+    try {
+      const { getAbandonedCartSummary } = await import("@/lib/storefront/abandoned-cart");
+      const ab = await getAbandonedCartSummary(businessId, periodStart, periodEnd);
+      if (ab.cartSessions >= 3) {
         observations.push({
           key: "cart-abandon",
-          severity: "medium",
-          text: `${traffic.addToCart} add-to-cart events but only ${traffic.purchases} purchases — carts are being abandoned.`,
+          severity: ab.cartAbandonRate != null && ab.cartAbandonRate >= 70 ? "medium" : "info",
+          text:
+            `Abandoned carts: ${ab.abandonedCarts} of ${ab.cartSessions} cart sessions didn't order` +
+            (ab.cartAbandonRate != null ? ` (${ab.cartAbandonRate}%)` : "") +
+            `; ${ab.abandonedCheckouts} left at checkout` +
+            (ab.estimatedLostValue > 0 ? `. Roughly ${money(ab.estimatedLostValue, currency)} of cart value went unpurchased.` : "."),
         });
       }
+    } catch (e) {
+      console.error("abandoned-cart for report failed:", (e as Error).message);
     }
 
     // marketing campaigns overlapping this week (deterministic attribution)

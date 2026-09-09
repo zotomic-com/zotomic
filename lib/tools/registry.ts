@@ -1018,6 +1018,36 @@ const send_report_email: ToolDef = {
   },
 };
 
+const get_abandoned_carts: ToolDef = {
+  name: "get_abandoned_carts",
+  description:
+    "Abandoned-cart stats from storefront analytics: how many shoppers added to cart or reached checkout but didn't place an order, the abandon rate, and the estimated value left in those carts. Period: 7d (default), 14d, 30d, 90d.",
+  risk: "read",
+  creditCost: 0,
+  parameters: {
+    type: "object",
+    properties: { period: { type: "string", enum: ["7d", "14d", "30d", "90d"] } },
+  },
+  async handler(ctx, a) {
+    const { getAbandonedCartSummary } = await import("@/lib/storefront/abandoned-cart");
+    const days = { "7d": 7, "14d": 14, "30d": 30, "90d": 90 }[s(a.period) ?? "7d"] ?? 7;
+    const r = await getAbandonedCartSummary(ctx.businessId, new Date(Date.now() - days * DAY), new Date());
+    return {
+      period: `last ${days} days`,
+      cartSessions: r.cartSessions,
+      reachedCheckout: r.checkoutSessions,
+      ordersPlaced: r.orders,
+      abandonedCarts: r.abandonedCarts,
+      abandonedAtCheckout: r.abandonedCheckouts,
+      cartAbandonRate: r.cartAbandonRate != null ? `${r.cartAbandonRate}%` : null,
+      checkoutAbandonRate: r.checkoutAbandonRate != null ? `${r.checkoutAbandonRate}%` : null,
+      averageCartValue: money(r.avgCartValue, ctx.currency),
+      estimatedValueLeftInCarts: money(r.estimatedLostValue, ctx.currency),
+      note: "Carts live only in the shopper's browser; this is derived from add-to-cart / checkout events vs orders placed.",
+    };
+  },
+};
+
 const get_storefront_assistant: ToolDef = {
   name: "get_storefront_assistant",
   description:
@@ -1178,6 +1208,7 @@ export const TOOLS: ToolDef[] = [
   create_task,
   send_report_telegram,
   send_report_email,
+  get_abandoned_carts,
   get_storefront_assistant,
   get_storefront_highlights,
   update_storefront_assistant,

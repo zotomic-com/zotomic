@@ -871,6 +871,37 @@ const store_reviews: AdminToolDef = {
   },
 };
 
+const store_abandoned_carts: AdminToolDef = {
+  name: "store_abandoned_carts",
+  description:
+    "A store's abandoned-cart stats (by store name or id): cart sessions vs orders, abandon rate, sessions left at checkout, and estimated cart value not purchased. Optional days (default 7).",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: { store: { type: "string" }, days: { type: "number" } },
+    required: ["store"],
+  },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const { getAbandonedCartSummary } = await import("@/lib/storefront/abandoned-cart");
+    const days = Math.min(Math.max(Math.round(nz(args.days) ?? 7), 1), 90);
+    const r = await getAbandonedCartSummary(st.id, new Date(Date.now() - days * DAY), new Date());
+    return {
+      store: st.name,
+      period: `last ${days} days`,
+      cartSessions: r.cartSessions,
+      reachedCheckout: r.checkoutSessions,
+      ordersPlaced: r.orders,
+      abandonedCarts: r.abandonedCarts,
+      abandonedAtCheckout: r.abandonedCheckouts,
+      cartAbandonRate: r.cartAbandonRate != null ? `${r.cartAbandonRate}%` : null,
+      averageCartValue: money(r.avgCartValue, st.currency),
+      estimatedValueLeftInCarts: money(r.estimatedLostValue, st.currency),
+    };
+  },
+};
+
 /* ────────────────────────  action tools (confirmed)  ──────────────────── */
 
 const set_store_status: AdminToolDef = {
@@ -1415,6 +1446,7 @@ export const ADMIN_TOOLS: AdminToolDef[] = [
   store_customers,
   store_customer_detail,
   store_reviews,
+  store_abandoned_carts,
   set_store_status,
   set_owner_assistant,
   set_storefront_assistant,
