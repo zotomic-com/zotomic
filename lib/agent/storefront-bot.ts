@@ -417,22 +417,24 @@ export async function runStorefrontBot(
 
   const traces: SfBotTrace[] = [];
   let model = MODEL_CHAIN[0];
-  let products: SfProductCard[] = [];
+  const cardMap = new Map<string, SfProductCard>();
   let list: { label: string; url: string } | null = null;
 
-  const cardsFromResults = (rows: unknown): SfProductCard[] => {
-    if (!Array.isArray(rows)) return [];
-    return rows
-      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && typeof r.handle === "string")
-      .slice(0, 6)
-      .map((r) => ({
-        name: String(r.name ?? ""),
-        handle: String(r.handle),
-        url: String(r.url ?? `${ctx.basePath}/products/${r.handle}`),
-        image: typeof r.image === "string" ? r.image : null,
-        price: String(r.price ?? ""),
-        stock: String(r.stock ?? ""),
-      }));
+  const addCards = (rows: unknown) => {
+    if (!Array.isArray(rows)) return;
+    for (const r of rows) {
+      if (!r || typeof r !== "object") continue;
+      const row = r as Record<string, unknown>;
+      if (typeof row.handle !== "string" || cardMap.has(row.handle)) continue;
+      cardMap.set(row.handle, {
+        name: String(row.name ?? ""),
+        handle: row.handle,
+        url: String(row.url ?? `${ctx.basePath}/products/${row.handle}`),
+        image: typeof row.image === "string" ? row.image : null,
+        price: String(row.price ?? ""),
+        stock: String(row.stock ?? ""),
+      });
+    }
   };
 
   for (let step = 0; step < 6; step++) {
@@ -442,7 +444,7 @@ export async function runStorefrontBot(
         reply: "Sorry — I'm having trouble right now. Please try again in a moment, or contact the store directly.",
         model,
         traces,
-        products,
+        products: [...cardMap.values()].slice(0, 6),
         list,
       };
     }
@@ -457,7 +459,7 @@ export async function runStorefrontBot(
         reply: text || "I'm not sure how to help with that. Could you rephrase?",
         model,
         traces,
-        products,
+        products: [...cardMap.values()].slice(0, 6),
         list,
       };
     }
@@ -485,18 +487,17 @@ export async function runStorefrontBot(
     // Collect product cards from the tools that surface products.
     const o = out as Record<string, unknown> | null;
     if (name === "search_catalog" && o && Array.isArray(o.results) && o.results.length) {
-      products = cardsFromResults(o.results);
+      addCards(o.results);
       const q = str((args ?? {}).query);
       const params = new URLSearchParams();
       if (q) params.set("q", q);
       if ((args ?? {}).in_stock_only === true) params.set("stock", "1");
       list = {
-        label: products.length >= 6 ? "See all results" : "Browse all products",
+        label: (o.results as unknown[]).length >= 6 ? "See all results" : "Browse all products",
         url: `${ctx.basePath}/products${params.toString() ? `?${params}` : ""}`,
       };
     } else if (name === "get_product" && o && typeof o.handle === "string" && !o.error) {
-      products = cardsFromResults([o]);
-      list = null;
+      addCards([o]);
     }
 
     contents.push({
@@ -509,7 +510,7 @@ export async function runStorefrontBot(
     reply: "I couldn't quite work that out. Could you rephrase, or contact the store directly?",
     model,
     traces,
-    products,
+    products: [...cardMap.values()].slice(0, 6),
     list,
   };
 }
