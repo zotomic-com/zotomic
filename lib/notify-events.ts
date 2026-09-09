@@ -22,6 +22,7 @@ export const OWNER_EVENTS: EventDef[] = [
   { key: "fraud_alert", label: "Fraud warning", hint: "A flagged customer places an order", channels: ["in_app", "email", "telegram"], default: { in_app: true, email: true, telegram: false } },
   { key: "new_review", label: "New review", hint: "A customer leaves a product review to moderate", channels: ["in_app", "email"], default: { in_app: true, email: false } },
   { key: "return_request", label: "Return request", hint: "A return / refund is requested", channels: ["in_app", "email"], default: { in_app: true, email: true } },
+  { key: "order_cancelled", label: "Order cancelled by shopper", hint: "A customer cancels their own pending order", channels: ["in_app", "email", "telegram"], default: { in_app: true, email: true, telegram: false } },
   { key: "weekly_report", label: "Weekly report ready", hint: "Your Weekly Intelligence report is generated", channels: ["in_app", "email", "telegram"], default: { in_app: true, email: true, telegram: false } },
   { key: "payment", label: "Payment updates", hint: "A credit / subscription payment is confirmed or rejected", channels: ["in_app", "email"], default: { in_app: true, email: true } },
 ];

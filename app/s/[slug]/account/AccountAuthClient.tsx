@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { readWishlist } from "@/components/storefront/wishlist-store";
 import { loginAction, registerAction } from "./actions";
 
 export function AccountAuthClient({
@@ -21,7 +22,11 @@ export function AccountAuthClient({
   const submit = (fd: FormData) =>
     start(async () => {
       setErr("");
-      const res = mode === "login" ? await loginAction(slug, fd) : await registerAction(slug, fd);
+      const wishIds = readWishlist(slug).map((w) => w.id);
+      const res =
+        mode === "login"
+          ? await loginAction(slug, fd, wishIds)
+          : await registerAction(slug, fd, wishIds);
       if ("error" in res && res.error) setErr(res.error);
       else {
         router.push(`${basePath}/account`);
@@ -58,6 +63,13 @@ export function AccountAuthClient({
       >
         {pending ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
       </button>
+      {mode === "login" && (
+        <p className="text-center text-sm">
+          <Link href={`${basePath}/account/forgot`} className="font-medium text-[var(--sf-muted)] hover:text-[var(--sf-fg)]">
+            Forgot your password?
+          </Link>
+        </p>
+      )}
       <p className="text-center text-sm text-[var(--sf-muted)]">
         {mode === "login" ? (
           <>

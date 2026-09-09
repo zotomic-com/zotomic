@@ -42,6 +42,29 @@ export async function sendStoreAccountWelcome(args: {
   });
 }
 
+/* ── storefront customer password reset ──────────────────────────────────── */
+export async function sendStoreAccountReset(args: {
+  to: string;
+  name: string;
+  storeName: string;
+  resetUrl: string;
+}): Promise<boolean> {
+  if (!args.to) return false;
+  return sendEmail({
+    to: args.to,
+    account: "support",
+    subject: `Reset your ${args.storeName} password`,
+    html: emailLayout(`
+      <h1 style="font-size:18px;margin:0 0 6px">Reset your password</h1>
+      <p style="color:#475569;line-height:1.6;margin:0 0 16px">Hi ${esc(args.name || "there")}, we got a request to reset the password for your ${esc(
+        args.storeName,
+      )} account. This link works for 45 minutes.</p>
+      <a href="${esc(args.resetUrl)}" style="display:inline-block;background:#15803d;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:600;font-size:14px">Choose a new password →</a>
+      <p style="margin:16px 0 0;color:#94a3b8;font-size:12px">If you didn't ask for this, you can ignore this email — your password stays the same.</p>
+    `),
+  });
+}
+
 /* ── order confirmation (to the customer) ─────────────────────────────────── */
 export async function sendOrderConfirmation(args: {
   to: string;

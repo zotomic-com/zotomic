@@ -6,6 +6,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { getStoreBySlug } from "@/lib/storefront/store";
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { money } from "@/lib/money";
+import { getStoreAccount } from "@/lib/storefront/account";
 import { ClearCartOnMount } from "@/components/storefront/ClearCartOnMount";
 import { TrackEvent } from "@/components/tracking/TrackEvent";
 
@@ -25,13 +26,19 @@ export default async function OrderPage({
   const db = getAdminSupabase();
   const { data: order } = await db
     .from("orders")
-    .select("order_number, total, subtotal, shipping, currency, status, placed_at, address, order_items(name, qty, unit_price)")
+    .select("order_number, total, subtotal, shipping, currency, status, placed_at, address, store_account_id, customer_id, order_items(name, qty, unit_price)")
     .eq("business_id", store.businessId)
     .eq("order_number", number)
     .maybeSingle();
 
   if (!order) notFound();
   const items = (order.order_items ?? []) as { name: string; qty: number; unit_price: number }[];
+
+  const account = await getStoreAccount(store.businessId);
+  const ownsOrder =
+    !!account &&
+    (order.store_account_id === account.id ||
+      (account.customerId != null && order.customer_id === account.customerId));
 
   return (
     <div className="mx-auto max-w-lg px-4 py-16 text-center sm:px-6">
@@ -79,6 +86,14 @@ export default async function OrderPage({
           Download invoice (PDF)
         </a>
       </div>
+
+      {ownsOrder && (
+        <p className="mt-4 text-sm text-[var(--sf-muted)]">
+          <Link href={`${basePath}/account/orders/${order.order_number}`} className="font-semibold text-[var(--sf-accent)]">
+            Track this order in your account →
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

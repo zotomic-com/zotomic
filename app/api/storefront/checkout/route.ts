@@ -100,8 +100,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `${p.name} is out of stock.` }, { status: 409 });
     }
     const basePrice = v && v.price != null ? Number(v.price) : Number(p.price);
-    const salePrice = v ? (v.sale_price == null ? null : Number(v.sale_price)) : Number(p.sale_price);
-    const unit = salePrice != null && salePrice < basePrice ? salePrice : basePrice;
+    const rawSale = v ? v.sale_price : p.sale_price;
+    const salePrice = rawSale == null ? null : Number(rawSale);
+    const unit = salePrice != null && salePrice > 0 && salePrice < basePrice ? salePrice : basePrice;
     lineItems.push({
       product_id: p.id as string,
       variant_id: v ? (v.id as string) : null,

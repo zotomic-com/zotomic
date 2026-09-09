@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { getAdminSupabase } from "@/lib/supabase";
@@ -150,4 +151,80 @@ export async function loginStoreAccount(input: {
   }
   await db.from("store_accounts").update({ last_login_at: new Date().toISOString() }).eq("id", data.id);
   return { ok: true, account: { id: data.id as string, email: data.email as string, name: data.name as string } };
+}
+
+/* ─────────────────────────────  password reset  ───────────────────────────── */
+
+const RESET_TTL_MIN = 45;
+
+/** Issue a reset token for a shopper. Returns the token + name/email for the
+ *  email send, or null when there's no such account (caller stays silent). */
+export async function createStoreAccountReset(
+  businessId: string,
+  email: string,
+): Promise<{ token: string; email: string; name: string } | null> {
+  const db = getAdminSupabase();
+  const { data } = await db
+    .from("store_accounts")
+    .select("id, email, name")
+    .eq("business_id", businessId)
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
+  if (!data) return null;
+  const token = randomBytes(32).toString("base64url");
+  await db
+    .from("store_accounts")
+    .update({
+      reset_token: token,
+      reset_token_expires: new Date(Date.now() + RESET_TTL_MIN * 60_000).toISOString(),
+    })
+    .eq("id", data.id);
+  return { token, email: data.email as string, name: (data.name as string) ?? "" };
+}
+
+export async function resetStoreAccountPassword(
+  businessId: string,
+  token: string,
+  newPassword: string,
+): Promise<{ error: string } | { ok: true }> {
+  if (newPassword.length < 8) return { error: "Password must be at least 8 characters." };
+  const db = getAdminSupabase();
+  const { data } = await db
+    .from("store_accounts")
+    .select("id, reset_token_expires")
+    .eq("business_id", businessId)
+    .eq("reset_token", token.trim())
+    .maybeSingle();
+  if (!data) return { error: "This reset link is invalid or has already been used." };
+  if (!data.reset_token_expires || new Date(data.reset_token_expires as string).getTime() < Date.now()) {
+    return { error: "This reset link has expired. Request a new one." };
+  }
+  await db
+    .from("store_accounts")
+    .update({
+      password_hash: await hashPassword(newPassword),
+      reset_token: null,
+      reset_token_expires: null,
+    })
+    .eq("id", data.id);
+  return { ok: true };
+}
+
+export async function changeStoreAccountPassword(
+  accountId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ error: string } | { ok: true }> {
+  if (newPassword.length < 8) return { error: "New password must be at least 8 characters." };
+  const db = getAdminSupabase();
+  const { data } = await db
+    .from("store_accounts")
+    .select("id, password_hash")
+    .eq("id", accountId)
+    .maybeSingle();
+  if (!data || !(await comparePassword(currentPassword, data.password_hash as string))) {
+    return { error: "Your current password is wrong." };
+  }
+  await db.from("store_accounts").update({ password_hash: await hashPassword(newPassword) }).eq("id", accountId);
+  return { ok: true };
 }
