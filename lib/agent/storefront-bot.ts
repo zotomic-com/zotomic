@@ -53,10 +53,24 @@ export interface SfBotTrace {
   ms: number;
 }
 
+/** A tappable product card the widget renders under the reply. */
+export interface SfProductCard {
+  name: string;
+  handle: string;
+  url: string;
+  image: string | null;
+  price: string;
+  stock: string;
+}
+
 export interface SfBotOutcome {
   reply: string;
   model: string;
   traces: SfBotTrace[];
+  /** products the assistant referenced this turn — rendered as image cards */
+  products: SfProductCard[];
+  /** optional "see all" link to a storefront listing page */
+  list: { label: string; url: string } | null;
 }
 
 /* ─────────────────────────────  tools  ───────────────────────────── */
@@ -124,6 +138,7 @@ const TOOLS: SfTool[] = [
           stock: stockLabel(p.stockQty, p.trackInventory),
           category: p.category,
           rating: p.reviewCount ? Number(p.rating.toFixed(1)) : null,
+          image: p.imageUrls[0] ?? null,
           url: `${ctx.basePath}/products/${p.slug}`,
         })),
       };
@@ -147,6 +162,8 @@ const TOOLS: SfTool[] = [
         : { options: [], variants: [] };
       return {
         name: p.name,
+        handle: p.slug,
+        image: p.imageUrls[0] ?? null,
         url: `${ctx.basePath}/products/${p.slug}`,
         price: priceText(p.salePrice ?? p.price, p.salePrice, ctx.currency),
         description: p.description || null,
@@ -323,7 +340,7 @@ Politely decline anything else (general knowledge, other shops, advice unrelated
 RULES:
 - Use the tools for every factual claim. NEVER invent products, prices, stock, policies or order details.
 - Prices and figures come only from tools — state them exactly as returned (currency: ${ctx.currency}).
-- When you mention a product, include its link.
+- PRODUCTS: after search_catalog or get_product, the app AUTOMATICALLY shows the shopper a tappable image card (photo, name, price, link) for each product. So just talk about the products in one or two natural sentences — do NOT paste product URLs, markdown links, bullet lists of products, or repeat every price. Example: "Yes, we have one perfume in stock — tap the card below to see it."
 - For order look-ups: a signed-in shopper is already verified. A guest must give the order number AND the phone number on the order before you reveal anything.
 - You cannot place orders, change orders, apply discounts or take payment. Point the shopper to the product page or checkout to buy, and to the store's contact details for changes.
 - Be concise and friendly. Plain language, short sentences, no emojis. Reply in the shopper's language.
@@ -400,6 +417,23 @@ export async function runStorefrontBot(
 
   const traces: SfBotTrace[] = [];
   let model = MODEL_CHAIN[0];
+  let products: SfProductCard[] = [];
+  let list: { label: string; url: string } | null = null;
+
+  const cardsFromResults = (rows: unknown): SfProductCard[] => {
+    if (!Array.isArray(rows)) return [];
+    return rows
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && typeof r.handle === "string")
+      .slice(0, 6)
+      .map((r) => ({
+        name: String(r.name ?? ""),
+        handle: String(r.handle),
+        url: String(r.url ?? `${ctx.basePath}/products/${r.handle}`),
+        image: typeof r.image === "string" ? r.image : null,
+        price: String(r.price ?? ""),
+        stock: String(r.stock ?? ""),
+      }));
+  };
 
   for (let step = 0; step < 6; step++) {
     const resp = await callGemini(system, contents);
@@ -408,6 +442,8 @@ export async function runStorefrontBot(
         reply: "Sorry — I'm having trouble right now. Please try again in a moment, or contact the store directly.",
         model,
         traces,
+        products,
+        list,
       };
     }
     model = resp.model;
@@ -417,7 +453,13 @@ export async function runStorefrontBot(
     );
     if (!fnCall) {
       const text = resp.parts.map((p) => ("text" in p ? p.text : "")).join("").trim();
-      return { reply: text || "I'm not sure how to help with that. Could you rephrase?", model, traces };
+      return {
+        reply: text || "I'm not sure how to help with that. Could you rephrase?",
+        model,
+        traces,
+        products,
+        list,
+      };
     }
 
     const { name, args } = fnCall.functionCall;
@@ -439,6 +481,24 @@ export async function runStorefrontBot(
       out = { error: (e as Error).message };
     }
     traces.push({ tool: name, args: args ?? {}, ms: Date.now() - started });
+
+    // Collect product cards from the tools that surface products.
+    const o = out as Record<string, unknown> | null;
+    if (name === "search_catalog" && o && Array.isArray(o.results) && o.results.length) {
+      products = cardsFromResults(o.results);
+      const q = str((args ?? {}).query);
+      const params = new URLSearchParams();
+      if (q) params.set("q", q);
+      if ((args ?? {}).in_stock_only === true) params.set("stock", "1");
+      list = {
+        label: products.length >= 6 ? "See all results" : "Browse all products",
+        url: `${ctx.basePath}/products${params.toString() ? `?${params}` : ""}`,
+      };
+    } else if (name === "get_product" && o && typeof o.handle === "string" && !o.error) {
+      products = cardsFromResults([o]);
+      list = null;
+    }
+
     contents.push({
       role: "user",
       parts: [{ functionResponse: { name, response: { result: out } } }],
@@ -449,6 +509,8 @@ export async function runStorefrontBot(
     reply: "I couldn't quite work that out. Could you rephrase, or contact the store directly?",
     model,
     traces,
+    products,
+    list,
   };
 }
 

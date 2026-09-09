@@ -211,7 +211,12 @@ export async function POST(req: NextRequest) {
     .eq("id", conversationId);
   await bumpUsage(store.businessId, utcPeriod(), { messages: 1 });
 
-  const res = NextResponse.json({ conversationId, reply: outcome.reply });
+  const res = NextResponse.json({
+    conversationId,
+    reply: outcome.reply,
+    products: outcome.products,
+    list: outcome.list,
+  });
   if (setCookie) {
     res.cookies.set(VISITOR_COOKIE, visitorId, {
       httpOnly: true,

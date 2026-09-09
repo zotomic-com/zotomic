@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { usePathname } from "next/navigation";
-import { MessageCircle, X, Send, Sparkles } from "lucide-react";
+import { MessageCircle, X, Send, Sparkles, ArrowRight } from "lucide-react";
 
 interface Bootstrap {
   enabled: boolean;
@@ -13,19 +13,66 @@ interface Bootstrap {
   unavailable: boolean;
 }
 
+interface ProductCard {
+  name: string;
+  handle: string;
+  url: string;
+  image: string | null;
+  price: string;
+  stock: string;
+}
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  products?: ProductCard[];
+  list?: { label: string; url: string } | null;
 }
 
 const convKey = (slug: string) => `zt_sf_chat_conv_${slug}`;
+const logKey = (slug: string) => `zt_sf_chat_log_${slug}`;
+const LOG_TTL = 12 * 60 * 60 * 1000; // keep the on-device chat for 12h
+const LOG_MAX = 40;
 
-/** Linkify bare storefront links + **bold** in assistant replies. */
+function loadLog(slug: string): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(logKey(slug));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { at: number; messages: ChatMessage[] };
+    if (!parsed?.at || Date.now() - parsed.at > LOG_TTL || !Array.isArray(parsed.messages)) {
+      localStorage.removeItem(logKey(slug));
+      return [];
+    }
+    return parsed.messages;
+  } catch {
+    return [];
+  }
+}
+
+function saveLog(slug: string, messages: ChatMessage[]) {
+  try {
+    if (!messages.length) return localStorage.removeItem(logKey(slug));
+    localStorage.setItem(
+      logKey(slug),
+      JSON.stringify({ at: Date.now(), messages: messages.slice(-LOG_MAX) }),
+    );
+  } catch {
+    /* private mode / quota */
+  }
+}
+
+/** Strip any stray product markdown link the model still emits (cards replace it),
+ *  then render **bold** and non-product links. */
 function renderContent(text: string) {
-  const parts = text.split(/(\bhttps?:\/\/\S+|\/[A-Za-z0-9/_-]*products\/[A-Za-z0-9_-]+|\*\*[^*]+\*\*)/g);
+  const cleaned = text
+    .replace(/\[([^\]]+)\]\((?:https?:\/\/[^)]+)?\/[^)]*products\/[^)]+\)/g, "$1")
+    .replace(/\(?\/[A-Za-z0-9/_-]*products\/[A-Za-z0-9_-]+\)?/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+  const parts = cleaned.split(/(\bhttps?:\/\/\S+|\*\*[^*]+\*\*)/g);
   return parts.map((p, i) => {
     if (/^\*\*[^*]+\*\*$/.test(p)) return <strong key={i}>{p.slice(2, -2)}</strong>;
-    if (/^(https?:\/\/|\/)/.test(p)) {
+    if (/^https?:\/\//.test(p)) {
       return (
         <a key={i} href={p} className="underline" style={{ color: "var(--sf-accent)" }}>
           {p.replace(/^https?:\/\//, "")}
@@ -34,6 +81,43 @@ function renderContent(text: string) {
     }
     return <span key={i}>{p}</span>;
   });
+}
+
+function ProductCards({ products, list }: { products: ProductCard[]; list?: { label: string; url: string } | null }) {
+  return (
+    <div className="mt-2 space-y-2">
+      {products.map((p) => (
+        <a
+          key={p.handle}
+          href={p.url}
+          className="flex items-center gap-3 rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-bg)] p-2 transition-colors hover:border-[var(--sf-accent)]"
+        >
+          <span className="h-14 w-14 shrink-0 overflow-hidden rounded-[calc(var(--sf-radius)-2px)] bg-[var(--sf-card)]">
+            {p.image ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={p.image} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+            ) : null}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-[var(--sf-fg)]">{p.name}</span>
+            <span className="block text-sm text-[var(--sf-fg)]">{p.price}</span>
+            {p.stock && p.stock !== "in stock" && (
+              <span className="block text-xs text-[var(--sf-muted)]">{p.stock}</span>
+            )}
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-[var(--sf-muted)]" />
+        </a>
+      ))}
+      {list && (
+        <a
+          href={list.url}
+          className="flex items-center justify-center gap-1.5 rounded-[var(--sf-radius)] border border-[var(--sf-line)] py-2 text-xs font-medium text-[var(--sf-fg)] hover:border-[var(--sf-accent)]"
+        >
+          {list.label} <ArrowRight className="h-3.5 w-3.5" />
+        </a>
+      )}
+    </div>
+  );
 }
 
 export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
@@ -62,6 +146,8 @@ export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
     } catch {
       /* private mode */
     }
+    const cached = loadLog(storeSlug);
+    if (cached.length) setMessages(cached);
     return () => {
       alive = false;
     };
@@ -70,6 +156,11 @@ export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
   useEffect(() => {
     if (open && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open, sending]);
+
+  // Cache the conversation on the visitor's device so it survives reloads / navigation.
+  useEffect(() => {
+    saveLog(storeSlug, messages);
+  }, [storeSlug, messages]);
 
   const send = useCallback(
     async (text: string) => {
@@ -98,7 +189,10 @@ export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
         } catch {
           /* ignore */
         }
-        setMessages((m) => [...m, { role: "assistant", content: data.reply }]);
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", content: data.reply, products: data.products ?? [], list: data.list ?? null },
+        ]);
       } catch {
         setError("Network error. Please try again.");
         setMessages((m) => m.slice(0, -1));
@@ -146,6 +240,25 @@ export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
                 {boot.registered ? "Powered by Zotomic" : "Shopping assistant"}
               </p>
             </div>
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMessages([]);
+                  setError(null);
+                  convId.current = null;
+                  try {
+                    localStorage.removeItem(convKey(storeSlug));
+                    localStorage.removeItem(logKey(storeSlug));
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="text-[11px] font-medium underline opacity-80 hover:opacity-100"
+              >
+                New chat
+              </button>
+            )}
             <button type="button" onClick={() => setOpen(false)} aria-label="Close">
               <X className="h-5 w-5" />
             </button>
@@ -178,9 +291,14 @@ export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
             )}
 
             {messages.map((m, i) => (
-              <Bubble key={i} role={m.role}>
-                {m.role === "assistant" ? renderContent(m.content) : m.content}
-              </Bubble>
+              <div key={i}>
+                <Bubble role={m.role}>
+                  {m.role === "assistant" ? renderContent(m.content) : m.content}
+                </Bubble>
+                {m.role === "assistant" && m.products && m.products.length > 0 && (
+                  <ProductCards products={m.products} list={m.list} />
+                )}
+              </div>
             ))}
 
             {sending && (
