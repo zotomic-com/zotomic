@@ -8,6 +8,7 @@ import { StoreSearchBar } from "./StoreSearchBar";
 import { AccountLink } from "./AccountLink";
 import { MenuDrawer } from "./MenuDrawer";
 import { MobileNav } from "./MobileNav";
+import { AssistantWidget } from "./AssistantWidget";
 
 /** Storefront chrome. Scopes accent/font/radius/shadow via CSS vars so it never
  *  collides with the Zotomic app styles. */
@@ -116,6 +117,7 @@ export function StoreShell({
       <main className={`flex-1 ${storeSlug ? "pb-24 sm:pb-0" : ""}`}>{children}</main>
 
       {storeSlug ? <MobileNav storeSlug={storeSlug} basePath={basePath} /> : null}
+      {storeSlug ? <AssistantWidget storeSlug={storeSlug} /> : null}
 
       <footer className="mt-20 border-t border-[var(--sf-line)] bg-[var(--sf-card)]">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
