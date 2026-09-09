@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Flame, Maximize2, Ruler, Star, Truck } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Flame, Maximize2, Ruler, ShoppingBag, Star, Truck } from "lucide-react";
 import { money } from "@/lib/money";
 import { cldUrl } from "@/lib/cloudinary";
 import { isColourOpt, isSizeOpt, resolveSwatch } from "@/lib/storefront/colour";
 import { Stars } from "./Stars";
-import { addToCart } from "./cart-store";
+import { addToCart, cartCount } from "./cart-store";
 import { pixel } from "@/components/tracking/Pixel";
 import { storefrontEvent } from "./StorefrontTracker";
 import { WishlistHeart } from "./WishlistHeart";
@@ -92,6 +93,18 @@ export function ProductDetail({
   const [added, setAdded] = useState(false);
   const [sizePage, setSizePage] = useState(0); // mobile: 3 sizes per page
   const [showReviews, setShowReviews] = useState(false); // desktop: reviews open on click
+  const [cartN, setCartN] = useState(0);
+
+  useEffect(() => {
+    const sync = () => setCartN(cartCount(storeSlug));
+    sync();
+    window.addEventListener("zotomic-cart", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("zotomic-cart", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, [storeSlug]);
 
   // lock page scroll behind the full-screen mobile layer
   useEffect(() => {
@@ -492,6 +505,14 @@ export function ProductDetail({
                     size={18}
                     className={b}
                   />
+                  <Link href={`${basePath}/cart`} aria-label="Cart" className={`relative ${b}`}>
+                    <ShoppingBag className="h-[18px] w-[18px]" />
+                    {cartN > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--sf-accent)] px-1 text-[10px] font-bold text-white">
+                        {cartN}
+                      </span>
+                    )}
+                  </Link>
                   <MenuDrawer nav={nav} basePath={basePath} storeSlug={storeSlug} triggerClassName={b} />
                 </div>
               </>
