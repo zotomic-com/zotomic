@@ -175,6 +175,12 @@ export async function submitStorefrontChatTopup(
   await writeAudit(businessId, user.id, "storefront_assistant.topup_submitted", {
     summary: `Submitted ${method} payment for ${pack.conversations} storefront-chat conversations (৳${pack.price}), txn ${txnId}`,
   });
+
+  const { pushAdminAlert } = await import("@/lib/admin/notify");
+  await pushAdminAlert(
+    `💬 <b>Storefront-chat top-up to confirm</b>\n${biz?.name ?? "A store"} · ${pack.conversations.toLocaleString("en-US")} conversations · ৳${pack.price} · ${method} · txn <code>${txnId}</code>\nReply "pending payments" to review.`,
+  );
+
   revalidatePath("/app/messages");
   return { ok: true };
 }

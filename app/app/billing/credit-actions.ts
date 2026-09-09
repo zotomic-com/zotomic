@@ -61,6 +61,11 @@ export async function submitCreditPurchase(form: FormData): Promise<{ ok: true }
     summary: `Submitted ${method} payment for ${pack.credits} credits (৳${pack.price}), txn ${txnId}`,
   });
 
+  const { pushAdminAlert } = await import("@/lib/admin/notify");
+  await pushAdminAlert(
+    `💳 <b>Credit top-up to confirm</b>\n${biz?.name ?? "A store"} · ${pack.credits} credits · ৳${pack.price} · ${method} · txn <code>${txnId}</code>\nReply "pending payments" to review.`,
+  );
+
   revalidatePath("/app/billing");
   return { ok: true };
 }

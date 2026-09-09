@@ -92,5 +92,14 @@ export async function POST(req: NextRequest) {
     status: "queued",
   });
 
+  try {
+    const { pushAdminAlert } = await import("@/lib/admin/notify");
+    await pushAdminAlert(
+      `🎉 <b>New store</b>: ${business.name} (${slug}) — ${(user as { email?: string }).email ?? "new owner"}`,
+    );
+  } catch {
+    /* non-fatal */
+  }
+
   return NextResponse.json({ success: true, businessId: bid, redirect: "/app" });
 }
