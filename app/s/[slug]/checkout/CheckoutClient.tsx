@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { money } from "@/lib/money";
+import { cldUrl } from "@/lib/cloudinary";
 import { readCart, writeCart, type CartItem } from "@/components/storefront/cart-store";
 import { QtyStepper } from "@/components/storefront/QtyStepper";
 import { StockLine, useLineStock } from "@/components/storefront/StockLine";
@@ -141,7 +142,13 @@ export function CheckoutClient({
         <p className="text-sm font-bold">Order summary</p>
         <ul className="mt-3 space-y-3 text-sm">
           {items.map((i) => (
-            <li key={i.id} className="flex items-center justify-between gap-2">
+            <li key={i.id} className="flex items-start gap-3">
+              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-bg)]">
+                {i.image && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={cldUrl(i.image, 120)} alt={i.name} className="h-full w-full object-cover" />
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[var(--sf-fg)]">{i.name}</p>
                 <StockLine info={stock[i.variantId ?? i.productId]} qty={i.qty} />
