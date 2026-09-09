@@ -13,11 +13,16 @@ export async function setOrderStatus(orderId: string, status: string, reason?: s
 
   const { data: before } = await db
     .from("orders")
-    .select("status, order_number")
+    .select("status, order_number, fraud_hold")
     .eq("business_id", businessId)
     .eq("id", orderId)
     .maybeSingle();
   if (!before) return { error: "Order not found" };
+
+  // a blacklisted-customer order can't move forward until the hold is cleared
+  if (before.fraud_hold && ["confirmed", "processing", "shipped", "delivered"].includes(status)) {
+    return { error: "This order is on hold — verify the customer and clear the fraud hold first." };
+  }
 
   const patch: Record<string, unknown> = { status };
   if (status === "delivered") patch.delivered_at = new Date().toISOString();
@@ -46,6 +51,31 @@ export async function setOrderStatus(orderId: string, status: string, reason?: s
   return { ok: true, reviewInvites };
 }
 
+export async function clearFraudHold(orderId: string): Promise<{ ok: true } | { error: string }> {
+  const { businessId, user, db } = await requireBusiness();
+  const { data: o } = await db
+    .from("orders")
+    .select("order_number, fraud_hold")
+    .eq("business_id", businessId)
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!o) return { error: "Order not found" };
+  await db.from("orders").update({ fraud_hold: false }).eq("business_id", businessId).eq("id", orderId);
+  await db
+    .from("fraud_order_matches")
+    .update({ cleared: true, cleared_by: user.id, cleared_at: new Date().toISOString() })
+    .eq("order_id", orderId)
+    .eq("business_id", businessId);
+  await writeAudit(businessId, user.id, "order.fraud_hold_cleared", {
+    targetType: "order",
+    targetId: orderId,
+    summary: `${o.order_number}: fraud hold cleared after verification`,
+  });
+  revalidatePath(`/app/orders/${orderId}`);
+  revalidatePath("/app/orders");
+  return { ok: true };
+}
+
 export async function bookCourier(orderId: string, provider: string) {
   const { businessId, user, db } = await requireBusiness();
 
@@ -58,11 +88,12 @@ export async function bookCourier(orderId: string, provider: string) {
 
   const { data: order } = await db
     .from("orders")
-    .select("id, order_number, total, payment_method, payment_status, address, customers(name, phone), order_items(qty)")
+    .select("id, order_number, total, payment_method, payment_status, address, fraud_hold, customers(name, phone), order_items(qty)")
     .eq("business_id", businessId)
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { error: "Order not found" };
+  if (order.fraud_hold) return { error: "This order is on hold — clear the fraud hold after verifying the customer." };
 
   const { data: existing } = await db.from("shipments").select("id").eq("order_id", orderId).maybeSingle();
   if (existing) return { error: "A shipment already exists for this order." };

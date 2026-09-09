@@ -10,7 +10,9 @@ import { DetailShell, FactList } from "@/components/app/DetailShell";
 import { Timeline, type TimelineEvent } from "@/components/app/Timeline";
 import { OrderStatusControl } from "./OrderStatusControl";
 import { CourierControl } from "./CourierControl";
+import { FraudHoldBanner } from "./FraudHoldBanner";
 import { listIntegrations, COURIER_PROVIDERS } from "@/lib/adapters/registry";
+import { STAGE_LABEL, CATEGORY_LABEL } from "@/lib/fraud/phone";
 
 export const dynamic = "force-dynamic";
 
@@ -26,14 +28,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const { data: order } = await db
     .from("orders")
     .select(
-      "id, order_number, status, payment_method, payment_status, subtotal, shipping, discount, total, currency, placed_at, address, cancel_reason, cancelled_at, customer_id, customers(id, name, phone, email, city, total_orders, total_spent), order_items(name, qty, unit_price, line_total)",
+      "id, order_number, status, payment_method, payment_status, subtotal, shipping, discount, total, currency, placed_at, address, cancel_reason, cancelled_at, fraud_hold, customer_id, customers(id, name, phone, email, city, total_orders, total_spent), order_items(name, qty, unit_price, line_total)",
     )
     .eq("business_id", tenant.businessId)
     .eq("id", id)
     .maybeSingle();
   if (!order) notFound();
 
-  const [integrations, { data: shipmentRow }, { data: audit }] = await Promise.all([
+  const [integrations, { data: shipmentRow }, { data: audit }, { data: fraudMatch }] = await Promise.all([
     listIntegrations(tenant.businessId),
     db.from("shipments").select("provider, status, tracking_code, consignment_id").eq("order_id", id).maybeSingle(),
     db
@@ -43,6 +45,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       .eq("target_id", id)
       .order("created_at", { ascending: false })
       .limit(10),
+    db
+      .from("fraud_order_matches")
+      .select("stage, cleared, flag_id, fraud_flags(category)")
+      .eq("order_id", id)
+      .eq("business_id", tenant.businessId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const couriers = integrations
@@ -168,6 +178,23 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           Cancelled{order.cancelled_at ? ` on ${new Date(order.cancelled_at as string).toLocaleDateString("en-US")}` : ""}
           {order.cancel_reason ? ` — ${order.cancel_reason}` : ""}
         </div>
+      )}
+
+      {fraudMatch && !fraudMatch.cleared && (
+        <FraudHoldBanner
+          orderId={order.id as string}
+          held={!!order.fraud_hold}
+          stageLabel={STAGE_LABEL[Number(fraudMatch.stage)] ?? "Watch"}
+          category={
+            CATEGORY_LABEL[
+              ((Array.isArray(fraudMatch.fraud_flags) ? fraudMatch.fraud_flags[0] : fraudMatch.fraud_flags) as
+                | { category?: string }
+                | null)?.category ?? "other"
+            ]
+          }
+          phone={cust?.phone ?? null}
+          email={cust?.email ?? null}
+        />
       )}
 
       {/* fulfilment progress */}

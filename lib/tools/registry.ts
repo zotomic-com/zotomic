@@ -1018,6 +1018,53 @@ const send_report_email: ToolDef = {
   },
 };
 
+const check_customer_risk: ToolDef = {
+  name: "check_customer_risk",
+  description:
+    "Check whether a customer is on Zotomic's fraud watchlist — by phone number or by one of your order numbers. Returns a warning with the stage and reason category only (no other stores, no numbers). Use it before confirming or shipping a suspicious order.",
+  risk: "read",
+  creditCost: 0,
+  parameters: {
+    type: "object",
+    properties: {
+      phone: { type: "string" },
+      orderNumber: { type: "string" },
+    },
+  },
+  async handler(ctx, a) {
+    let phone = s(a.phone);
+    if (!phone && s(a.orderNumber)) {
+      const { data: o } = await ctx.db
+        .from("orders")
+        .select("customers(phone)")
+        .eq("business_id", ctx.businessId)
+        .ilike("order_number", s(a.orderNumber)!)
+        .maybeSingle();
+      const c = (Array.isArray(o?.customers) ? o?.customers[0] : o?.customers) as { phone?: string } | null;
+      phone = c?.phone ?? "";
+    }
+    if (!phone) return { error: "Give a phone number or one of your order numbers." };
+
+    const { getActiveFlagByPhone } = await import("@/lib/fraud/flags");
+    const { STAGE_LABEL, CATEGORY_LABEL } = await import("@/lib/fraud/phone");
+    const flag = await getActiveFlagByPhone(phone);
+    if (!flag) return { flagged: false, message: "Not on the fraud watchlist." };
+
+    const label = STAGE_LABEL[flag.stage] ?? "Watch";
+    return {
+      flagged: true,
+      stage: flag.stage,
+      stageLabel: label,
+      reasonCategory: CATEGORY_LABEL[flag.category] ?? "risk signals",
+      advice:
+        flag.stage >= 3
+          ? "Blacklisted customer. Any order from them is placed on hold automatically — verify by phone/WhatsApp/email and only clear the hold if you're confident, otherwise cancel."
+          : `On the watchlist at ${label} stage. Verify this order directly (call / WhatsApp / email) before you confirm it.`,
+      note: "This is a platform-wide warning. Details from other stores are not shared.",
+    };
+  },
+};
+
 const get_abandoned_carts: ToolDef = {
   name: "get_abandoned_carts",
   description:
@@ -1228,6 +1275,7 @@ export const TOOLS: ToolDef[] = [
   create_task,
   send_report_telegram,
   send_report_email,
+  check_customer_risk,
   get_abandoned_carts,
   get_storefront_assistant,
   get_storefront_highlights,

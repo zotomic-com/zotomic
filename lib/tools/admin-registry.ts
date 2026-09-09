@@ -10,6 +10,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { money } from "@/lib/money";
 import { SF_CHAT_QUOTA, utcPeriod } from "@/lib/storefront/assistant";
 import { normalizeSignals } from "@/lib/storefront/assistant-signals";
+import { STAGE_LABEL, CATEGORY_LABEL } from "@/lib/fraud/phone";
 import { PLANS, type PlanId } from "@/lib/plans";
 
 export type AdminRisk = "read" | "consequential";
@@ -919,6 +920,158 @@ const store_abandoned_carts: AdminToolDef = {
   },
 };
 
+/* ─────────────────────────────  fraud  ───────────────────────────── */
+
+const fraud_list: AdminToolDef = {
+  name: "fraud_list",
+  description:
+    "The platform fraud watchlist. Optional: stage (1 Watch / 2 Suspect / 3 Blacklist), query (phone/email/name). Returns each flagged person's stage, category, risk score and recent order count.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: { stage: { type: "number", enum: [1, 2, 3] }, query: { type: "string" } },
+  },
+  async handler(_a, args) {
+    const db = getAdminSupabase();
+    const wk = new Date(Date.now() - 7 * DAY).toISOString();
+    let q = db
+      .from("fraud_flags")
+      .select("id, phone, email, name, stage, category, reason, auto_score, source, last_activity_at")
+      .eq("status", "active")
+      .order("stage", { ascending: false })
+      .order("last_activity_at", { ascending: false })
+      .limit(100);
+    if (nz(args.stage)) q = q.eq("stage", nz(args.stage)!);
+    if (s(args.query)) q = q.or(`phone.ilike.%${s(args.query)}%,email.ilike.%${s(args.query)}%,name.ilike.%${s(args.query)}%`);
+    const { data } = await q;
+    const ids = (data ?? []).map((f) => f.id as string);
+    const { data: matches } = ids.length
+      ? await db.from("fraud_order_matches").select("flag_id").in("flag_id", ids).gte("created_at", wk)
+      : { data: [] as { flag_id: string }[] };
+    const recent = new Map<string, number>();
+    for (const m of matches ?? []) recent.set(m.flag_id as string, (recent.get(m.flag_id as string) ?? 0) + 1);
+    return {
+      flags: (data ?? []).map((f) => ({
+        id: f.id,
+        name: f.name ?? null,
+        phone: f.phone ?? null,
+        email: f.email ?? null,
+        stage: Number(f.stage),
+        stageLabel: STAGE_LABEL[Number(f.stage)],
+        category: CATEGORY_LABEL[(f.category as string) ?? "other"] ?? f.category,
+        riskScore: f.auto_score != null ? Number(f.auto_score) : null,
+        source: f.source,
+        ordersLast7d: recent.get(f.id as string) ?? 0,
+        reason: f.reason ?? null,
+      })),
+    };
+  },
+};
+
+const fraud_detail: AdminToolDef = {
+  name: "fraud_detail",
+  description: "Full detail on ONE fraud flag (by phone or flag id): stage, category, reason, the evidence numbers, every store involved, and the orders it has matched.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: { phone: { type: "string" }, flagId: { type: "string" } },
+  },
+  async handler(_a, args) {
+    const db = getAdminSupabase();
+    let q = db.from("fraud_flags").select("*").eq("status", "active");
+    if (s(args.flagId)) q = q.eq("id", s(args.flagId));
+    else if (s(args.phone)) {
+      const { normalizePhone } = await import("@/lib/fraud/phone");
+      const p = normalizePhone(s(args.phone));
+      if (!p) return { error: "Invalid phone." };
+      q = q.eq("phone", p);
+    } else return { error: "Give a phone or flag id." };
+    const { data: f } = await q.maybeSingle();
+    if (!f) return { error: "No active flag for that." };
+    const { data: matches } = await db
+      .from("fraud_order_matches")
+      .select("stage, held, cleared, created_at, businesses(name), orders(order_number, status)")
+      .eq("flag_id", f.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    return {
+      name: f.name ?? null,
+      phone: f.phone ?? null,
+      email: f.email ?? null,
+      stage: Number(f.stage),
+      stageLabel: STAGE_LABEL[Number(f.stage)],
+      category: CATEGORY_LABEL[(f.category as string) ?? "other"] ?? f.category,
+      source: f.source,
+      reason: f.reason ?? null,
+      riskScore: f.auto_score != null ? Number(f.auto_score) : null,
+      evidence: f.evidence ?? {},
+      stores: Array.isArray(f.stores) ? f.stores : [],
+      matchedOrders: (matches ?? []).map((m) => {
+        const o = (Array.isArray(m.orders) ? m.orders[0] : m.orders) as { order_number?: string; status?: string } | null;
+        const b = (Array.isArray(m.businesses) ? m.businesses[0] : m.businesses) as { name?: string } | null;
+        return { order: o?.order_number ?? "—", store: b?.name ?? "—", status: o?.status, held: m.held, cleared: m.cleared, at: m.created_at };
+      }),
+    };
+  },
+};
+
+const set_fraud_stage: AdminToolDef = {
+  name: "set_fraud_stage",
+  description:
+    "Flag a customer, or change their stage: 1 = Watch, 2 = Suspect, 3 = Blacklist (Stage 3 auto-holds their new orders everywhere). Identify by phone (creates the flag if new) or flagId.",
+  risk: "consequential",
+  parameters: {
+    type: "object",
+    properties: {
+      phone: { type: "string" },
+      flagId: { type: "string" },
+      name: { type: "string" },
+      stage: { type: "number", enum: [1, 2, 3] },
+      category: { type: "string", enum: ["cancellations", "returns", "delivery_failures", "cross_store", "chargeback", "abuse", "reported", "other"] },
+      reason: { type: "string" },
+    },
+    required: ["stage"],
+  },
+  async handler(adminId, args) {
+    const { setFraudStage } = await import("@/lib/fraud/flags");
+    const stage = ([1, 2, 3].includes(nz(args.stage) ?? 0) ? nz(args.stage) : 1) as 1 | 2 | 3;
+    const res = await setFraudStage(
+      { flagId: s(args.flagId) || undefined, phone: s(args.phone) || undefined, name: s(args.name) || undefined },
+      { stage, category: s(args.category) || undefined, reason: s(args.reason) || undefined, adminId },
+    );
+    if ("error" in res) return res;
+    await writeUserAudit(adminId, "fraud.stage_set", `${s(args.phone) || s(args.flagId)} → ${STAGE_LABEL[stage]}`, res.flagId);
+    return { ok: true, flagId: res.flagId, stage: STAGE_LABEL[stage] };
+  },
+};
+
+const clear_fraud_flag: AdminToolDef = {
+  name: "clear_fraud_flag",
+  description: "Clear a fraud flag as a false positive (by flag id).",
+  risk: "consequential",
+  parameters: { type: "object", properties: { flagId: { type: "string" } }, required: ["flagId"] },
+  async handler(adminId, args) {
+    const { clearFraudFlag } = await import("@/lib/fraud/flags");
+    const res = await clearFraudFlag(s(args.flagId), adminId);
+    if ("error" in res) return res;
+    await writeUserAudit(adminId, "fraud.cleared", `Cleared flag ${s(args.flagId)}`);
+    return { ok: true };
+  },
+};
+
+const run_fraud_scan: AdminToolDef = {
+  name: "run_fraud_scan",
+  description: "Run the platform-wide fraud scan now (recomputes Stage 1/2 auto flags from cancellation / return / delivery-failure signals).",
+  risk: "consequential",
+  parameters: { type: "object", properties: {} },
+  async handler(adminId) {
+    const { runFraudScan } = await import("@/lib/fraud/detect");
+    const r = await runFraudScan();
+    await writeUserAudit(adminId, "fraud.scan", `Scan: ${r.flagged} flagged of ${r.scanned}`);
+    return r;
+  },
+};
+
 /* ────────────────────────  action tools (confirmed)  ──────────────────── */
 
 const set_store_status: AdminToolDef = {
@@ -1464,6 +1617,11 @@ export const ADMIN_TOOLS: AdminToolDef[] = [
   store_customer_detail,
   store_reviews,
   store_abandoned_carts,
+  fraud_list,
+  fraud_detail,
+  set_fraud_stage,
+  clear_fraud_flag,
+  run_fraud_scan,
   set_store_status,
   set_owner_assistant,
   set_storefront_assistant,

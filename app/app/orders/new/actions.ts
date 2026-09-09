@@ -35,6 +35,14 @@ export async function createManualOrder(payload: {
     targetId: res.id,
     summary: `Manual order ${res.orderNumber}`,
   });
+
+  const { checkOrderForFraud } = await import("@/lib/fraud/check");
+  await checkOrderForFraud(res.id, {
+    phone: payload.customer.phone,
+    email: payload.customer.email,
+    name: payload.customer.name,
+  });
+
   revalidatePath("/app/orders");
   return { ok: true, orderId: res.id };
 }

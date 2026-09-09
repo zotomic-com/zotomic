@@ -285,6 +285,10 @@ export async function POST(req: NextRequest) {
     href: "/app/orders",
   });
 
+  // fraud check — warn the owner (and hold the order if blacklisted)
+  const { checkOrderForFraud } = await import("@/lib/fraud/check");
+  await checkOrderForFraud(order.id as string, { phone, email: clean(body.customer?.email, 200), name });
+
   revalidatePath(`/s/${body.storeSlug}`);
 
   // ── gateway payment: start it and hand back a redirect URL ────────────────
