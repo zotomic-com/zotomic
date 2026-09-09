@@ -1594,9 +1594,34 @@ const block_ip: AdminToolDef = {
   },
 };
 
+/* ─────────────────────────────  general / web  ───────────────────────────── */
+
+const web_search: AdminToolDef = {
+  name: "web_search",
+  description:
+    "Search the public web and get a short answer with source links. Use this for anything outside the Zotomic platform that needs current or factual information — news, prices, exchange rates, product/company research, documentation, how-to, definitions, or anything that may have changed since your training. Do NOT use it for platform data (stores, orders, users, revenue) — those have their own tools.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: { query: { type: "string", description: "a natural-language search query" } },
+    required: ["query"],
+  },
+  async handler(_a, args) {
+    const query = s(args.query);
+    if (!query) return { error: "Give something to search for." };
+    const { runWebSearch } = await import("@/lib/ai/web-search");
+    const res = await runWebSearch(query);
+    if (!res) {
+      return { error: "Web search returned nothing (the search provider may be blocking us right now). Try rephrasing or again shortly." };
+    }
+    return { answer: res.answer, sources: res.sources };
+  },
+};
+
 /* ─────────────────────────────  registry  ───────────────────────────── */
 
 export const ADMIN_TOOLS: AdminToolDef[] = [
+  web_search,
   list_users,
   user_detail,
   set_user_state,
