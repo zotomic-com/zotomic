@@ -1,77 +1,57 @@
 import nodemailer, { type Transporter } from "nodemailer";
 
 /**
- * Email adapter — Gmail / Google Workspace SMTP via App Passwords.
- *
- * Four sending identities, each authenticating as itself:
+ * Email adapter — one Gmail account (`zotomic.com@gmail.com`) with four
+ * "Send mail as" aliases. Every send authenticates as the ONE account
+ * (MAIL_AUTH_USER / MAIL_AUTH_PASS, falling back to GMAIL_USER /
+ * GMAIL_APP_PASSWORD) and just varies the From address:
  *   invoice  invoice@zotomic.com  — customer order invoices & confirmations
  *   admin    admin@zotomic.com    — Zotomic-issued invoices + internal alerts
  *   support  support@zotomic.com  — store-owner account mail (resets, billing, reports)
  *   info     info@zotomic.com     — general / post-purchase (review invites, newsletter)
  *
- * Each account reads MAIL_<ACCOUNT>_USER / MAIL_<ACCOUNT>_PASS. If an account is
- * not configured it falls back to the legacy GMAIL_USER / GMAIL_APP_PASSWORD
- * single account. If nothing is configured, sends are logged and skipped (never
- * throws), so the app works without mail.
+ * Each alias's From address can be overridden with MAIL_<ACCOUNT>_FROM (or the
+ * legacy MAIL_<ACCOUNT>_USER). If auth isn't configured, sends are logged and
+ * skipped (never throws), so the app works without mail.
  */
 
 export type MailAccount = "invoice" | "admin" | "support" | "info";
 
-interface AccountCfg {
-  user?: string;
-  pass?: string;
-  from: string;
+const ALIAS: Record<MailAccount, { addr: string; label: string }> = {
+  invoice: { addr: "invoice@zotomic.com", label: "Zotomic Invoices" },
+  admin: { addr: "admin@zotomic.com", label: "Zotomic" },
+  support: { addr: "support@zotomic.com", label: "Zotomic Support" },
+  info: { addr: "info@zotomic.com", label: "Zotomic" },
+};
+
+function fromFor(a: MailAccount): string {
+  const key = a.toUpperCase();
+  const addr = process.env[`MAIL_${key}_FROM`] || process.env[`MAIL_${key}_USER`] || ALIAS[a].addr;
+  return `"${ALIAS[a].label}" <${addr}>`;
 }
 
-function accountCfg(a: MailAccount): AccountCfg {
-  const e = process.env;
-  switch (a) {
-    case "invoice":
-      return { user: e.MAIL_INVOICE_USER, pass: e.MAIL_INVOICE_PASS, from: `"Zotomic Invoices" <${e.MAIL_INVOICE_USER || "invoice@zotomic.com"}>` };
-    case "admin":
-      return { user: e.MAIL_ADMIN_USER, pass: e.MAIL_ADMIN_PASS, from: `"Zotomic" <${e.MAIL_ADMIN_USER || "admin@zotomic.com"}>` };
-    case "support":
-      return { user: e.MAIL_SUPPORT_USER, pass: e.MAIL_SUPPORT_PASS, from: `"Zotomic Support" <${e.MAIL_SUPPORT_USER || "support@zotomic.com"}>` };
-    case "info":
-      return { user: e.MAIL_INFO_USER, pass: e.MAIL_INFO_PASS, from: `"Zotomic" <${e.MAIL_INFO_USER || "info@zotomic.com"}>` };
-  }
-}
-
-function legacyCfg(): AccountCfg {
-  return {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-    from: process.env.EMAIL_FROM ?? process.env.GMAIL_USER ?? "",
-  };
+function authCreds(): { user: string; pass: string } | null {
+  const user = process.env.MAIL_AUTH_USER || process.env.GMAIL_USER;
+  const pass = process.env.MAIL_AUTH_PASS || process.env.GMAIL_APP_PASSWORD;
+  return user && pass ? { user, pass } : null;
 }
 
 const transports = new Map<string, Transporter>();
 
 function transportFor(account?: MailAccount): { t: Transporter | null; from: string } {
-  const want = account ? accountCfg(account) : null;
-  if (want?.user && want.pass) {
-    if (!transports.has(want.user)) {
-      transports.set(want.user, nodemailer.createTransport({ service: "gmail", auth: { user: want.user, pass: want.pass } }));
-    }
-    return { t: transports.get(want.user) ?? null, from: want.from };
+  const from = account
+    ? fromFor(account)
+    : process.env.EMAIL_FROM ?? process.env.MAIL_AUTH_USER ?? process.env.GMAIL_USER ?? "";
+  const c = authCreds();
+  if (!c) return { t: null, from };
+  if (!transports.has(c.user)) {
+    transports.set(c.user, nodemailer.createTransport({ service: "gmail", auth: { user: c.user, pass: c.pass } }));
   }
-  const leg = legacyCfg();
-  if (leg.user && leg.pass) {
-    if (!transports.has(leg.user)) {
-      transports.set(leg.user, nodemailer.createTransport({ service: "gmail", auth: { user: leg.user, pass: leg.pass } }));
-    }
-    // legacy transport can't send *as* another address — use the legacy From
-    return { t: transports.get(leg.user) ?? null, from: leg.from };
-  }
-  return { t: null, from: want?.from ?? leg.from };
+  return { t: transports.get(c.user) ?? null, from };
 }
 
-export function emailConfigured(account?: MailAccount): boolean {
-  if (account) {
-    const c = accountCfg(account);
-    if (c.user && c.pass) return true;
-  }
-  return !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+export function emailConfigured(_account?: MailAccount): boolean {
+  return !!authCreds();
 }
 
 export interface EmailAttachment {
@@ -99,9 +79,8 @@ export async function sendEmailResult(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { t, from: accountFrom } = transportFor(account);
   if (!t) {
-    const key = account ? `MAIL_${account.toUpperCase()}_USER / _PASS` : "GMAIL_USER / GMAIL_APP_PASSWORD";
     console.info(`[email skipped — not configured] account=${account ?? "default"} to=${to}`);
-    return { ok: false, error: `Mail account not configured (${key}).` };
+    return { ok: false, error: "Mail is not configured (MAIL_AUTH_USER / MAIL_AUTH_PASS)." };
   }
   try {
     await t.sendMail({
