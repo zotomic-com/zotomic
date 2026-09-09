@@ -7,6 +7,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { enforceRateLimit } from "@/lib/ratelimit";
 import {
   getStorefrontAssistantState,
+  getStorefrontAssistantTraining,
   reserveStorefrontConversation,
   bumpUsage,
   utcPeriod,
@@ -165,6 +166,8 @@ export async function POST(req: NextRequest) {
     conversationId = created.id as string;
   }
 
+  const training = await getStorefrontAssistantTraining(store.businessId);
+
   // Run the agent.
   const outcome = await runStorefrontBot(
     {
@@ -177,6 +180,13 @@ export async function POST(req: NextRequest) {
       account: account
         ? { id: account.id, customerId: account.customerId, phone: account.phone, name: account.name }
         : null,
+      training: {
+        persona: training.persona,
+        knowledge: training.knowledge.filter((k) => k.enabled).map((k) => ({ question: k.question, answer: k.answer })),
+        promotedNames: training.promoted.map((p) => p.name),
+        signals: training.signals,
+        productNotes: training.productNotes,
+      },
       db,
     },
     history,

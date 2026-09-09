@@ -5,6 +5,7 @@ import { listChannels } from "@/lib/messaging";
 import { getPaymentNumbers } from "@/lib/platform-settings";
 import {
   getStorefrontAssistantState,
+  getStorefrontAssistantTraining,
   SF_CHAT_PACKS,
   utcPeriod,
 } from "@/lib/storefront/assistant";
@@ -12,6 +13,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MessagesClient, type Thread } from "./MessagesClient";
 import { StorefrontAssistantPanel, type SfConversation } from "./StorefrontAssistantPanel";
+import { AssistantTraining } from "./AssistantTraining";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,8 @@ export default async function MessagesPage() {
     { data: sfCfgRow },
     { data: pendingTopup },
     { data: usageRow },
+    training,
+    { data: notedProducts },
   ] = await Promise.all([
     db
       .from("messaging_messages")
@@ -66,6 +70,12 @@ export default async function MessagesPage() {
       .eq("business_id", businessId)
       .eq("period", utcPeriod())
       .maybeSingle(),
+    getStorefrontAssistantTraining(businessId),
+    db
+      .from("products")
+      .select("id, name, assistant_note")
+      .eq("business_id", businessId)
+      .not("assistant_note", "is", null),
   ]);
 
   const sfConversations: SfConversation[] = (sfConvs ?? []).map((c) => {
@@ -155,6 +165,20 @@ export default async function MessagesPage() {
             : null
         }
       />
+
+      {assistantState.ownerEnabled && (
+        <AssistantTraining
+          persona={training.persona ?? ""}
+          signals={training.signals}
+          knowledge={training.knowledge}
+          promoted={training.promoted.map((p) => ({ id: p.id, name: p.name }))}
+          notedProducts={(notedProducts ?? []).map((p) => ({
+            id: p.id as string,
+            name: p.name as string,
+            note: (p.assistant_note as string) ?? "",
+          }))}
+        />
+      )}
 
       {threads.length === 0 ? (
         <EmptyState

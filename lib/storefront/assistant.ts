@@ -12,6 +12,7 @@
 import "server-only";
 import { getAdminSupabase } from "@/lib/supabase";
 import type { PlanId } from "@/lib/plans";
+import { DEFAULT_SIGNALS, normalizeSignals, type SignalToggles } from "./assistant-signals";
 
 export const SF_CHAT_QUOTA: Record<PlanId, number> = {
   free: 200,
@@ -51,6 +52,9 @@ export interface StorefrontAssistantConfig {
   extraConversations: number;
   suspended: boolean;
   suspendedReason: string | null;
+  persona: string | null;
+  promotedProductIds: string[];
+  signals: SignalToggles;
 }
 
 const DEFAULT_CONFIG: StorefrontAssistantConfig = {
@@ -61,6 +65,9 @@ const DEFAULT_CONFIG: StorefrontAssistantConfig = {
   extraConversations: 0,
   suspended: false,
   suspendedReason: null,
+  persona: null,
+  promotedProductIds: [],
+  signals: DEFAULT_SIGNALS,
 };
 
 export function utcPeriod(d = new Date()): string {
@@ -80,7 +87,9 @@ export async function getStorefrontAssistantConfig(
   const db = getAdminSupabase();
   const { data } = await db
     .from("storefront_assistant_config")
-    .select("enabled, name, greeting, suggested_prompts, extra_conversations, suspended, suspended_reason")
+    .select(
+      "enabled, name, greeting, suggested_prompts, extra_conversations, suspended, suspended_reason, persona, promoted_product_ids, signals",
+    )
     .eq("business_id", businessId)
     .maybeSingle();
   if (!data) return { ...DEFAULT_CONFIG };
@@ -94,6 +103,84 @@ export async function getStorefrontAssistantConfig(
     extraConversations: Number(data.extra_conversations ?? 0),
     suspended: !!data.suspended,
     suspendedReason: (data.suspended_reason as string) || null,
+    persona: (data.persona as string) || null,
+    promotedProductIds: Array.isArray(data.promoted_product_ids)
+      ? (data.promoted_product_ids as string[]).filter((s) => typeof s === "string").slice(0, 5)
+      : [],
+    signals: normalizeSignals(data.signals),
+  };
+}
+
+export interface KnowledgeEntry {
+  id: string;
+  question: string;
+  answer: string;
+  enabled: boolean;
+}
+
+export interface PromotedProduct {
+  id: string;
+  name: string;
+  handle: string;
+}
+
+export interface StorefrontAssistantTraining {
+  persona: string | null;
+  signals: SignalToggles;
+  knowledge: KnowledgeEntry[];
+  promoted: PromotedProduct[];
+  /** product id → owner talking-points note */
+  productNotes: Record<string, string>;
+}
+
+export async function getStorefrontAssistantTraining(
+  businessId: string,
+): Promise<StorefrontAssistantTraining> {
+  const db = getAdminSupabase();
+  const cfg = await getStorefrontAssistantConfig(businessId);
+
+  const [{ data: kn }, { data: promo }, { data: noted }] = await Promise.all([
+    db
+      .from("storefront_assistant_knowledge")
+      .select("id, question, answer, enabled")
+      .eq("business_id", businessId)
+      .order("sort", { ascending: true })
+      .order("created_at", { ascending: true }),
+    cfg.promotedProductIds.length
+      ? db
+          .from("products")
+          .select("id, name, slug")
+          .eq("business_id", businessId)
+          .in("id", cfg.promotedProductIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; slug: string }[] }),
+    db
+      .from("products")
+      .select("id, assistant_note")
+      .eq("business_id", businessId)
+      .not("assistant_note", "is", null),
+  ]);
+
+  const productNotes: Record<string, string> = {};
+  for (const r of noted ?? []) {
+    const note = (r.assistant_note as string)?.trim();
+    if (note) productNotes[r.id as string] = note;
+  }
+
+  return {
+    persona: cfg.persona,
+    signals: cfg.signals,
+    knowledge: (kn ?? []).map((k) => ({
+      id: k.id as string,
+      question: k.question as string,
+      answer: k.answer as string,
+      enabled: !!k.enabled,
+    })),
+    promoted: (promo ?? []).map((p) => ({
+      id: p.id as string,
+      name: p.name as string,
+      handle: p.slug as string,
+    })),
+    productNotes,
   };
 }
 

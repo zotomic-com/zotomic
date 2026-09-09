@@ -18,6 +18,7 @@ import {
   getStoreCategories,
 } from "@/lib/storefront/store";
 import type { StorefrontConfig } from "@/lib/storefront/config";
+import { getStorefrontSignals, type SignalToggles } from "@/lib/storefront/assistant-signals";
 import { canAttempt, recordSuccess, recordFailure, chainOpen, sleep, backoffDelay } from "@/lib/ai/circuit";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -31,6 +32,14 @@ export interface SfBotAccount {
   name: string;
 }
 
+export interface SfBotTraining {
+  persona: string | null;
+  knowledge: { question: string; answer: string }[];
+  promotedNames: string[];
+  signals: SignalToggles;
+  productNotes: Record<string, string>;
+}
+
 export interface SfBotContext {
   businessId: string;
   storeName: string;
@@ -39,6 +48,7 @@ export interface SfBotContext {
   basePath: string;
   config: StorefrontConfig;
   account: SfBotAccount | null;
+  training: SfBotTraining;
   db: SupabaseClient;
 }
 
@@ -139,6 +149,7 @@ const TOOLS: SfTool[] = [
           category: p.category,
           rating: p.reviewCount ? Number(p.rating.toFixed(1)) : null,
           image: p.imageUrls[0] ?? null,
+          owner_note: ctx.training.productNotes[p.id] || undefined,
           url: `${ctx.basePath}/products/${p.slug}`,
         })),
       };
@@ -166,6 +177,7 @@ const TOOLS: SfTool[] = [
         image: p.imageUrls[0] ?? null,
         url: `${ctx.basePath}/products/${p.slug}`,
         price: priceText(p.salePrice ?? p.price, p.salePrice, ctx.currency),
+        owner_note: ctx.training.productNotes[p.id] || undefined,
         description: p.description || null,
         category: p.category,
         rating: p.reviewCount ? { average: Number(p.rating.toFixed(1)), count: p.reviewCount } : null,
@@ -186,6 +198,22 @@ const TOOLS: SfTool[] = [
     run: async (ctx) => {
       const cats = await getStoreCategories(ctx.businessId);
       return { categories: cats.map((c) => ({ name: c.name, products: c.count })) };
+    },
+  },
+  {
+    name: "store_highlights",
+    description:
+      "The store's current best-sellers, discounted items, running-campaign products and trending items — with links. Call this for 'what do you recommend', 'what's popular / best-selling', 'anything on sale / offers', gift ideas, or when the shopper is just browsing and could use a nudge. Returns only the groups the owner has enabled; may be empty.",
+    parameters: { type: "object", properties: {} },
+    run: async (ctx) => {
+      const s = await getStorefrontSignals(ctx.businessId, ctx.currency, ctx.basePath, ctx.training.signals);
+      if (!s.any) return { note: "No highlights to show right now." };
+      return {
+        bestsellers: s.bestsellers,
+        on_sale: s.onSale,
+        campaigns: s.campaigns.map((c) => ({ campaign: c.name, ends: c.endsOn, products: c.products })),
+        trending: s.hot,
+      };
     },
   },
   {
@@ -330,6 +358,27 @@ type GeminiPart =
 type GeminiContent = { role: "user" | "model"; parts: GeminiPart[] };
 
 function systemPrompt(ctx: SfBotContext): string {
+  const t = ctx.training;
+
+  const knowledge = t.knowledge.length
+    ? `\n\nSTORE KNOWLEDGE — the owner's own answers. Treat these as authoritative; prefer them over your own guesses:\n${t.knowledge
+        .slice(0, 25)
+        .map((k) => `Q: ${k.question}\nA: ${k.answer}`)
+        .join("\n\n")
+        .slice(0, 4500)}`
+    : "";
+
+  const persona = t.persona ? `\n\nOWNER INSTRUCTIONS (follow these):\n${t.persona.slice(0, 1500)}` : "";
+
+  const promoted = t.promotedNames.length
+    ? `\n\nThe owner especially wants you to suggest these products when relevant: ${t.promotedNames.join(", ")}. Use search_catalog to pull one up so its card shows.`
+    : "";
+
+  const anySignal = t.signals.bestseller || t.signals.sale || t.signals.campaign || t.signals.hot;
+  const highlights = anySignal
+    ? `\n\nThis store has live highlights (best-sellers / discounts / campaign items / trending). When the shopper asks for a recommendation, a gift, "what's popular", "any offers", or is browsing without a clear goal, call store_highlights and feature what it returns. Mention a discount or "best-seller" naturally — don't oversell.`
+    : "";
+
   return `You are ${ctx.assistantName}, the shopping assistant for the online store "${ctx.storeName}".
 
 SCOPE — you help shoppers of THIS store only:
@@ -340,11 +389,12 @@ Politely decline anything else (general knowledge, other shops, advice unrelated
 RULES:
 - Use the tools for every factual claim. NEVER invent products, prices, stock, policies or order details.
 - Prices and figures come only from tools — state them exactly as returned (currency: ${ctx.currency}).
-- PRODUCTS: after search_catalog or get_product, the app AUTOMATICALLY shows the shopper a tappable image card (photo, name, price, link) for each product. So just talk about the products in one or two natural sentences — do NOT paste product URLs, markdown links, bullet lists of products, or repeat every price. Example: "Yes, we have one perfume in stock — tap the card below to see it."
+- PRODUCTS: after search_catalog, get_product or store_highlights, the app AUTOMATICALLY shows the shopper a tappable image card (photo, name, price, link) for each product. So just talk about the products in one or two natural sentences — do NOT paste product URLs, markdown links, bullet lists of products, or repeat every price. Example: "Yes, we have one perfume in stock — tap the card below to see it."
+- If a product result has an "owner_note", weave that talking point in when you discuss that product.
 - For order look-ups: a signed-in shopper is already verified. A guest must give the order number AND the phone number on the order before you reveal anything.
 - You cannot place orders, change orders, apply discounts or take payment. Point the shopper to the product page or checkout to buy, and to the store's contact details for changes.
 - Be concise and friendly. Plain language, short sentences, no emojis. Reply in the shopper's language.
-${ctx.account ? `\nThe shopper is signed in as ${ctx.account.name || "a registered customer"}.` : ""}`;
+${ctx.account ? `\nThe shopper is signed in as ${ctx.account.name || "a registered customer"}.` : ""}${persona}${promoted}${highlights}${knowledge}`;
 }
 
 async function callGemini(
@@ -498,6 +548,15 @@ export async function runStorefrontBot(
       };
     } else if (name === "get_product" && o && typeof o.handle === "string" && !o.error) {
       addCards([o]);
+    } else if (name === "store_highlights" && o) {
+      addCards(o.bestsellers);
+      addCards(o.on_sale);
+      addCards(o.trending);
+      if (Array.isArray(o.campaigns)) {
+        for (const c of o.campaigns) {
+          if (c && typeof c === "object") addCards((c as Record<string, unknown>).products);
+        }
+      }
     }
 
     contents.push({

@@ -4,6 +4,12 @@ import { money } from "@/lib/money";
 import { deliverReportEmail, deliverReportTelegram } from "@/lib/reports/deliver";
 import { groundedSearch, searchConfigured } from "@/lib/ai/search";
 import { webSearchesToday, webSearchCapFor } from "@/lib/credits";
+import {
+  getStorefrontAssistantTraining,
+  getStorefrontAssistantConfig,
+  getStorefrontAssistantState,
+} from "@/lib/storefront/assistant";
+import { getStorefrontSignals, normalizeSignals } from "@/lib/storefront/assistant-signals";
 import type { PlanId } from "@/lib/plans";
 import type { ToolContext, ToolDef } from "./types";
 
@@ -1012,6 +1018,142 @@ const send_report_email: ToolDef = {
   },
 };
 
+const get_storefront_assistant: ToolDef = {
+  name: "get_storefront_assistant",
+  description:
+    "The storefront shopping assistant's setup and training: whether it is on, this month's conversation usage, the owner instructions, the knowledge Q&A entries (with ids), the promoted products, and which live signals (best-seller / sale / campaign / hot) it is allowed to surface to shoppers.",
+  risk: "read",
+  creditCost: 0,
+  parameters: { type: "object", properties: {} },
+  async handler(ctx) {
+    const [training, state] = await Promise.all([
+      getStorefrontAssistantTraining(ctx.businessId),
+      getStorefrontAssistantState({ businessId: ctx.businessId, name: "" }),
+    ]);
+    return {
+      enabled: state.ownerEnabled,
+      suspendedByAdmin: state.suspended,
+      usageThisMonth: { conversations: state.used, monthlyQuota: state.quota, topUpPool: state.extra },
+      instructions: training.persona,
+      allowedSignals: training.signals,
+      promotedProducts: training.promoted.map((p) => p.name),
+      knowledge: training.knowledge.map((k) => ({
+        id: k.id,
+        question: k.question,
+        answer: k.answer,
+        enabled: k.enabled,
+      })),
+      productsWithNotes: Object.keys(training.productNotes).length,
+    };
+  },
+};
+
+const get_storefront_highlights: ToolDef = {
+  name: "get_storefront_highlights",
+  description:
+    "What the storefront assistant will currently recommend to shoppers: best-sellers (units sold in the last 30 days), discounted items, running-campaign products and trending items. Answers 'what is my assistant promoting' / 'what's my best seller right now'.",
+  risk: "read",
+  creditCost: 0,
+  parameters: { type: "object", properties: {} },
+  async handler(ctx) {
+    const cfg = await getStorefrontAssistantConfig(ctx.businessId);
+    const sig = await getStorefrontSignals(ctx.businessId, ctx.currency, "", cfg.signals);
+    return {
+      bestsellers: sig.bestsellers.map((p) => ({ name: p.name, price: p.price, why: p.reason })),
+      onSale: sig.onSale.map((p) => ({ name: p.name, price: p.price, why: p.reason })),
+      campaigns: sig.campaigns.map((c) => ({
+        campaign: c.name,
+        endsOn: c.endsOn,
+        products: c.products.map((p) => p.name),
+      })),
+      trending: sig.hot.map((p) => ({ name: p.name, why: p.reason })),
+      note: sig.any ? undefined : "Nothing is being highlighted right now.",
+    };
+  },
+};
+
+const update_storefront_assistant: ToolDef = {
+  name: "update_storefront_assistant",
+  description:
+    "Update the storefront shopping assistant's training. Provide any of: instructions (replaces the owner-instructions text); addKnowledge {question, answer} to add one Q&A the assistant treats as truth; removeKnowledgeId to delete one; signals to set which of best-seller/sale/campaign/hot it may surface; enabled to switch the assistant on or off. Changes apply to shoppers immediately.",
+  risk: "write",
+  creditCost: 1,
+  parameters: {
+    type: "object",
+    properties: {
+      instructions: { type: "string", description: "replace the owner instructions / tone text" },
+      addKnowledge: {
+        type: "object",
+        properties: { question: { type: "string" }, answer: { type: "string" } },
+        description: "add one knowledge Q&A entry",
+      },
+      removeKnowledgeId: { type: "string", description: "id of a knowledge entry to delete" },
+      signals: {
+        type: "object",
+        properties: {
+          bestseller: { type: "boolean" },
+          sale: { type: "boolean" },
+          campaign: { type: "boolean" },
+          hot: { type: "boolean" },
+        },
+      },
+      enabled: { type: "boolean" },
+    },
+  },
+  async handler(ctx, a) {
+    const done: string[] = [];
+    const cfgPatch: Record<string, unknown> = {};
+    if (s(a.instructions) !== undefined) {
+      cfgPatch.persona = (s(a.instructions) as string).trim().slice(0, 2000) || null;
+      done.push("instructions");
+    }
+    if (a.signals && typeof a.signals === "object") {
+      cfgPatch.signals = normalizeSignals(a.signals as Record<string, unknown>);
+      done.push("signals");
+    }
+    if (typeof a.enabled === "boolean") {
+      cfgPatch.enabled = a.enabled;
+      done.push(a.enabled ? "enabled" : "disabled");
+    }
+    if (Object.keys(cfgPatch).length) {
+      cfgPatch.business_id = ctx.businessId;
+      cfgPatch.updated_at = new Date().toISOString();
+      await ctx.db.from("storefront_assistant_config").upsert(cfgPatch, { onConflict: "business_id" });
+    }
+
+    const addK = a.addKnowledge as { question?: unknown; answer?: unknown } | undefined;
+    if (addK && s(addK.question) && s(addK.answer)) {
+      await ctx.db.from("storefront_assistant_knowledge").insert({
+        business_id: ctx.businessId,
+        question: (s(addK.question) as string).slice(0, 300),
+        answer: (s(addK.answer) as string).slice(0, 2000),
+      });
+      done.push("added a knowledge entry");
+    }
+    if (s(a.removeKnowledgeId)) {
+      await ctx.db
+        .from("storefront_assistant_knowledge")
+        .delete()
+        .eq("business_id", ctx.businessId)
+        .eq("id", s(a.removeKnowledgeId)!);
+      done.push("removed a knowledge entry");
+    }
+
+    if (!done.length) return { error: "Nothing to change." };
+
+    await ctx.db.from("audit_logs").insert({
+      business_id: ctx.businessId,
+      actor_id: ctx.userId,
+      actor_type: "assistant",
+      action: "storefront_assistant.training_updated",
+      target_type: "business",
+      target_id: ctx.businessId,
+      summary: `Assistant updated storefront assistant training: ${done.join(", ")}`,
+    });
+    return { updated: done };
+  },
+};
+
 export const TOOLS: ToolDef[] = [
   get_business_profile,
   get_business_settings,
@@ -1036,6 +1178,9 @@ export const TOOLS: ToolDef[] = [
   create_task,
   send_report_telegram,
   send_report_email,
+  get_storefront_assistant,
+  get_storefront_highlights,
+  update_storefront_assistant,
   update_product,
   update_business_settings,
 ];
