@@ -82,3 +82,24 @@ export async function setStoreFraudWarnings(businessId: string, enabled: boolean
   revalidatePath("/admin/fraud");
   return { ok: true };
 }
+
+/** Search stores to opt one out of fraud warnings (default is: every store on). */
+export async function findStoresForFraud(
+  query: string,
+): Promise<{ id: string; name: string; enabled: boolean }[]> {
+  await requireAdmin();
+  const term = query.trim();
+  if (term.length < 2) return [];
+  const { data } = await getAdminSupabase()
+    .from("businesses")
+    .select("id, name, fraud_warnings_enabled")
+    .eq("status", "active")
+    .ilike("name", `%${term}%`)
+    .order("name")
+    .limit(10);
+  return (data ?? []).map((b) => ({
+    id: b.id as string,
+    name: b.name as string,
+    enabled: b.fraud_warnings_enabled !== false,
+  }));
+}

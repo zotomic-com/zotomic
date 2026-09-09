@@ -1,6 +1,6 @@
 import { requireAdmin, adminDb } from "@/lib/admin-server";
 import { StatCard } from "@/components/ui/stat-card";
-import { FraudClient, type FlagRow, type StoreToggle } from "./FraudClient";
+import { FraudClient, type FlagRow, type ExcludedStore } from "./FraudClient";
 import { STAGE_LABEL } from "@/lib/fraud/phone";
 
 export const dynamic = "force-dynamic";
@@ -10,18 +10,25 @@ export default async function AdminFraudPage() {
   const db = adminDb();
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
 
-  const [{ data: flags }, { data: matches }, { data: holds }, { data: businesses }] = await Promise.all([
-    db
-      .from("fraud_flags")
-      .select("id, phone, email, name, stage, category, reason, auto_score, source, status, last_activity_at, created_at")
-      .eq("status", "active")
-      .order("stage", { ascending: false })
-      .order("last_activity_at", { ascending: false })
-      .limit(500),
-    db.from("fraud_order_matches").select("flag_id, created_at").gte("created_at", weekAgo),
-    db.from("fraud_order_matches").select("id").eq("held", true).eq("cleared", false),
-    db.from("businesses").select("id, name, fraud_warnings_enabled").eq("status", "active").order("name"),
-  ]);
+  const [{ data: flags }, { data: matches }, { data: holds }, { count: totalStores }, { data: excluded }] =
+    await Promise.all([
+      db
+        .from("fraud_flags")
+        .select("id, phone, email, name, stage, category, reason, auto_score, source, status, last_activity_at, created_at")
+        .eq("status", "active")
+        .order("stage", { ascending: false })
+        .order("last_activity_at", { ascending: false })
+        .limit(500),
+      db.from("fraud_order_matches").select("flag_id, created_at").gte("created_at", weekAgo),
+      db.from("fraud_order_matches").select("id").eq("held", true).eq("cleared", false),
+      db.from("businesses").select("id", { count: "exact", head: true }).eq("status", "active"),
+      db
+        .from("businesses")
+        .select("id, name")
+        .eq("status", "active")
+        .eq("fraud_warnings_enabled", false)
+        .order("name"),
+    ]);
 
   const recentByFlag = new Map<string, number>();
   for (const m of matches ?? []) recentByFlag.set(m.flag_id as string, (recentByFlag.get(m.flag_id as string) ?? 0) + 1);
@@ -43,10 +50,9 @@ export default async function AdminFraudPage() {
       : "—",
   }));
 
-  const stores: StoreToggle[] = (businesses ?? []).map((b) => ({
+  const excludedStores: ExcludedStore[] = (excluded ?? []).map((b) => ({
     id: b.id as string,
     name: b.name as string,
-    enabled: b.fraud_warnings_enabled !== false,
   }));
 
   const byStage = { 1: 0, 2: 0, 3: 0 } as Record<number, number>;
@@ -69,7 +75,11 @@ export default async function AdminFraudPage() {
         <StatCard label="Orders on hold" value={(holds ?? []).length.toLocaleString("en-US")} invert />
       </div>
 
-      <FraudClient rows={rows} stores={stores} />
+      <FraudClient
+        rows={rows}
+        excludedStores={excludedStores}
+        totalStores={totalStores ?? 0}
+      />
     </div>
   );
 }

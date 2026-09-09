@@ -13,7 +13,7 @@ import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { CATEGORY_LABEL } from "@/lib/fraud/phone";
-import { setStageAction, runScanAction, setStoreFraudWarnings } from "./actions";
+import { setStageAction, runScanAction, setStoreFraudWarnings, findStoresForFraud } from "./actions";
 
 export interface FlagRow {
   id: string;
@@ -29,15 +29,22 @@ export interface FlagRow {
   ordersThisWeek: number;
   lastActivity: string;
 }
-export interface StoreToggle {
+export interface ExcludedStore {
   id: string;
   name: string;
-  enabled: boolean;
 }
 
 const STAGE_TONE: Record<number, "warning" | "danger"> = { 1: "warning", 2: "warning", 3: "danger" };
 
-export function FraudClient({ rows, stores }: { rows: FlagRow[]; stores: StoreToggle[] }) {
+export function FraudClient({
+  rows,
+  excludedStores,
+  totalStores,
+}: {
+  rows: FlagRow[];
+  excludedStores: ExcludedStore[];
+  totalStores: number;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, start] = useTransition();
@@ -135,37 +142,7 @@ export function FraudClient({ rows, stores }: { rows: FlagRow[]; stores: StoreTo
         <DataTable columns={cols} rows={filtered} rowKey={(r) => r.id} empty={{ title: "No flags" }} />
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <span className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-fg-subtle" /> Which stores get fraud warnings
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <ul className="divide-y divide-border px-4 text-sm">
-          {stores.map((s) => (
-            <li key={s.id} className="flex items-center justify-between py-2.5">
-              <span className="font-medium text-fg">{s.name}</span>
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-fg-muted">
-                <input
-                  type="checkbox"
-                  checked={s.enabled}
-                  onChange={(e) =>
-                    start(async () => {
-                      const res = await setStoreFraudWarnings(s.id, e.target.checked);
-                      if ("error" in res) return toast(res.error, "error");
-                      toast("Updated", "success");
-                      router.refresh();
-                    })
-                  }
-                />
-                {s.enabled ? "Receiving warnings" : "Off"}
-              </label>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      <FraudWarningStores excludedStores={excludedStores} totalStores={totalStores} />
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Flag a customer">
         <form action={submitAdd} className="space-y-3">
@@ -209,5 +186,101 @@ export function FraudClient({ rows, stores }: { rows: FlagRow[]; stores: StoreTo
         </form>
       </Modal>
     </div>
+  );
+}
+
+/* ─────────────  who receives fraud warnings (exception list)  ───────────── */
+
+function FraudWarningStores({
+  excludedStores,
+  totalStores,
+}: {
+  excludedStores: ExcludedStore[];
+  totalStores: number;
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [pending, start] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<{ id: string; name: string; enabled: boolean }[]>([]);
+
+  const search = (term: string) => {
+    setQ(term);
+    if (term.trim().length < 2) return setResults([]);
+    start(async () => setResults(await findStoresForFraud(term)));
+  };
+
+  const setEnabled = (id: string, enabled: boolean, name: string) =>
+    start(async () => {
+      const res = await setStoreFraudWarnings(id, enabled);
+      if ("error" in res) return toast(res.error, "error");
+      toast(enabled ? `${name} back on` : `${name} opted out`, "success");
+      setResults((r) => r.map((x) => (x.id === id ? { ...x, enabled } : x)));
+      router.refresh();
+    });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <span className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-fg-subtle" /> Fraud warnings
+          </span>
+        </CardTitle>
+        <button onClick={() => setOpen((o) => !o)} className="text-xs font-semibold text-primary">
+          {open ? "Done" : "Manage exceptions"}
+        </button>
+      </CardHeader>
+
+      <div className="space-y-3 px-4 py-4 text-sm">
+        <p className="text-fg-muted">
+          On for <span className="font-semibold text-fg">all {totalStores.toLocaleString("en-US")} stores</span>
+          {excludedStores.length > 0 ? (
+            <>
+              {" "}
+              except <span className="font-semibold text-fg">{excludedStores.length}</span>.
+            </>
+          ) : (
+            "."
+          )}
+        </p>
+
+        {excludedStores.length > 0 && (
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {excludedStores.map((s) => (
+              <li key={s.id} className="flex items-center justify-between px-3 py-2">
+                <span className="font-medium text-fg">{s.name}</span>
+                <Button size="sm" variant="ghost" disabled={pending} onClick={() => setEnabled(s.id, true, s.name)}>
+                  Turn back on
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {open && (
+          <div className="rounded-lg border border-dashed border-border p-3">
+            <Input value={q} onChange={(e) => search(e.target.value)} placeholder="Find a store to opt out…" autoFocus />
+            {results.length > 0 && (
+              <ul className="mt-2 divide-y divide-border">
+                {results.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between py-2">
+                    <span className="text-fg">{r.name}</span>
+                    {r.enabled ? (
+                      <Button size="sm" variant="secondary" disabled={pending} onClick={() => setEnabled(r.id, false, r.name)}>
+                        Turn off warnings
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-fg-subtle">already off</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
