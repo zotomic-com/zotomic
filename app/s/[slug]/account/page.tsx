@@ -6,7 +6,9 @@ import { storeBasePath } from "@/lib/storefront/base-path";
 import { getStoreAccount } from "@/lib/storefront/account";
 import { getAdminSupabase } from "@/lib/supabase";
 import { money } from "@/lib/money";
+import { resolvePrefs, CUSTOMER_EVENTS } from "@/lib/notify-events";
 import { AccountClient, type Address } from "./AccountClient";
+import { AccountNotifications } from "./AccountNotifications";
 
 export const metadata: Metadata = { title: "My account", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -25,7 +27,7 @@ export default async function AccountPage({ params }: { params: Promise<{ slug: 
     ? `store_account_id.eq.${account.id},customer_id.eq.${account.customerId}`
     : `store_account_id.eq.${account.id}`;
 
-  const [{ data: orders }, { data: addresses }] = await Promise.all([
+  const [{ data: orders }, { data: addresses }, { data: acctRow }] = await Promise.all([
     db
       .from("orders")
       .select("order_number, total, status, placed_at")
@@ -38,7 +40,9 @@ export default async function AccountPage({ params }: { params: Promise<{ slug: 
       .select("id, label, name, phone, address, city, area, is_default")
       .eq("account_id", account.id)
       .order("is_default", { ascending: false }),
+    db.from("store_accounts").select("notification_prefs").eq("id", account.id).maybeSingle(),
   ]);
+  const notifPrefs = resolvePrefs(CUSTOMER_EVENTS, acctRow?.notification_prefs);
 
   const orderRows = (orders ?? []).map((o) => ({
     number: o.order_number as string,
@@ -86,6 +90,8 @@ export default async function AccountPage({ params }: { params: Promise<{ slug: 
         profile={{ name: account.name, email: account.email, phone: account.phone ?? "" }}
         addresses={(addresses ?? []) as Address[]}
       />
+
+      <AccountNotifications slug={slug} prefs={notifPrefs} />
     </div>
   );
 }

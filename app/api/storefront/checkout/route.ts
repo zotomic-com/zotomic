@@ -3,7 +3,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { getStoreBySlug } from "@/lib/storefront/store";
 import { getStoreAccount } from "@/lib/storefront/account";
 import { revalidatePath } from "next/cache";
-import { sendNewOrderAlert, sendOrderConfirmation } from "@/lib/emails";
+import { sendOrderConfirmation } from "@/lib/emails";
 import { loadIntegration, paymentProvider } from "@/lib/adapters/registry";
 import { enforceRateLimit } from "@/lib/ratelimit";
 import { resolveInvoiceSender } from "@/lib/invoice-sender";
@@ -213,6 +213,7 @@ export async function POST(req: NextRequest) {
 
   // Decrement tracked stock (variant stock when a variant was chosen).
   const touchedProducts = new Set<string>();
+  const lowStockCrossed: { name: string; qty: number }[] = [];
   for (const li of lineItems) {
     if (li.variant_id) {
       const v = variantMap.get(li.variant_id);
@@ -226,10 +227,10 @@ export async function POST(req: NextRequest) {
     } else {
       const p = priceMap.get(li.product_id);
       if (p?.track_inventory) {
-        await db
-          .from("products")
-          .update({ stock_qty: Math.max(0, Number(p.stock_qty) - li.qty) })
-          .eq("id", li.product_id);
+        const before = Number(p.stock_qty);
+        const after = Math.max(0, before - li.qty);
+        await db.from("products").update({ stock_qty: after }).eq("id", li.product_id);
+        if (before >= 10 && after < 10) lowStockCrossed.push({ name: p.name as string, qty: after });
       }
     }
   }
@@ -277,13 +278,22 @@ export async function POST(req: NextRequest) {
     meta: { order_number: order.order_number, items: lineItems.length },
   });
 
-  await db.from("notifications").insert({
-    business_id: store.businessId,
-    type: "new_order",
-    title: `New order ${order.order_number}`,
-    body: `${name} · ${lineItems.length} item(s) · ${total} ${store.currency}`,
-    href: "/app/orders",
-  });
+  {
+    const { notifyOwner } = await import("@/lib/notify");
+    await notifyOwner(store.businessId, "new_order", {
+      title: `New order ${order.order_number}`,
+      body: `${name} · ${lineItems.length} item(s) · ${total} ${store.currency}`,
+      href: `/app/orders/${order.id}`,
+      email: { subject: `New order ${order.order_number} — ${total} ${store.currency}`, account: "admin" },
+    });
+    for (const s of lowStockCrossed) {
+      await notifyOwner(store.businessId, "low_stock", {
+        title: `Low stock: ${s.name}`,
+        body: `${s.name} is down to ${s.qty} in stock after this order.`,
+        href: "/app/inventory",
+      });
+    }
+  }
 
   // fraud check — warn the owner (and hold the order if blacklisted)
   const { checkOrderForFraud } = await import("@/lib/fraud/check");
@@ -369,6 +379,7 @@ export async function POST(req: NextRequest) {
     ((Array.isArray(owner?.users) ? owner?.users[0] : owner?.users) as { email?: string } | null)?.email ?? "";
   const invSender = await resolveInvoiceSender(store.businessId);
 
+  void ownerEmail; // owner alert now goes through notifyOwner (respects prefs)
   await Promise.allSettled([
     custEmail
       ? sendOrderConfirmation({
@@ -384,13 +395,6 @@ export async function POST(req: NextRequest) {
           replyTo: invSender.replyTo ?? ownerEmail ?? undefined,
         })
       : Promise.resolve(),
-    sendNewOrderAlert({
-      to: ownerEmail,
-      orderNumber: order.order_number as string,
-      customerName: name,
-      total,
-      currency: store.currency,
-    }),
   ]);
 
   return NextResponse.json({ ok: true, orderNumber: order.order_number });

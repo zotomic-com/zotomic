@@ -47,5 +47,16 @@ export async function POST(req: NextRequest) {
   await db.from("review_tokens").update({ used_at: new Date().toISOString() }).eq("token", token);
   revalidateTag(`site:${tok.business_id}`);
 
+  try {
+    const { notifyOwner } = await import("@/lib/notify");
+    await notifyOwner(tok.business_id as string, "new_review", {
+      title: `New ${rating}★ review to moderate`,
+      body: `${reviewerName || "A customer"} reviewed a product. Approve or hide it in Reviews.`,
+      href: "/app/reviews",
+    });
+  } catch {
+    /* non-fatal */
+  }
+
   return NextResponse.json({ ok: true });
 }

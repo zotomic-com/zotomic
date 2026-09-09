@@ -158,28 +158,18 @@ export async function submitStorefrontChatTopup(
   });
   if (error) return { error: "Could not submit — try again." };
 
-  const { data: admins } = await db.from("users").select("id").eq("role", "admin");
   const { data: biz } = await db.from("businesses").select("name").eq("id", businessId).maybeSingle();
-  if (admins?.length) {
-    await db.from("notifications").insert(
-      admins.map((a) => ({
-        business_id: businessId,
-        user_id: a.id as string,
-        type: "sf_chat_topup",
-        title: `Storefront chat top-up to confirm — ${biz?.name ?? "a store"}`,
-        body: `${pack.conversations.toLocaleString("en-US")} conversations · ৳${pack.price} · ${method} · txn ${txnId}`,
-        href: `/admin/tenants/${businessId}`,
-      })),
-    );
-  }
   await writeAudit(businessId, user.id, "storefront_assistant.topup_submitted", {
     summary: `Submitted ${method} payment for ${pack.conversations} storefront-chat conversations (৳${pack.price}), txn ${txnId}`,
   });
 
-  const { pushAdminAlert } = await import("@/lib/admin/notify");
-  await pushAdminAlert(
-    `💬 <b>Storefront-chat top-up to confirm</b>\n${biz?.name ?? "A store"} · ${pack.conversations.toLocaleString("en-US")} conversations · ৳${pack.price} · ${method} · txn <code>${txnId}</code>\nReply "pending payments" to review.`,
-  );
+  const { notifyAdmins } = await import("@/lib/notify");
+  await notifyAdmins("payment_pending", {
+    title: `Storefront-chat top-up to confirm — ${biz?.name ?? "a store"}`,
+    body: `${pack.conversations.toLocaleString("en-US")} conversations · ৳${pack.price} · ${method} · txn ${txnId}`,
+    href: `/admin/tenants/${businessId}`,
+    businessId,
+  });
 
   revalidatePath("/app/messages");
   return { ok: true };

@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/admin-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { setPlatformSetting, PLATFORM_KEYS, type PlatformKey } from "@/lib/platform-settings";
 import { verifyBot } from "@/lib/telegram";
+import { sanitizePrefs, ADMIN_EVENTS, type Prefs } from "@/lib/notify-events";
 
 export async function savePlatformSettings(form: FormData) {
   const admin = await requireAdmin();
@@ -32,4 +33,13 @@ export async function savePlatformSettings(form: FormData) {
 
   revalidatePath("/admin/settings");
   return { ok: true, note: results.telegram };
+}
+
+export async function saveAdminNotificationPrefs(prefs: Prefs): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  const clean = sanitizePrefs(ADMIN_EVENTS, prefs);
+  const { error } = await getAdminSupabase().from("users").update({ notification_prefs: clean }).eq("id", admin.id);
+  if (error) return { error: "Could not save." };
+  revalidatePath("/admin/settings");
+  return { ok: true };
 }

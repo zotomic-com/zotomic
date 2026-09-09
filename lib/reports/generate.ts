@@ -4,7 +4,6 @@ import { buildObservations, type Observation } from "@/lib/observations";
 import { geminiGenerate, geminiConfigured, parseJsonResponse } from "@/lib/ai/gemini";
 import { checkAiBudget, recordAiCalls } from "@/lib/ai/budget";
 import { money, pctChange } from "@/lib/money";
-import { sendReportReady } from "@/lib/emails";
 import { getTrafficSummary } from "@/lib/traffic";
 import { campaignsInWindow, getCampaignAttribution } from "@/lib/marketing";
 import { getUsdToBdt } from "@/lib/fx";
@@ -305,35 +304,27 @@ export async function generateReport(
       .update({ status: "ready", summary, model: aiModel, generated_at: new Date().toISOString() })
       .eq("id", reportId);
 
-    await db.from("notifications").insert({
-      business_id: businessId,
-      type: "report_ready",
-      title: `Weekly report ready — ${ps} to ${pe}`,
-      body: summary.slice(0, 160),
-      href: "/app/intelligence",
-    });
-
     try {
       const { data: bizRow } = await db.from("businesses").select("name").eq("id", businessId).single();
-      const { data: owner } = await db
-        .from("business_members")
-        .select("users(email)")
-        .eq("business_id", businessId)
-        .eq("role", "owner")
-        .maybeSingle();
-      const email =
-        ((Array.isArray(owner?.users) ? owner?.users[0] : owner?.users) as { email?: string } | null)
-          ?.email ?? "";
-      if (email) {
-        await sendReportReady({
-          to: email,
-          businessName: (bizRow?.name as string) ?? "your business",
-          periodLabel: `${ps} to ${pe}`,
-          summary,
-        });
-      }
+      const { notifyOwner } = await import("@/lib/notify");
+      const { emailLayout } = await import("@/lib/email");
+      await notifyOwner(businessId, "weekly_report", {
+        title: `Weekly report ready — ${ps} to ${pe}`,
+        body: summary.slice(0, 220),
+        href: "/app/intelligence",
+        email: {
+          account: "support",
+          subject: `Your weekly report is ready — ${bizRow?.name ?? "your business"}`,
+          html: emailLayout(`
+            <h1 style="font-size:18px;margin:0 0 4px">Weekly Intelligence</h1>
+            <p style="color:#94a3b8;font-size:13px;margin:0 0 12px">${ps} to ${pe}</p>
+            <p style="color:#475569;line-height:1.6;margin:0 0 16px">${summary}</p>
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL ?? "https://zotomic.com"}/app/intelligence" style="display:inline-block;background:#15803d;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:600;font-size:14px">View the full report →</a>
+          `),
+        },
+      });
     } catch (e) {
-      console.error("report-ready email failed", (e as Error).message);
+      console.error("report-ready notify failed", (e as Error).message);
     }
 
     return { reportId, status: "ready", aiModel };
@@ -343,6 +334,18 @@ export async function generateReport(
       .from("reports")
       .update({ status: "failed", error: (e as Error).message.slice(0, 500) })
       .eq("id", reportId);
+    try {
+      const { data: b } = await db.from("businesses").select("name").eq("id", businessId).maybeSingle();
+      const { notifyAdmins } = await import("@/lib/notify");
+      await notifyAdmins("report_failed", {
+        title: `Weekly report failed — ${b?.name ?? businessId}`,
+        body: (e as Error).message.slice(0, 200),
+        href: "/admin/reports",
+        businessId,
+      });
+    } catch {
+      /* ignore */
+    }
     return { reportId, status: "failed", aiModel: null };
   }
 }

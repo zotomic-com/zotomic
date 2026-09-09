@@ -79,6 +79,22 @@ export async function updateProfileAction(slug: string, form: FormData) {
   return { ok: true };
 }
 
+export async function saveNotificationPrefsAction(slug: string, form: FormData) {
+  const store = await biz(slug);
+  if (!store) return { error: "Store unavailable" };
+  const account = await getStoreAccount(store.businessId);
+  if (!account) return { error: "Not signed in" };
+  const { sanitizePrefs, CUSTOMER_EVENTS } = await import("@/lib/notify-events");
+  const prefs = sanitizePrefs(CUSTOMER_EVENTS, {
+    order_updates: { email: form.get("order_updates") === "on" },
+    review_invite: { email: form.get("review_invite") === "on" },
+    marketing: { email: form.get("marketing") === "on" },
+  });
+  await getAdminSupabase().from("store_accounts").update({ notification_prefs: prefs }).eq("id", account.id);
+  revalidatePath(`/s/${slug}/account`);
+  return { ok: true };
+}
+
 export async function saveAddressAction(slug: string, form: FormData) {
   const store = await biz(slug);
   if (!store) return { error: "Store unavailable" };

@@ -41,30 +41,19 @@ export async function submitCreditPurchase(form: FormData): Promise<{ ok: true }
   });
   if (error) return { error: "Could not submit — try again." };
 
-  // let every admin know there's a payment to confirm
-  const { data: admins } = await db.from("users").select("id").eq("role", "admin");
   const { data: biz } = await db.from("businesses").select("name").eq("id", businessId).maybeSingle();
-  if (admins?.length) {
-    await db.from("notifications").insert(
-      admins.map((a) => ({
-        business_id: businessId,
-        user_id: a.id as string,
-        type: "credit_purchase",
-        title: `Credit top-up to confirm — ${biz?.name ?? "a store"}`,
-        body: `${pack.credits} credits · ৳${pack.price} · ${method} · txn ${txnId}`,
-        href: "/admin/credits",
-      })),
-    );
-  }
 
   await writeAudit(businessId, user.id, "credits.purchase_submitted", {
     summary: `Submitted ${method} payment for ${pack.credits} credits (৳${pack.price}), txn ${txnId}`,
   });
 
-  const { pushAdminAlert } = await import("@/lib/admin/notify");
-  await pushAdminAlert(
-    `💳 <b>Credit top-up to confirm</b>\n${biz?.name ?? "A store"} · ${pack.credits} credits · ৳${pack.price} · ${method} · txn <code>${txnId}</code>\nReply "pending payments" to review.`,
-  );
+  const { notifyAdmins } = await import("@/lib/notify");
+  await notifyAdmins("payment_pending", {
+    title: `Credit top-up to confirm — ${biz?.name ?? "a store"}`,
+    body: `${pack.credits} credits · ৳${pack.price} · ${method} · txn ${txnId}`,
+    href: "/admin/credits",
+    businessId,
+  });
 
   revalidatePath("/app/billing");
   return { ok: true };

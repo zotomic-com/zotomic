@@ -8,7 +8,9 @@ import { ImageUploader } from "@/components/app/ImageUploader";
 import { Select } from "@/components/ui/select";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import { updateBusinessSettings } from "./actions";
+import { NotificationMatrix } from "@/components/app/NotificationMatrix";
+import { OWNER_EVENTS, type Prefs } from "@/lib/notify-events";
+import { updateBusinessSettings, saveOwnerNotificationPrefs } from "./actions";
 
 const CURRENCIES = ["BDT", "USD", "INR", "PKR", "EUR", "GBP"];
 const TIMEZONES = ["Asia/Dhaka", "Asia/Kolkata", "Asia/Karachi", "UTC", "Europe/London", "America/New_York"];
@@ -31,10 +33,14 @@ export function SettingsClient({
   business,
   user,
   brandedInvoice,
+  notificationPrefs,
+  telegramLinked,
 }: {
   business: BusinessSettings;
   user: { name: string; email: string; role: string };
   brandedInvoice: boolean;
+  notificationPrefs: Prefs;
+  telegramLinked: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -136,6 +142,24 @@ export function SettingsClient({
               {pending ? "Saving…" : "Save changes"}
             </Button>
           </form>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+        </CardHeader>
+        <CardBody>
+          <NotificationMatrix
+            events={OWNER_EVENTS}
+            initial={notificationPrefs}
+            onSave={saveOwnerNotificationPrefs}
+            note={
+              telegramLinked
+                ? "Telegram alerts go to the chat ID set above."
+                : "Add a Telegram chat ID above to enable Telegram alerts."
+            }
+          />
         </CardBody>
       </Card>
 

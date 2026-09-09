@@ -55,7 +55,7 @@ export async function checkOrderForFraud(
       .update({ last_activity_at: new Date().toISOString(), stores })
       .eq("id", flag.id);
 
-    // warn the store owner
+    // warn the store owner (admin can disable per store; owner controls channels)
     const { data: biz } = await db
       .from("businesses")
       .select("fraud_warnings_enabled")
@@ -64,9 +64,8 @@ export async function checkOrderForFraud(
     if (biz?.fraud_warnings_enabled !== false) {
       const label = STAGE_LABEL[flag.stage] ?? "Watch";
       const cat = CATEGORY_LABEL[flag.category] ?? "risk signals";
-      await db.from("notifications").insert({
-        business_id: order.business_id,
-        type: "fraud_alert",
+      const { notifyOwner } = await import("@/lib/notify");
+      await notifyOwner(order.business_id as string, "fraud_alert", {
         title:
           flag.stage >= 3
             ? `⚠️ Order ${order.order_number} placed on hold — blacklisted customer`
@@ -76,6 +75,7 @@ export async function checkOrderForFraud(
             ? `This customer is blacklisted (${cat}). The order is on hold — verify by phone/WhatsApp/email before shipping, then clear the hold or cancel.`
             : `This customer is on the fraud watchlist at ${label} stage (${cat}). Verify the order directly before you confirm it.`,
         href: `/app/orders/${order.id}`,
+        email: { account: "admin" },
       });
     }
 

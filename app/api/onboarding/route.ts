@@ -93,10 +93,13 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    const { pushAdminAlert } = await import("@/lib/admin/notify");
-    await pushAdminAlert(
-      `🎉 <b>New store</b>: ${business.name} (${slug}) — ${(user as { email?: string }).email ?? "new owner"}`,
-    );
+    const { notifyAdmins } = await import("@/lib/notify");
+    await notifyAdmins("new_store", {
+      title: `New store: ${business.name}`,
+      body: `${slug} — ${(user as { email?: string }).email ?? "new owner"}`,
+      href: `/admin/tenants/${bid}`,
+      businessId: bid as string,
+    });
   } catch {
     /* non-fatal */
   }

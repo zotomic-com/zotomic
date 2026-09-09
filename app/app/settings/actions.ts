@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireBusiness, writeAudit } from "@/lib/app-actions";
+import { sanitizePrefs, OWNER_EVENTS, type Prefs } from "@/lib/notify-events";
 
 const CURRENCIES = ["BDT", "USD", "INR", "PKR", "EUR", "GBP"];
 
@@ -39,5 +40,14 @@ export async function updateBusinessSettings(formData: FormData) {
 
   revalidatePath("/app/settings");
   revalidatePath("/app");
+  return { ok: true };
+}
+
+export async function saveOwnerNotificationPrefs(prefs: Prefs): Promise<{ ok: true } | { error: string }> {
+  const { businessId, db } = await requireBusiness({ allowReadOnly: true });
+  const clean = sanitizePrefs(OWNER_EVENTS, prefs);
+  const { error } = await db.from("businesses").update({ notification_prefs: clean }).eq("id", businessId);
+  if (error) return { error: "Could not save." };
+  revalidatePath("/app/settings");
   return { ok: true };
 }

@@ -11,11 +11,17 @@ export async function issueReviewTokens(businessId: string, orderId: string): Pr
 
   const { data: order } = await db
     .from("orders")
-    .select("id, customer_id, order_items(product_id, name), customers(email, name)")
+    .select("id, customer_id, store_account_id, order_items(product_id, name), customers(email, name)")
     .eq("business_id", businessId)
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return 0;
+
+  // a signed-in shopper can opt out of review invitations
+  if (order.store_account_id) {
+    const { channelAllowed } = await import("@/lib/notify");
+    if (!(await channelAllowed("customer", order.store_account_id as string, "review_invite", "email"))) return 0;
+  }
 
   const seen = new Set<string>();
   const products: { id: string; name: string }[] = [];
