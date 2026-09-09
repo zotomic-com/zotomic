@@ -139,8 +139,16 @@ export function ProductDetail({
   const lowStock = !soldOut && stockLeft != null && stockLeft > 0 && stockLeft <= 5;
   const images = product.imageUrls.length ? product.imageUrls : [];
 
+  // the most a customer may buy of this line right now (null = untracked)
+  const qtyMax = stockLeft != null ? Math.max(0, stockLeft) : null;
+  useEffect(() => {
+    if (qtyMax != null && qty > qtyMax) setQty(Math.max(1, qtyMax));
+  }, [qtyMax, qty]);
+
   const add = (buyNow: boolean) => {
     if (needsSelection || soldOut || selected?.soldOut) return;
+    const addQty = qtyMax != null ? Math.min(qty, qtyMax) : qty;
+    if (addQty < 1) return;
     addToCart(
       storeSlug,
       {
@@ -153,10 +161,10 @@ export function ProductDetail({
         image: images[0] ?? null,
         slug: product.slug,
       },
-      qty,
+      addQty,
     );
-    pixel.track("AddToCart", { content_name: product.name, value: price * qty, currency });
-    storefrontEvent(storeSlug, "add_to_cart", { productId: product.id, value: price * qty });
+    pixel.track("AddToCart", { content_name: product.name, value: price * addQty, currency });
+    storefrontEvent(storeSlug, "add_to_cart", { productId: product.id, value: price * addQty });
     if (buyNow) router.push(`${basePath}/checkout`);
     else {
       setAdded(true);
@@ -387,13 +395,23 @@ export function ProductDetail({
     );
   }
 
-  const Qty = () => (
-    <div className="inline-flex items-center rounded-full border border-[var(--sf-line)]">
-      <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-3 py-1.5 text-lg leading-none" aria-label="Decrease">−</button>
-      <span className="w-8 text-center text-sm tabular-nums">{qty}</span>
-      <button onClick={() => setQty((q) => q + 1)} className="px-3 py-1.5 text-lg leading-none" aria-label="Increase">+</button>
-    </div>
-  );
+  const Qty = () => {
+    const atMax = qtyMax != null && qty >= qtyMax;
+    return (
+      <div className="inline-flex items-center rounded-full border border-[var(--sf-line)]">
+        <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-3 py-1.5 text-lg leading-none disabled:opacity-30" aria-label="Decrease" disabled={qty <= 1}>−</button>
+        <span className="w-8 text-center text-sm tabular-nums">{qty}</span>
+        <button
+          onClick={() => setQty((q) => (qtyMax != null ? Math.min(qtyMax, q + 1) : q + 1))}
+          className="px-3 py-1.5 text-lg leading-none disabled:opacity-30"
+          aria-label="Increase"
+          disabled={atMax}
+        >
+          +
+        </button>
+      </div>
+    );
+  };
 
   /** single rounded pill split into Add to cart | Buy now — solid blue */
   const BuyBar = () => {

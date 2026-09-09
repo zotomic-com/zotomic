@@ -38,9 +38,10 @@ export function CheckoutClient({
 
   useEffect(() => setItems(readCart(storeSlug)), [storeSlug]);
 
-  const updateQty = (id: string, qty: number) => {
+  const updateQty = (id: string, qty: number, cap?: number) => {
+    const target = Math.max(0, cap != null ? Math.min(cap, qty) : qty);
     const next = readCart(storeSlug)
-      .map((i) => (i.id === id ? { ...i, qty: Math.max(0, qty) } : i))
+      .map((i) => (i.id === id ? { ...i, qty: target } : i))
       .filter((i) => i.qty > 0);
     writeCart(storeSlug, next);
     setItems(next);
@@ -153,7 +154,11 @@ export function CheckoutClient({
                 <p className="truncate text-[var(--sf-fg)]">{i.name}</p>
                 <StockLine info={stock[i.variantId ?? i.productId]} qty={i.qty} />
                 <div className="mt-1">
-                  <QtyStepper qty={i.qty} onChange={(n) => updateQty(i.id, n)} min={0} size="sm" />
+                  {(() => {
+                    const s = stock[i.variantId ?? i.productId];
+                    const cap = s?.tracked ? Math.max(0, s.stock) : undefined;
+                    return <QtyStepper qty={i.qty} onChange={(n) => updateQty(i.id, n, cap)} min={0} max={cap} size="sm" />;
+                  })()}
                 </div>
               </div>
               <span className="shrink-0 font-medium">{money(i.price * i.qty, currency)}</span>

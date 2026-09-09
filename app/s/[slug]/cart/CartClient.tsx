@@ -29,9 +29,10 @@ export function CartClient({
     setItems(readCart(storeSlug));
   }, [storeSlug]);
 
-  const update = (id: string, qty: number) => {
+  const update = (id: string, qty: number, cap?: number) => {
+    const target = Math.max(0, cap != null ? Math.min(cap, qty) : qty);
     const next = readCart(storeSlug)
-      .map((i) => (i.id === id ? { ...i, qty: Math.max(0, qty) } : i))
+      .map((i) => (i.id === id ? { ...i, qty: target } : i))
       .filter((i) => i.qty > 0);
     writeCart(storeSlug, next);
     setItems(next);
@@ -73,7 +74,11 @@ export function CartClient({
               <p className="mt-0.5 text-sm text-[var(--sf-muted)]">{money(i.price, currency)}</p>
               <StockLine info={stock[i.variantId ?? i.productId]} qty={i.qty} />
               <div className="mt-auto flex items-center gap-3 pt-2">
-                <QtyStepper qty={i.qty} onChange={(n) => update(i.id, n)} min={0} size="sm" />
+                {(() => {
+                  const s = stock[i.variantId ?? i.productId];
+                  const cap = s?.tracked ? Math.max(0, s.stock) : undefined;
+                  return <QtyStepper qty={i.qty} onChange={(n) => update(i.id, n, cap)} min={0} max={cap} size="sm" />;
+                })()}
                 <button
                   onClick={() => update(i.id, 0)}
                   className="text-[var(--sf-muted)] hover:text-red-600"
