@@ -8,6 +8,7 @@ import { sendReportReady } from "@/lib/emails";
 import { getTrafficSummary } from "@/lib/traffic";
 import { campaignsInWindow, getCampaignAttribution } from "@/lib/marketing";
 import { getUsdToBdt } from "@/lib/fx";
+import { getChatDemandObservations } from "@/lib/reports/chat-demand";
 
 const DAY = 86_400_000;
 
@@ -180,6 +181,15 @@ export async function generateReport(
       console.error("campaign attribution for report failed:", (e as Error).message);
     }
 
+    // storefront-assistant chats — what shoppers asked for (incl. unmet demand)
+    let chatDemand: Observation[] = [];
+    try {
+      chatDemand = await getChatDemandObservations(businessId, periodStart, periodEnd);
+      observations.push(...chatDemand);
+    } catch (e) {
+      console.error("chat-demand mining for report failed:", (e as Error).message);
+    }
+
     const coldStart = cur.orders_count === 0 && prev.orders_count === 0;
 
     // ── deterministic metrics rows ──────────────────────────────────────────
@@ -244,6 +254,22 @@ export async function generateReport(
       : observations.map((o) => ({ type: "rule", severity: o.severity, title: o.text, body: null }))
     ).map((r) => ({ ...r, report_id: reportId, business_id: businessId, evidence: {} }));
     if (insightRows.length) await db.from("insights").insert(insightRows);
+
+    // Always keep the storefront-chat demand signals as their own insight rows,
+    // even when the AI narrative replaced the rule-based insights above.
+    if (chatDemand.length && !aiInsights.some((i) => /shopper|assistant/i.test(i.title))) {
+      await db.from("insights").insert(
+        chatDemand.map((o) => ({
+          report_id: reportId,
+          business_id: businessId,
+          type: "chat_demand",
+          severity: o.severity,
+          title: o.text,
+          body: null,
+          evidence: {},
+        })),
+      );
+    }
 
     // ── recommendations ────────────────────────────────────────────────────
     await db.from("recommendations").delete().eq("report_id", reportId).eq("status", "open");
