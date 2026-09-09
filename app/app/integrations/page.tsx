@@ -1,13 +1,16 @@
 import { redirect } from "next/navigation";
 import { getTenant } from "@/lib/tenant-server";
+import { getAdminSupabase } from "@/lib/supabase";
 import { getEntitlements } from "@/lib/entitlements";
 import { listIntegrations, PAYMENT_PROVIDERS, COURIER_PROVIDERS } from "@/lib/adapters/registry";
 import { MESSAGING_PROVIDERS, listChannels } from "@/lib/messaging";
 import { getStoreTracking } from "@/lib/store-tracking";
+import { dnsRecords } from "@/lib/vercel-domains";
 import { PageHeader } from "@/components/app/PageHeader";
 import { IntegrationSection } from "./IntegrationsClient";
 import { MessagingSection } from "./MessagingClient";
 import { TrackingSection } from "./TrackingClient";
+import { DomainSection } from "./DomainClient";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +19,20 @@ export default async function IntegrationsPage() {
   if (!tenant) redirect("/login");
   if (!tenant.businessId) redirect("/onboarding");
 
-  const [ent, connected, channels, tracking] = await Promise.all([
+  const [ent, connected, channels, tracking, { data: sfCfg }] = await Promise.all([
     getEntitlements(tenant.businessId),
     listIntegrations(tenant.businessId),
     listChannels(tenant.businessId),
     getStoreTracking(tenant.businessId),
+    getAdminSupabase()
+      .from("storefront_config")
+      .select("custom_domain, custom_domain_status")
+      .eq("business_id", tenant.businessId)
+      .maybeSingle(),
   ]);
+
+  const customDomain = (sfCfg?.custom_domain as string) ?? null;
+  const domainStatus = ((sfCfg?.custom_domain_status as string) ?? "none") as "none" | "pending" | "active";
 
   const toProvider = (p: { id: string; name: string; credentialFields: { key: string; label: string; type: "text" | "password" }[] }) => ({
     id: p.id,
@@ -44,6 +55,13 @@ export default async function IntegrationsPage() {
       <PageHeader
         title="Integrations"
         subtitle="Connect your own courier, payment, messaging and analytics accounts. Credentials stay encrypted on our servers."
+      />
+
+      <DomainSection
+        locked={!ent.custom_domain}
+        domain={customDomain}
+        status={domainStatus}
+        records={customDomain ? dnsRecords(customDomain) : []}
       />
 
       <TrackingSection

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken, getRoleRedirect } from "@/lib/jwt";
+import { isPlatformHost } from "@/lib/storefront/domain";
 
 const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
 const STOREFRONT_ROOT = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
@@ -75,6 +76,28 @@ export async function middleware(req: NextRequest) {
     const reqHeaders = new Headers(req.headers);
     reqHeaders.set("x-sf-root-host", "1"); // renderer basePath = ""
     return NextResponse.rewrite(url, { request: { headers: reqHeaders } });
+  }
+
+  // ── store's own custom domain (e.g. shop.brand.com) ──────────────────────
+  if (!isPlatformHost(host)) {
+    if (pathname.startsWith("/s/") || pathname.startsWith("/_next") || pathname.startsWith("/api")) {
+      return NextResponse.next();
+    }
+    const h = host.split(":")[0].toLowerCase();
+    try {
+      const r = await fetch(new URL(`/api/storefront/host?host=${encodeURIComponent(h)}`, req.url));
+      const slug = r.ok ? ((await r.json()) as { slug: string | null }).slug : null;
+      if (slug) {
+        const url = req.nextUrl.clone();
+        url.pathname = `/s/${slug}${pathname === "/" ? "" : pathname}`;
+        const reqHeaders = new Headers(req.headers);
+        reqHeaders.set("x-sf-root-host", "1");
+        return NextResponse.rewrite(url, { request: { headers: reqHeaders } });
+      }
+    } catch {
+      /* fall through to 404 */
+    }
+    return new NextResponse("This domain is not connected to a Zotomic store.", { status: 404 });
   }
 
   // ── shared-domain path storefront (zotomic.com/<slug>/…) ─────────────────
