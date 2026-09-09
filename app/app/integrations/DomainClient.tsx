@@ -105,6 +105,21 @@ export function DomainSection({ locked, domain, status, records }: Props) {
                 </tbody>
               </table>
               <p className="mt-2 text-fg-subtle">DNS changes can take a few minutes to a few hours.</p>
+
+              <details className="mt-2.5 border-t border-border pt-2">
+                <summary className="cursor-pointer font-semibold text-fg-muted">Using Cloudflare?</summary>
+                <ul className="mt-1.5 list-disc space-y-1 pl-4 text-fg-subtle">
+                  <li>
+                    Add the record with the proxy <span className="font-semibold text-fg">turned OFF</span> — the cloud icon
+                    must be grey (&ldquo;DNS only&rdquo;), not orange. A proxied record blocks the SSL certificate.
+                  </li>
+                  <li>
+                    Under SSL/TLS set the encryption mode to <span className="font-semibold text-fg">Full</span> (not
+                    &ldquo;Flexible&rdquo; — Flexible causes a redirect loop).
+                  </li>
+                  <li>Cloudflare flattens CNAMEs at the root, so a root domain can use the same value as a subdomain.</li>
+                </ul>
+              </details>
             </div>
           )}
 
@@ -118,7 +133,12 @@ export function DomainSection({ locked, domain, status, records }: Props) {
                   run(async () => {
                     const res = await checkCustomDomain();
                     if ("ok" in res)
-                      toast(res.active ? "Domain is live 🎉" : "DNS not detected yet — try again shortly", res.active ? "success" : "info");
+                      toast(
+                        res.active
+                          ? "Domain is live 🎉"
+                          : "Not verified yet — check the DNS record is set and (on Cloudflare) not proxied.",
+                        res.active ? "success" : "info",
+                      );
                     return res;
                   })
                 }
