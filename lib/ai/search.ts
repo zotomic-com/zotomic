@@ -6,7 +6,7 @@
 import { canAttempt, recordSuccess, recordFailure, chainOpen } from "./circuit";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
-const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-flash-lite-latest"];
+const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-3.5-flash-lite"];
 
 export interface GroundedResult {
   answer: string;

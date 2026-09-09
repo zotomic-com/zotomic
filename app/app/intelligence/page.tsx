@@ -9,6 +9,7 @@ import { getTrafficSummary } from "@/lib/traffic";
 import { money } from "@/lib/money";
 import { PageHeader } from "@/components/app/PageHeader";
 import { GenerateReportButton } from "@/components/app/GenerateReportButton";
+import { AddToTasksButton } from "@/components/app/AddToTasksButton";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -191,11 +192,12 @@ export default async function IntelligencePage() {
               <ul className="space-y-3">
                 {recs.map((r) => (
                   <li key={r.id} className="rounded-sm border border-border p-3">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-fg">{r.title}</p>
-                      <div className="flex gap-1">
+                      <div className="flex items-center gap-1">
                         {r.effort && <Badge tone="neutral">effort: {r.effort}</Badge>}
                         {r.impact && <Badge tone="primary">impact: {r.impact}</Badge>}
+                        <AddToTasksButton title={r.title} impact={r.impact} />
                       </div>
                     </div>
                     {r.detail && <p className="mt-1 text-sm text-fg-muted">{r.detail}</p>}

@@ -150,9 +150,9 @@ export async function runAgent(
         ok = false;
         out = { error: (e as Error).message };
       }
-      credits += t.creditCost;
-      lastToolResult = out;
       didApprovedWrite = ok && !(out && typeof out === "object" && "error" in out);
+      if (didApprovedWrite) credits += t.creditCost;
+      lastToolResult = out;
       traces.push({ tool: t.name, args: opts.approved.args, ok, ms: Date.now() - started });
       contents.push({ role: "model", parts: [{ functionCall: { name: t.name, args: opts.approved.args } }] });
       contents.push({
@@ -225,7 +225,9 @@ export async function runAgent(
       ok = false;
       out = { error: (e as Error).message };
     }
-    credits += tool.creditCost;
+    // don't bill a tool that errored (e.g. web_search when the provider is down)
+    const errored = !ok || (out != null && typeof out === "object" && "error" in out);
+    if (!errored) credits += tool.creditCost;
     lastToolResult = out;
     traces.push({ tool: name, args: args ?? {}, ok, ms: Date.now() - started });
     contents.push({ role: "model", parts: [fnCall] });

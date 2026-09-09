@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
 import { addTask, deleteTask, toggleTask } from "./actions";
 
 export interface Task {
@@ -22,6 +23,7 @@ const TONE = { high: "danger", medium: "warning", low: "neutral" } as const;
 
 export function TasksClient({ tasks }: { tasks: Task[] }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [pending, start] = useTransition();
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("medium");
@@ -29,30 +31,34 @@ export function TasksClient({ tasks }: { tasks: Task[] }) {
   const open = tasks.filter((t) => t.status === "open");
   const done = tasks.filter((t) => t.status === "done");
 
+  const run = (fn: () => Promise<{ error?: string; ok?: boolean }>, okMsg?: string) =>
+    start(async () => {
+      try {
+        const res = await fn();
+        if (res.error) return toast(res.error, "error");
+        if (okMsg) toast(okMsg, "success");
+        router.refresh();
+      } catch {
+        toast("Something went wrong — try again.", "error");
+      }
+    });
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     const fd = new FormData();
     fd.set("title", title);
     fd.set("priority", priority);
-    start(async () => {
-      await addTask(fd);
-      setTitle("");
-      router.refresh();
+    run(async () => {
+      const res = await addTask(fd);
+      if (!("error" in res)) setTitle("");
+      return res;
     });
   };
 
-  const toggle = (id: string, done: boolean) =>
-    start(async () => {
-      await toggleTask(id, done);
-      router.refresh();
-    });
+  const toggle = (id: string, done: boolean) => run(() => toggleTask(id, done));
 
-  const remove = (id: string) =>
-    start(async () => {
-      await deleteTask(id);
-      router.refresh();
-    });
+  const remove = (id: string) => run(() => deleteTask(id), "Task removed");
 
   return (
     <div className="space-y-5">
@@ -76,7 +82,7 @@ export function TasksClient({ tasks }: { tasks: Task[] }) {
       {open.length === 0 && done.length === 0 ? (
         <EmptyState
           title="No tasks"
-          description="Add tasks here, or let your weekly report create them from its recommendations."
+          description="Add tasks here, or send recommendations over from your Weekly Report with “Add to tasks”."
         />
       ) : (
         <div className="card divide-y divide-border">
@@ -90,6 +96,7 @@ export function TasksClient({ tasks }: { tasks: Task[] }) {
               />
               <span className="flex-1 text-sm text-fg">{t.title}</span>
               {t.source === "assistant" && <Badge tone="primary">assistant</Badge>}
+              {t.source === "system" && <Badge tone="neutral">from report</Badge>}
               <Badge tone={TONE[t.priority as keyof typeof TONE] ?? "neutral"}>{t.priority}</Badge>
               <button
                 type="button"
@@ -113,6 +120,17 @@ export function TasksClient({ tasks }: { tasks: Task[] }) {
                 className="h-4 w-4 accent-[var(--primary)]"
               />
               <span className="flex-1 text-sm text-fg line-through">{t.title}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  remove(t.id);
+                }}
+                className="text-fg-subtle hover:text-danger"
+                aria-label="Delete task"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </label>
           ))}
         </div>

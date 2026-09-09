@@ -835,7 +835,17 @@ const web_search: ToolDef = {
       return { error: `Daily web-search limit reached (${cap}/day on the ${plan} plan). It resets at 00:00 UTC.` };
     }
 
-    // record the call so the daily cap counts it (credits are charged by the agent loop)
+    const res = await groundedSearch(query);
+    if (!res) {
+      // nothing charged — no usage_ledger row, and the agent loop skips the
+      // credit for an errored tool
+      return {
+        error:
+          "Web search is unavailable right now (the search provider is over its quota). No credits were used — try again later.",
+      };
+    }
+
+    // only a real result counts against credits + the daily cap
     await ctx.db.from("usage_ledger").insert({
       business_id: ctx.businessId,
       user_id: ctx.userId,
@@ -845,8 +855,6 @@ const web_search: ToolDef = {
       cost: 10,
     });
 
-    const res = await groundedSearch(query);
-    if (!res) return { error: "Web search is temporarily unavailable. Try again shortly." };
     return { answer: res.answer, sources: res.sources, remainingToday: Math.max(0, cap - used - 1) };
   },
 };

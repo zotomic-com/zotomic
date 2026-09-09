@@ -306,7 +306,7 @@ export default async function DashboardPage() {
               <EmptyState
                 icon={ListChecks}
                 title="Nothing on your list"
-                description="Recommendations from your weekly report land here as tasks."
+                description="Add tasks on the Tasks page, or send a Weekly Report recommendation over as one."
               />
             )}
           </CardBody>

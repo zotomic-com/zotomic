@@ -9,6 +9,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { AddToTasksButton } from "@/components/app/AddToTasksButton";
 
 export const dynamic = "force-dynamic";
 
@@ -148,11 +149,12 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
               <ul className="space-y-3">
                 {recs.map((r) => (
                   <li key={r.id as string} className="rounded-sm border border-border p-3">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-fg">{r.title as string}</p>
-                      <div className="flex gap-1">
+                      <div className="flex items-center gap-1">
                         {r.effort ? <Badge tone="neutral">effort: {r.effort as string}</Badge> : null}
                         {r.impact ? <Badge tone="primary">impact: {r.impact as string}</Badge> : null}
+                        <AddToTasksButton title={r.title as string} impact={(r.impact as string) ?? null} />
                       </div>
                     </div>
                     {r.detail ? <p className="mt-1 text-sm text-fg-muted">{r.detail as string}</p> : null}

@@ -10,7 +10,7 @@ const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 // Fallback chain — first that responds wins. `gemini-2.5-*` is retired for new
 // keys (2026), so the chain leads with 3.x flash tiers.
-const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite"];
+const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-3.5-flash-lite"];
 
 export interface GeminiResult {
   text: string;
