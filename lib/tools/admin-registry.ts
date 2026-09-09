@@ -929,7 +929,10 @@ const fraud_list: AdminToolDef = {
   risk: "read",
   parameters: {
     type: "object",
-    properties: { stage: { type: "number", enum: [1, 2, 3] }, query: { type: "string" } },
+    properties: {
+      stage: { type: "integer", description: "1 = Watch, 2 = Suspect, 3 = Blacklist" },
+      query: { type: "string" },
+    },
   },
   async handler(_a, args) {
     const db = getAdminSupabase();
@@ -1026,7 +1029,7 @@ const set_fraud_stage: AdminToolDef = {
       phone: { type: "string" },
       flagId: { type: "string" },
       name: { type: "string" },
-      stage: { type: "number", enum: [1, 2, 3] },
+      stage: { type: "integer", description: "1 = Watch, 2 = Suspect, 3 = Blacklist" },
       category: { type: "string", enum: ["cancellations", "returns", "delivery_failures", "cross_store", "chargeback", "abuse", "reported", "other"] },
       reason: { type: "string" },
     },
