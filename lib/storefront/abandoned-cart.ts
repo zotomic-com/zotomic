@@ -20,7 +20,7 @@ export interface AbandonedCartSummary {
   cartSessions: number;        // distinct sessions with add_to_cart
   checkoutSessions: number;    // distinct sessions that reached begin_checkout
   registeredCartSessions: number; // of those, from a signed-in shopper
-  orders: number;             // non-cancelled orders placed in the window
+  orders: number;             // completed storefront checkouts (purchase events) in the window
   abandonedCarts: number;
   abandonedCheckouts: number;
   cartAbandonRate: number | null;      // % of cart sessions that didn't order
@@ -67,14 +67,18 @@ export async function getAbandonedCartSummary(
   end: Date,
 ): Promise<AbandonedCartSummary> {
   const db = getAdminSupabase();
-  const [events, { data: orders }] = await Promise.all([
+  // Compare tracked funnel to tracked funnel: purchase EVENTS (real storefront
+  // checkouts), not the orders table — which also holds imported/manual orders
+  // that never had a cart session.
+  const [events, { count: purchaseEvents }] = await Promise.all([
     loadCartEvents(businessId, start),
     db
-      .from("orders")
-      .select("total, status, placed_at")
+      .from("storefront_events")
+      .select("id", { count: "exact", head: true })
       .eq("business_id", businessId)
-      .gte("placed_at", start.toISOString())
-      .lt("placed_at", end.toISOString()),
+      .eq("type", "purchase")
+      .gte("created_at", start.toISOString())
+      .lt("created_at", end.toISOString()),
   ]);
 
   const inWindow = events.filter(
@@ -101,8 +105,7 @@ export async function getAbandonedCartSummary(
     }
   }
 
-  const orderRows = (orders ?? []).filter((o) => o.status !== "cancelled");
-  const orderCount = orderRows.length;
+  const orderCount = purchaseEvents ?? 0;
 
   const cartSessions = cartSet.size;
   const checkoutSessions = checkoutSet.size;
