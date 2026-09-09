@@ -35,7 +35,8 @@ export default async function MessagesPage() {
     { data: pendingTopup },
     { data: usageRow },
     training,
-    { data: notedProducts },
+    { data: products },
+    { data: campaignLinks },
   ] = await Promise.all([
     db
       .from("messaging_messages")
@@ -73,10 +74,34 @@ export default async function MessagesPage() {
     getStorefrontAssistantTraining(businessId),
     db
       .from("products")
-      .select("id, name, assistant_note")
+      .select("id, name, assistant_note, status")
       .eq("business_id", businessId)
-      .not("assistant_note", "is", null),
+      .neq("status", "archived")
+      .order("name"),
+    db
+      .from("campaign_products")
+      .select("product_id, campaigns!inner(name, status, starts_on, ends_on)")
+      .eq("business_id", businessId),
   ]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const campaignByProduct = new Map<string, string>();
+  for (const cp of (campaignLinks ?? []) as {
+    product_id: string;
+    campaigns: { name: string; status: string; starts_on: string; ends_on: string } | { name: string; status: string; starts_on: string; ends_on: string }[];
+  }[]) {
+    const c = Array.isArray(cp.campaigns) ? cp.campaigns[0] : cp.campaigns;
+    if (c && c.status === "running" && c.starts_on <= today && c.ends_on >= today) {
+      campaignByProduct.set(cp.product_id, c.name);
+    }
+  }
+
+  const allProducts = ((products as { id: string; name: string; assistant_note: string | null }[]) ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    campaign: campaignByProduct.get(p.id) ?? null,
+    hasNote: !!p.assistant_note,
+  }));
 
   const sfConversations: SfConversation[] = (sfConvs ?? []).map((c) => {
     const acct = Array.isArray(c.store_accounts) ? c.store_accounts[0] : c.store_accounts;
@@ -171,11 +196,16 @@ export default async function MessagesPage() {
           persona={training.persona ?? ""}
           signals={training.signals}
           knowledge={training.knowledge}
-          promoted={training.promoted.map((p) => ({ id: p.id, name: p.name }))}
-          notedProducts={(notedProducts ?? []).map((p) => ({
-            id: p.id as string,
-            name: p.name as string,
-            note: (p.assistant_note as string) ?? "",
+          promoted={training.promoted.map((p) => ({
+            id: p.id,
+            name: p.name,
+            campaign: campaignByProduct.get(p.id) ?? null,
+          }))}
+          allProducts={allProducts}
+          notedProducts={Object.entries(training.productNotes).map(([id, note]) => ({
+            id,
+            name: allProducts.find((p) => p.id === id)?.name ?? "Product",
+            note,
           }))}
         />
       )}

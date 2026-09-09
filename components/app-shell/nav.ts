@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   BarChart3,
+  Bot,
   Boxes,
   Building2,
   Coins,
@@ -66,6 +67,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/websites", label: "Websites", icon: Globe },
   { href: "/admin/reports", label: "Reports", icon: BarChart3 },
   { href: "/admin/assistant-activity", label: "Assistant Activity", icon: MessageSquareText },
+  { href: "/admin/storefront-assistants", label: "Storefront Assistants", icon: Bot },
   { href: "/admin/content-library", label: "Pages & Legal", icon: ScrollText },
   { href: "/admin/integrations", label: "Integrations", icon: Plug },
   { href: "/admin/marketing", label: "Marketing", icon: Megaphone },

@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { GraduationCap, Plus, Trash2, Search, Pencil, X } from "lucide-react";
+import { GraduationCap, Plus, Trash2, Pencil, X, Megaphone } from "lucide-react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Textarea } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import type { SignalToggles } from "@/lib/storefront/assistant-signals";
 import {
@@ -15,7 +16,6 @@ import {
   updateKnowledgeEntry,
   deleteKnowledgeEntry,
   setProductAssistantNote,
-  searchProductsForAssistant,
 } from "./actions";
 
 interface KEntry {
@@ -24,9 +24,16 @@ interface KEntry {
   answer: string;
   enabled: boolean;
 }
+interface ProductOpt {
+  id: string;
+  name: string;
+  campaign: string | null;
+  hasNote: boolean;
+}
 interface Promoted {
   id: string;
   name: string;
+  campaign: string | null;
 }
 interface NotedProduct {
   id: string;
@@ -41,24 +48,28 @@ const SIGNAL_LABELS: { key: keyof SignalToggles; label: string; hint: string }[]
   { key: "hot", label: "Trending / hot", hint: "Your 'hot' badge, plus recent sales spikes" },
 ];
 
+type RunFn = (fn: () => Promise<{ ok: true } | { error: string }>, ok?: string, after?: () => void) => void;
+
 export function AssistantTraining({
   persona: persona0,
   signals: signals0,
   knowledge: knowledge0,
   promoted: promoted0,
+  allProducts,
   notedProducts: noted0,
 }: {
   persona: string;
   signals: SignalToggles;
   knowledge: KEntry[];
   promoted: Promoted[];
+  allProducts: ProductOpt[];
   notedProducts: NotedProduct[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, start] = useTransition();
 
-  const run = (fn: () => Promise<{ ok: true } | { error: string }>, ok = "Saved", after?: () => void) =>
+  const run: RunFn = (fn, ok = "Saved", after) =>
     start(async () => {
       const res = await fn();
       if ("error" in res) return toast(res.error, "error");
@@ -85,10 +96,18 @@ export function AssistantTraining({
     setPromoted(list);
     run(() => saveAssistantTraining({ promotedProductIds: list.map((p) => p.id) }), "Updated");
   };
+  const addable = allProducts.filter((p) => !promoted.some((x) => x.id === p.id));
+  // campaign (ad) products first
+  addable.sort((a, b) => (b.campaign ? 1 : 0) - (a.campaign ? 1 : 0) || a.name.localeCompare(b.name));
 
   /* knowledge add form */
   const [kq, setKq] = useState("");
   const [ka, setKa] = useState("");
+
+  /* product notes */
+  const notedIds = new Set(noted0.map((p) => p.id));
+  const noteAddable = allProducts.filter((p) => !notedIds.has(p.id));
+  const [noteTarget, setNoteTarget] = useState<ProductOpt | null>(null);
 
   return (
     <Card>
@@ -136,12 +155,7 @@ export function AssistantTraining({
                 key={s.key}
                 className="flex cursor-pointer items-start gap-2 rounded-lg border border-border p-2.5 text-sm"
               >
-                <input
-                  type="checkbox"
-                  checked={signals[s.key]}
-                  onChange={() => toggleSignal(s.key)}
-                  className="mt-0.5"
-                />
+                <input type="checkbox" checked={signals[s.key]} onChange={() => toggleSignal(s.key)} className="mt-0.5" />
                 <span>
                   <span className="font-medium text-fg">{s.label}</span>
                   <span className="block text-xs text-fg-subtle">{s.hint}</span>
@@ -157,11 +171,15 @@ export function AssistantTraining({
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-fg">Products to push ({promoted.length}/5)</h3>
           <p className="text-xs text-fg-subtle">
-            The assistant actively suggests these when a shopper is browsing or asks for a recommendation.
+            The assistant actively suggests these when a shopper is browsing or asks for a recommendation. Products with
+            a <Megaphone className="inline h-3 w-3" /> have a Marketing campaign running — add the ones you&apos;re
+            running Meta ads on so the assistant sends shoppers straight to them.
           </p>
+
           <div className="flex flex-wrap gap-2">
             {promoted.map((p) => (
               <Badge key={p.id} tone="primary">
+                {p.campaign && <Megaphone className="h-3 w-3" />}
                 {p.name}
                 <button
                   onClick={() => savePromoted(promoted.filter((x) => x.id !== p.id))}
@@ -174,13 +192,23 @@ export function AssistantTraining({
             ))}
             {promoted.length === 0 && <span className="text-xs text-fg-subtle">None selected.</span>}
           </div>
-          {promoted.length < 5 && (
-            <ProductPicker
-              label="Add a product"
-              onPick={(p) => {
-                if (!promoted.some((x) => x.id === p.id)) savePromoted([...promoted, { id: p.id, name: p.name }]);
+
+          {promoted.length < 5 && addable.length > 0 && (
+            <Select
+              value=""
+              onChange={(e) => {
+                const p = addable.find((x) => x.id === e.target.value);
+                if (p) savePromoted([...promoted, { id: p.id, name: p.name, campaign: p.campaign }]);
               }}
-            />
+              className="max-w-sm"
+            >
+              <option value="">Add a product…</option>
+              {addable.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.campaign ? `📣 ${p.name} — ads: ${p.campaign}` : p.name}
+                </option>
+              ))}
+            </Select>
           )}
         </section>
 
@@ -249,10 +277,29 @@ export function AssistantTraining({
             ))}
           </ul>
 
-          <ProductPicker
-            label="Add a note to a product"
-            renderPicked={(p, clear) => <ProductNoteEditor product={{ ...p, note: "" }} run={run} pending={pending} onDone={clear} />}
-          />
+          {noteTarget ? (
+            <ProductNoteEditor
+              product={{ id: noteTarget.id, name: noteTarget.name, note: "" }}
+              run={run}
+              pending={pending}
+              onDone={() => setNoteTarget(null)}
+            />
+          ) : (
+            noteAddable.length > 0 && (
+              <Select
+                value=""
+                onChange={(e) => setNoteTarget(noteAddable.find((x) => x.id === e.target.value) ?? null)}
+                className="max-w-sm"
+              >
+                <option value="">Add a note to a product…</option>
+                {noteAddable.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            )
+          )}
         </section>
       </CardBody>
     </Card>
@@ -260,15 +307,7 @@ export function AssistantTraining({
 }
 
 /* ── knowledge row ── */
-function KnowledgeRow({
-  entry,
-  run,
-  pending,
-}: {
-  entry: KEntry;
-  run: (fn: () => Promise<{ ok: true } | { error: string }>, ok?: string, after?: () => void) => void;
-  pending: boolean;
-}) {
+function KnowledgeRow({ entry, run, pending }: { entry: KEntry; run: RunFn; pending: boolean }) {
   const [edit, setEdit] = useState(false);
   const [q, setQ] = useState(entry.question);
   const [a, setA] = useState(entry.answer);
@@ -327,15 +366,7 @@ function KnowledgeRow({
 }
 
 /* ── product note row (existing) ── */
-function ProductNoteRow({
-  product,
-  run,
-  pending,
-}: {
-  product: NotedProduct;
-  run: (fn: () => Promise<{ ok: true } | { error: string }>, ok?: string, after?: () => void) => void;
-  pending: boolean;
-}) {
+function ProductNoteRow({ product, run, pending }: { product: NotedProduct; run: RunFn; pending: boolean }) {
   const [edit, setEdit] = useState(false);
   if (edit) return <ProductNoteEditor product={product} run={run} pending={pending} onDone={() => setEdit(false)} />;
   return (
@@ -369,13 +400,13 @@ function ProductNoteEditor({
   onDone,
 }: {
   product: { id: string; name: string; note: string };
-  run: (fn: () => Promise<{ ok: true } | { error: string }>, ok?: string, after?: () => void) => void;
+  run: RunFn;
   pending: boolean;
   onDone: () => void;
 }) {
   const [note, setNote] = useState(product.note);
   return (
-    <li className="rounded-lg border border-border p-3 text-sm">
+    <div className="rounded-lg border border-border p-3 text-sm">
       <p className="mb-1.5 font-medium text-fg">{product.name}</p>
       <Textarea
         rows={2}
@@ -395,96 +426,6 @@ function ProductNoteEditor({
           Save note
         </Button>
       </div>
-    </li>
-  );
-}
-
-/* ── product search / picker ── */
-function ProductPicker({
-  label,
-  onPick,
-  renderPicked,
-}: {
-  label: string;
-  onPick?: (p: { id: string; name: string }) => void;
-  renderPicked?: (p: { id: string; name: string }, clear: () => void) => React.ReactNode;
-}) {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<{ id: string; name: string }[]>([]);
-  const [picked, setPicked] = useState<{ id: string; name: string } | null>(null);
-  const [busy, start] = useTransition();
-
-  const search = () =>
-    start(async () => {
-      try {
-        const rows = await searchProductsForAssistant(q);
-        setResults(rows.map((r) => ({ id: r.id, name: r.name })));
-      } catch {
-        toast("Search failed", "error");
-      }
-    });
-
-  if (picked && renderPicked)
-    return (
-      <>
-        {renderPicked(picked, () => {
-          setPicked(null);
-          setOpen(false);
-          setQ("");
-          setResults([]);
-        })}
-      </>
-    );
-
-  if (!open) {
-    return (
-      <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
-        <Plus className="h-4 w-4" /> {label}
-      </Button>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-border p-3">
-      <div className="flex gap-2">
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), search())}
-          placeholder="Product name…"
-          autoFocus
-        />
-        <Button size="sm" variant="secondary" disabled={busy} onClick={search}>
-          <Search className="h-4 w-4" />
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-      {results.length > 0 && (
-        <ul className="mt-2 divide-y divide-border">
-          {results.map((r) => (
-            <li key={r.id}>
-              <button
-                className="w-full py-2 text-left text-sm hover:text-primary"
-                onClick={() => {
-                  if (renderPicked) setPicked(r);
-                  else {
-                    onPick?.(r);
-                    setOpen(false);
-                    setQ("");
-                    setResults([]);
-                  }
-                }}
-              >
-                {r.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

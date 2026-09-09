@@ -203,6 +203,7 @@ export async function adminResolveStorefrontChatTopup(
     `${action === "grant" ? "Granted" : "Rejected"} ${p.conversations} conversations (৳${p.amount}, ${p.method})`,
   );
   revalidatePath(`/admin/tenants/${p.business_id}`);
+  revalidatePath("/admin/storefront-assistants");
   return { ok: true };
 }
 
