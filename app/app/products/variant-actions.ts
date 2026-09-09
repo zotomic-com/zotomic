@@ -230,3 +230,60 @@ export async function setStockTracking(
   revalidatePath("/app/inventory");
   return { ok: true };
 }
+
+/** Bulk: set several products / variants to 0 stock (mark out of stock). */
+export async function bulkMarkOutOfStock(
+  items: { productId: string; variantId?: string | null }[],
+): Promise<{ error: string } | { ok: true; count: number }> {
+  const { businessId, user, db } = await requireBusiness();
+  const list = (items ?? []).filter((i) => i && i.productId).slice(0, 300);
+  if (!list.length) return { error: "Nothing selected." };
+
+  const variantIds = list.filter((i) => i.variantId).map((i) => i.variantId as string);
+  const productIds = [...new Set(list.filter((i) => !i.variantId).map((i) => i.productId))];
+  const touchedProducts = new Set(list.map((i) => i.productId));
+
+  if (variantIds.length) {
+    await db.from("product_variants").update({ stock_qty: 0 }).eq("business_id", businessId).in("id", variantIds);
+  }
+  if (productIds.length) {
+    await db
+      .from("products")
+      .update({ stock_qty: 0, track_inventory: true })
+      .eq("business_id", businessId)
+      .in("id", productIds);
+  }
+  // resync variant-product totals
+  for (const pid of touchedProducts) {
+    const { data: sib } = await db
+      .from("product_variants")
+      .select("stock_qty")
+      .eq("business_id", businessId)
+      .eq("product_id", pid)
+      .eq("active", true);
+    if (sib && sib.length) {
+      await db
+        .from("products")
+        .update({ stock_qty: sib.reduce((s, r) => s + Number(r.stock_qty), 0) })
+        .eq("id", pid);
+    }
+    await db.from("inventory_adjustments").insert({
+      business_id: businessId,
+      product_id: pid,
+      variant_id: null,
+      delta: 0,
+      balance: 0,
+      reason: "correction",
+      note: "Bulk marked out of stock",
+      created_by: user.id,
+    });
+  }
+
+  await writeAudit(businessId, user.id, "inventory.bulk_out_of_stock", {
+    targetType: "product",
+    summary: `${list.length} items set to 0`,
+  });
+  revalidatePath("/app/inventory");
+  revalidatePath("/app/products");
+  return { ok: true, count: list.length };
+}
