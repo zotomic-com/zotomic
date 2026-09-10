@@ -98,16 +98,12 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
       <div className={cn("fixed inset-0 z-50 lg:hidden", open ? "" : "pointer-events-none")} aria-hidden={!open}>
         <div
           onClick={() => setOpen(false)}
-          className={cn(
-            "absolute inset-0 bg-black/40 transition-opacity duration-200",
-            open ? "opacity-100" : "opacity-0",
-          )}
+          className="absolute inset-0 bg-black/40 transition-opacity duration-200"
+          style={{ opacity: open ? 1 : 0 }}
         />
         <aside
-          className={cn(
-            "absolute inset-y-0 left-0 flex w-72 max-w-[82vw] flex-col border-r border-border bg-surface p-4 shadow-xl transition-transform duration-200 ease-out",
-            open ? "translate-x-0" : "-translate-x-full",
-          )}
+          style={{ transform: open ? "translateX(0)" : "translateX(-100%)" }}
+          className="absolute inset-y-0 left-0 flex w-72 max-w-[82vw] flex-col border-r border-border bg-surface p-4 shadow-xl transition-transform duration-200 ease-out"
         >
           <div className="mb-5 flex items-center justify-between px-2">
             <Link href="/" onClick={() => setOpen(false)} aria-label="Zotomic home">
