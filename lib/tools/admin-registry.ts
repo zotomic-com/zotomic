@@ -12,9 +12,10 @@ import { SF_CHAT_QUOTA, utcPeriod } from "@/lib/storefront/assistant";
 import { normalizeSignals } from "@/lib/storefront/assistant-signals";
 import { STAGE_LABEL, CATEGORY_LABEL } from "@/lib/fraud/phone";
 import { PLANS, type PlanId } from "@/lib/plans";
+import type { AdminCapability } from "@/lib/ai/assistant-caps";
 
 export type AdminRisk = "read" | "consequential";
-export type AdminCapability = "media" | "files" | "git" | "git_merge" | "sql" | "deploy";
+export type { AdminCapability };
 
 export interface AdminToolDef {
   name: string;

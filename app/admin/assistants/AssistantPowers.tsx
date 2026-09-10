@@ -7,8 +7,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { setAssistantCap, type AssistantAction } from "./actions";
-import type { AssistantCaps } from "@/lib/ai/assistant-powers";
-import type { AdminCapability } from "@/lib/tools/admin-registry";
+import type { AssistantCaps, AdminCapability } from "@/lib/ai/assistant-caps";
 
 const ORDER: { cap: AdminCapability; danger: boolean; needsEnv?: "git" | "sql" | "deploy"; typed?: string }[] = [
   { cap: "media", danger: false },
