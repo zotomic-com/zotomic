@@ -57,25 +57,9 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
-      {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen flex-col border-r border-border bg-surface p-4 lg:flex">
-        <Link href="/" className="mb-6 flex items-center gap-2 px-2">
-          <Logo />
-        </Link>
-        <NavList />
-        <div className="mt-auto flex flex-col gap-2 pt-4">
-          <Button href="/login" variant="ghost" size="sm" className="justify-start">
-            Log in
-          </Button>
-          <Button href="/signup" size="sm">
-            Start free <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </aside>
-
-      {/* Mobile top bar */}
-      <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-surface px-4 lg:hidden">
+    <div className="flex min-h-screen flex-col">
+      {/* Top bar — same on every breakpoint; the drawer is the nav */}
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-surface px-4 sm:px-6">
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setOpen((v) => !v)}
@@ -89,14 +73,19 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
             <Logo size={24} />
           </Link>
         </div>
-        <Button href="/signup" size="sm">
-          Start free
-        </Button>
-      </div>
+        <div className="flex items-center gap-2">
+          <Button href="/login" variant="ghost" size="sm" className="hidden sm:inline-flex">
+            Log in
+          </Button>
+          <Button href="/signup" size="sm">
+            Start free
+          </Button>
+        </div>
+      </header>
 
-      {/* Mobile side drawer — click the icon, the backdrop, a link or Escape to close */}
+      {/* Side drawer — click the icon, the backdrop, a link or Escape to close */}
       {open && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50">
           <div onClick={() => setOpen(false)} className="absolute inset-0 bg-black/40 animate-fade-in-plain" />
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[82vw] animate-slide-in-left flex-col border-r border-border bg-surface p-4 shadow-xl">
             <div className="mb-5 flex items-center justify-between px-2">
@@ -126,10 +115,8 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-h-screen flex-col">
-        <main className="flex-1">{children}</main>
-        <SiteFooter />
-      </div>
+      <main className="flex-1">{children}</main>
+      <SiteFooter />
     </div>
   );
 }
