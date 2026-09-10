@@ -14,6 +14,7 @@ import { STAGE_LABEL, CATEGORY_LABEL } from "@/lib/fraud/phone";
 import { PLANS, type PlanId } from "@/lib/plans";
 
 export type AdminRisk = "read" | "consequential";
+export type AdminCapability = "media" | "files" | "git" | "git_merge" | "sql" | "deploy";
 
 export interface AdminToolDef {
   name: string;
@@ -21,6 +22,10 @@ export interface AdminToolDef {
   risk: AdminRisk;
   parameters: { type: "object"; properties: Record<string, unknown>; required?: string[] };
   handler: (adminId: string, args: Record<string, unknown>) => Promise<unknown>;
+  /** the admin must have granted this power in Assistants settings for the tool to run */
+  requiresCap?: AdminCapability;
+  /** consequential tools: an extra word the admin must type to confirm (SQL/deploy/merge) */
+  confirmWord?: string;
 }
 
 const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -1618,10 +1623,286 @@ const web_search: AdminToolDef = {
   },
 };
 
+/* ──────────────────────────  workspace + media  ────────────────────────── */
+
+const analyze_media: AdminToolDef = {
+  name: "analyze_media",
+  description:
+    "Look at / listen to a media file in the shared workspace (image, voice note, or short video) and answer a question about it — transcribe speech, describe an image, summarise a clip. For files the admin attached in chat you already see them; use this only for workspace files.",
+  risk: "read",
+  requiresCap: "files",
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "workspace path, e.g. notes/call.m4a" },
+      question: { type: "string", description: "what to find out about it" },
+    },
+    required: ["path"],
+  },
+  async handler(adminId, args) {
+    const { readWorkspaceFile } = await import("@/lib/ai/workspace");
+    const { analyzeMedia } = await import("@/lib/ai/media");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    const f = await readWorkspaceFile(s(args.path));
+    if ("error" in f) return f;
+    if (f.kind !== "media" || !f.base64) return { error: `${f.path} isn't a supported image/audio/video file.` };
+    const res = await analyzeMedia([{ mimeType: f.mimeType, dataBase64: f.base64, name: f.path }], s(args.question) || "Describe this in detail; transcribe any speech.");
+    await logAssistantAction(adminId, "media", `Analysed ${f.path}`, { path: f.path }, "error" in res ? res.error : "ok");
+    return "error" in res ? res : { answer: res.text };
+  },
+};
+
+const list_workspace: AdminToolDef = {
+  name: "list_workspace",
+  description: "List the files in the shared workspace (a private folder you and the admin both use). Optional path to list a sub-folder.",
+  risk: "read",
+  requiresCap: "files",
+  parameters: { type: "object", properties: { path: { type: "string" } } },
+  async handler(_a, args) {
+    const { listWorkspace } = await import("@/lib/ai/workspace");
+    const files = await listWorkspace(s(args.path));
+    return { files: files.map((f) => ({ path: f.path, sizeKB: Math.round(f.size / 102.4) / 10, updatedAt: f.updatedAt })) };
+  },
+};
+
+const read_workspace_file: AdminToolDef = {
+  name: "read_workspace_file",
+  description: "Read a text file from the shared workspace. Returns its contents (media returns nothing — use analyze_media).",
+  risk: "read",
+  requiresCap: "files",
+  parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+  async handler(adminId, args) {
+    const { readWorkspaceFile } = await import("@/lib/ai/workspace");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    const f = await readWorkspaceFile(s(args.path));
+    if ("error" in f) return f;
+    await logAssistantAction(adminId, "file_read", `Read ${f.path}`, { path: f.path });
+    if (f.kind === "media") return { path: f.path, note: "This is a media file — use analyze_media to understand it.", mimeType: f.mimeType };
+    if (f.kind === "binary") return { path: f.path, note: "Binary file, can't show as text.", sizeKB: Math.round(f.size / 1024) };
+    return { path: f.path, content: f.text ?? "", mimeType: f.mimeType };
+  },
+};
+
+const write_workspace_file: AdminToolDef = {
+  name: "write_workspace_file",
+  description: "Create or overwrite a text file in the shared workspace. The admin confirms the exact contents first.",
+  risk: "consequential",
+  requiresCap: "files",
+  parameters: {
+    type: "object",
+    properties: { path: { type: "string" }, content: { type: "string" } },
+    required: ["path", "content"],
+  },
+  async handler(adminId, args) {
+    const { writeWorkspaceFile } = await import("@/lib/ai/workspace");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    const res = await writeWorkspaceFile(s(args.path), typeof args.content === "string" ? args.content : String(args.content ?? ""));
+    await logAssistantAction(adminId, "file_write", `Wrote ${s(args.path)}`, { path: s(args.path) }, "error" in res ? res.error : "ok");
+    return res;
+  },
+};
+
+const delete_workspace_file: AdminToolDef = {
+  name: "delete_workspace_file",
+  description: "Delete a file from the shared workspace. Confirmed first.",
+  risk: "consequential",
+  requiresCap: "files",
+  parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+  async handler(adminId, args) {
+    const { deleteWorkspaceFile } = await import("@/lib/ai/workspace");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    const res = await deleteWorkspaceFile(s(args.path));
+    await logAssistantAction(adminId, "file_delete", `Deleted ${s(args.path)}`, { path: s(args.path) }, "error" in res ? res.error : "ok");
+    return res;
+  },
+};
+
+/* ────────────────────────────  coding / repo  ──────────────────────────── */
+
+const repo_read_file: AdminToolDef = {
+  name: "repo_read_file",
+  description: "Read a file from the Zotomic GitHub repo (defaults to the main branch). Use this to see current code before proposing a change.",
+  risk: "read",
+  requiresCap: "git",
+  parameters: {
+    type: "object",
+    properties: { path: { type: "string", description: "repo-relative path" }, ref: { type: "string", description: "branch or sha (optional)" } },
+    required: ["path"],
+  },
+  async handler(_a, args) {
+    const { repoReadFile } = await import("@/lib/ai/devops");
+    return repoReadFile(s(args.path), s(args.ref) || undefined);
+  },
+};
+
+const repo_list_dir: AdminToolDef = {
+  name: "repo_list_dir",
+  description: "List a directory in the Zotomic GitHub repo.",
+  risk: "read",
+  requiresCap: "git",
+  parameters: { type: "object", properties: { path: { type: "string" }, ref: { type: "string" } } },
+  async handler(_a, args) {
+    const { repoListDir } = await import("@/lib/ai/devops");
+    return repoListDir(s(args.path), s(args.ref) || undefined);
+  },
+};
+
+const repo_search_code: AdminToolDef = {
+  name: "repo_search_code",
+  description: "Search the Zotomic repo's code for a string or symbol. Returns matching file paths.",
+  risk: "read",
+  requiresCap: "git",
+  parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+  async handler(_a, args) {
+    const { repoSearchCode } = await import("@/lib/ai/devops");
+    return repoSearchCode(s(args.query));
+  },
+};
+
+const git_open_pr: AdminToolDef = {
+  name: "git_open_pr",
+  description:
+    "Commit code changes to a NEW branch and open a pull request against main. Provide the FULL new content of each file in `changes`, and any files to remove in `deletePaths`. Never writes to main directly. The admin reviews and merges the PR.",
+  risk: "consequential",
+  requiresCap: "git",
+  parameters: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "PR title" },
+      body: { type: "string", description: "what and why" },
+      branch: { type: "string", description: "branch name (optional, auto if omitted)" },
+      changes: {
+        type: "array",
+        description: "files to create/overwrite, each with the complete new content",
+        items: {
+          type: "object",
+          properties: { path: { type: "string" }, content: { type: "string" } },
+          required: ["path", "content"],
+        },
+      },
+      deletePaths: { type: "array", items: { type: "string" }, description: "files to delete" },
+    },
+    required: ["title", "changes"],
+  },
+  async handler(adminId, args) {
+    const { openPullRequest } = await import("@/lib/ai/devops");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    const raw = Array.isArray(args.changes) ? (args.changes as { path?: string; content?: string }[]) : [];
+    const changes = raw
+      .filter((c) => c && typeof c.path === "string" && typeof c.content === "string")
+      .map((c) => ({ path: c.path as string, content: c.content as string }));
+    for (const p of Array.isArray(args.deletePaths) ? (args.deletePaths as unknown[]) : []) {
+      if (typeof p === "string" && p) changes.push({ path: p, content: null as unknown as string });
+    }
+    if (!changes.length) return { error: "No file changes provided." };
+    const res = await openPullRequest({
+      branch: s(args.branch) || `zotomic/${Date.now().toString(36)}`,
+      title: s(args.title) || "Zotomic change",
+      body: s(args.body) || undefined,
+      changes,
+    });
+    await logAssistantAction(
+      adminId,
+      "git_pr",
+      "error" in res ? `PR failed: ${res.error}` : `Opened PR #${res.number} (${res.branch})`,
+      { title: s(args.title), files: changes.map((c) => c.path) },
+      "error" in res ? res.error : "ok",
+    );
+    return res;
+  },
+};
+
+const git_pr_status: AdminToolDef = {
+  name: "git_pr_status",
+  description: "Check a pull request's state (open/merged/closed) and whether it can be merged.",
+  risk: "read",
+  requiresCap: "git",
+  parameters: { type: "object", properties: { number: { type: "integer" } }, required: ["number"] },
+  async handler(_a, args) {
+    const { getPullRequest } = await import("@/lib/ai/devops");
+    return getPullRequest(Number(args.number));
+  },
+};
+
+const git_merge_pr: AdminToolDef = {
+  name: "git_merge_pr",
+  description: "Merge a pull request (squash) into main. This triggers a production deploy. Requires the git-merge power and a typed confirmation.",
+  risk: "consequential",
+  requiresCap: "git_merge",
+  confirmWord: "MERGE",
+  parameters: { type: "object", properties: { number: { type: "integer" } }, required: ["number"] },
+  async handler(adminId, args) {
+    const { mergePullRequest } = await import("@/lib/ai/devops");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    const res = await mergePullRequest(Number(args.number));
+    await logAssistantAction(adminId, "git_merge", `Merged PR #${Number(args.number)}`, { number: Number(args.number) }, "error" in res ? res.error : "ok");
+    return res;
+  },
+};
+
+/* ────────────────────────  database + deploy  ──────────────────────────── */
+
+const run_sql: AdminToolDef = {
+  name: "run_sql",
+  description:
+    "Run a SQL migration on the production Postgres database (DDL and scoped DML). Catastrophic statements are refused. The admin sees the full SQL and must type RUN to confirm. Always prefer a reviewed migration file over ad-hoc SQL.",
+  risk: "consequential",
+  requiresCap: "sql",
+  confirmWord: "RUN",
+  parameters: {
+    type: "object",
+    properties: { sql: { type: "string" }, note: { type: "string", description: "what this migration does" } },
+    required: ["sql"],
+  },
+  async handler(adminId, args) {
+    const { runSql } = await import("@/lib/ai/devops");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    const sql = s(args.sql);
+    const res = await runSql(sql);
+    await logAssistantAction(
+      adminId,
+      "sql",
+      "error" in res ? `SQL failed: ${res.error}` : `Ran SQL — ${res.statements} statement(s)`,
+      { sql: sql.slice(0, 4000), note: s(args.note) },
+      "error" in res ? res.error : "ok",
+    );
+    return res;
+  },
+};
+
+const trigger_deploy: AdminToolDef = {
+  name: "trigger_deploy",
+  description: "Trigger a production deployment on Vercel (builds the current main branch, or a given ref). Requires the deploy power and a typed DEPLOY confirmation.",
+  risk: "consequential",
+  requiresCap: "deploy",
+  confirmWord: "DEPLOY",
+  parameters: { type: "object", properties: { ref: { type: "string" }, note: { type: "string" } } },
+  async handler(adminId, args) {
+    const { triggerDeploy } = await import("@/lib/ai/devops");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    const res = await triggerDeploy(s(args.ref) || "main");
+    await logAssistantAction(adminId, "deploy", "error" in res ? `Deploy failed: ${res.error}` : `Deploy started (${res.id})`, { ref: s(args.ref) || "main", note: s(args.note) }, "error" in res ? res.error : "ok");
+    return res;
+  },
+};
+
 /* ─────────────────────────────  registry  ───────────────────────────── */
 
 export const ADMIN_TOOLS: AdminToolDef[] = [
   web_search,
+  analyze_media,
+  list_workspace,
+  read_workspace_file,
+  write_workspace_file,
+  delete_workspace_file,
+  repo_read_file,
+  repo_list_dir,
+  repo_search_code,
+  git_open_pr,
+  git_pr_status,
+  git_merge_pr,
+  run_sql,
+  trigger_deploy,
   list_users,
   user_detail,
   set_user_state,

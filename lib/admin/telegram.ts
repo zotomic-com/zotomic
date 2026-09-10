@@ -89,6 +89,42 @@ export async function tgDeleteWebhook(token: string): Promise<void> {
   }
 }
 
+/** Download a file the user sent to the bot. Returns base64 + mime, or an error. */
+export async function tgGetFileBytes(
+  token: string,
+  fileId: string,
+  maxBytes = 15 * 1024 * 1024,
+): Promise<{ ok: true; base64: string; mimeType: string; name: string } | { ok: false; error: string }> {
+  try {
+    const meta = await fetch(`${API}${token}/getFile?file_id=${encodeURIComponent(fileId)}`, {
+      signal: AbortSignal.timeout(10_000),
+    }).then((r) => r.json());
+    if (!meta.ok || !meta.result?.file_path) return { ok: false, error: meta.description || "Telegram wouldn't return the file." };
+    const path = meta.result.file_path as string;
+    if (meta.result.file_size && meta.result.file_size > maxBytes) {
+      return { ok: false, error: `That file is ${(meta.result.file_size / 1024 / 1024).toFixed(1)} MB — over the ${Math.round(maxBytes / 1024 / 1024)} MB limit.` };
+    }
+    const res = await fetch(`https://api.telegram.org/file/bot${token}/${path}`, { signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) return { ok: false, error: `Download failed (${res.status}).` };
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > maxBytes) return { ok: false, error: "File is too large." };
+    const ext = path.split(".").pop()?.toLowerCase() ?? "";
+    const extMime: Record<string, string> = {
+      jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif",
+      oga: "audio/ogg", ogg: "audio/ogg", opus: "audio/ogg", mp3: "audio/mpeg", m4a: "audio/mp4", wav: "audio/wav",
+      mp4: "video/mp4", mov: "video/mov", webm: "video/webm",
+    };
+    return {
+      ok: true,
+      base64: buf.toString("base64"),
+      mimeType: extMime[ext] ?? "application/octet-stream",
+      name: path.split("/").pop() ?? "file",
+    };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 /** Split a long reply into Telegram-sized chunks (4096 char limit). */
 export function chunkTelegram(text: string, size = 3800): string[] {
   if (text.length <= size) return [text];

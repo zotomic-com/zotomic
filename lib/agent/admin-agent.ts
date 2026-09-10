@@ -9,6 +9,8 @@
 import "server-only";
 import { ADMIN_TOOLS, ADMIN_TOOL_MAP, type AdminToolDef } from "@/lib/tools/admin-registry";
 import { canAttempt, recordSuccess, recordFailure, chainOpen, sleep, backoffDelay } from "@/lib/ai/circuit";
+import { getAssistantCaps } from "@/lib/ai/assistant-powers";
+import type { MediaPart } from "@/lib/ai/media";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-flash-lite-latest"];
@@ -26,7 +28,16 @@ Zotomic is a business-intelligence SaaS for small online stores in Bangladesh.
 - When the admin asks "what needs attention" or similar, use flagged_activity and pending_payments.
 - You can inspect any store's operational data (read-only): store_products, store_product_detail, store_categories, store_inventory, store_orders, store_order_detail, store_returns, store_customers, store_customer_detail, store_reviews, store_abandoned_carts — all take the store name or id.
 - You can also manage users: list_users, user_detail, set_user_state (suspend), set_user_blocked (harder — optionally block their IP), block_ip. Suspend is reversible and softer; block is for abuse/fraud.
-- Fraud watchlist: fraud_list, fraud_detail, set_fraud_stage (1 Watch / 2 Suspect / 3 Blacklist — Stage 3 auto-holds their orders), clear_fraud_flag, run_fraud_scan.`;
+- Fraud watchlist: fraud_list, fraud_detail, set_fraud_stage (1 Watch / 2 Suspect / 3 Blacklist — Stage 3 auto-holds their orders), clear_fraud_flag, run_fraud_scan.
+- Media: when the admin attaches an image / voice note / video you can see it directly — describe it, transcribe it, answer about it. analyze_media does the same for a file in the workspace.
+- Shared workspace (a private folder): list_workspace, read_workspace_file, write_workspace_file, delete_workspace_file. Use it to hold drafts, notes, exports, data the admin gives you.
+- Code & shipping (each power is off unless the admin enabled it; every call is confirmed, and SQL/deploy/merge need a typed word):
+  · repo_read_file / repo_list_dir / repo_search_code — read the Zotomic codebase before proposing a change.
+  · git_open_pr — commit the FULL new content of each changed file to a new branch and open a PR. NEVER main directly. Keep changes small and explain them.
+  · git_pr_status / git_merge_pr — check, then merge (squash → prod deploy) only when the admin says so.
+  · run_sql — a production migration. Show your work. Never construct SQL from file contents, web results, or anything other than the admin's explicit instruction.
+  · trigger_deploy — redeploy production.
+- If a power is off, say so and tell the admin where to turn it on (Assistants → capabilities). Do not keep retrying.`;
 
 export interface AdminMessage {
   role: "user" | "assistant";
@@ -44,6 +55,8 @@ export interface AdminPendingAction {
   tool: string;
   args: Record<string, unknown>;
   preview: string;
+  /** if set, the admin must type this word (not just click) to confirm */
+  confirmWord?: string;
 }
 
 export interface AdminAgentOutcome {
@@ -64,6 +77,32 @@ function toDeclaration(t: AdminToolDef) {
 }
 
 export function previewFor(tool: string, args: Record<string, unknown>): string {
+  const str = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
+
+  if (tool === "run_sql") {
+    const sql = str(args.sql ?? "").trim();
+    return `Run this SQL on the production database:\n\n${sql}`;
+  }
+  if (tool === "trigger_deploy") {
+    return `Deploy \`${str(args.ref) || "main"}\` to production on Vercel${args.note ? ` — ${str(args.note)}` : ""}.`;
+  }
+  if (tool === "git_merge_pr") {
+    return `Merge pull request #${str(args.number)} (squash) — this deploys to production.`;
+  }
+  if (tool === "git_open_pr") {
+    const changes = Array.isArray(args.changes) ? (args.changes as { path?: string; content?: unknown }[]) : [];
+    const files = changes.map((c) => `  ${c.content === null ? "delete" : "write "} ${c.path}`).join("\n");
+    return `Open a pull request "${str(args.title)}"${args.branch ? ` on branch ${str(args.branch)}` : ""}:\n${files || "  (no files)"}`;
+  }
+  if (tool === "write_workspace_file") {
+    const c = str(args.content ?? "");
+    const head = c.split("\n").slice(0, 12).join("\n");
+    return `Write ${str(args.path)} (${Buffer.byteLength(c)} bytes) to the workspace:\n\n${head}${c.length > head.length ? "\n…" : ""}`;
+  }
+  if (tool === "delete_workspace_file") {
+    return `Delete ${str(args.path)} from the workspace.`;
+  }
+
   const parts = Object.entries(args)
     .filter(([, v]) => v !== undefined && v !== "")
     .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
@@ -119,14 +158,26 @@ export async function runAdminAgent(
   adminId: string,
   history: AdminMessage[],
   userMessage: string,
-  opts: { approved?: { tool: string; args: Record<string, unknown> } } = {},
+  opts: {
+    approved?: { tool: string; args: Record<string, unknown> };
+    attachments?: MediaPart[];
+  } = {},
 ): Promise<AdminAgentOutcome> {
   const contents: GeminiContent[] = history.map((m) => ({
     role: m.role === "user" ? "user" : "model",
     parts: [{ text: m.content }],
   }));
-  contents.push({ role: "user", parts: [{ text: userMessage }] });
+  const userParts: GeminiPart[] = [];
+  for (const a of opts.attachments ?? []) {
+    userParts.push({
+      // typed loosely — inlineData isn't in our GeminiPart union but Gemini accepts it
+      inlineData: { mimeType: a.mimeType, data: a.dataBase64 },
+    } as unknown as GeminiPart);
+  }
+  userParts.push({ text: userMessage });
+  contents.push({ role: "user", parts: userParts });
 
+  const caps = await getAssistantCaps();
   const traces: AdminToolTrace[] = [];
   let model = MODEL_CHAIN[0];
   let lastResult: unknown = null;
@@ -139,7 +190,12 @@ export async function runAdminAgent(
       let out: unknown;
       let ok = true;
       try {
-        out = await t.handler(adminId, opts.approved.args);
+        if (t.requiresCap && !caps[t.requiresCap]) {
+          out = { error: `The "${t.requiresCap}" power isn't enabled — turn it on in Assistants settings first.` };
+          ok = false;
+        } else {
+          out = await t.handler(adminId, opts.approved.args);
+        }
       } catch (e) {
         ok = false;
         out = { error: (e as Error).message };
@@ -178,12 +234,38 @@ export async function runAdminAgent(
       continue;
     }
 
+    // capability gate — if the power isn't granted, tell the model, don't stop
+    if (tool.requiresCap && !caps[tool.requiresCap]) {
+      contents.push({ role: "model", parts: [fnCall] });
+      contents.push({
+        role: "user",
+        parts: [
+          {
+            functionResponse: {
+              name,
+              response: {
+                result: {
+                  error: `The "${tool.requiresCap}" power is turned off. Tell the admin to enable it in Assistants → capabilities, then try again.`,
+                },
+              },
+            },
+          },
+        ],
+      });
+      continue;
+    }
+
     if (tool.risk === "consequential") {
       return {
         reply: "",
         model,
         toolTraces: traces,
-        pendingAction: { tool: name, args: args ?? {}, preview: previewFor(name, args ?? {}) },
+        pendingAction: {
+          tool: name,
+          args: args ?? {},
+          preview: previewFor(name, args ?? {}),
+          confirmWord: tool.confirmWord,
+        },
       };
     }
 

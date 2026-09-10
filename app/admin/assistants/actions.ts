@@ -11,6 +11,8 @@ import {
   utcMonth,
   type SearchProvider,
 } from "@/lib/ai/search-keys";
+import { getAssistantCaps, CAP_LABEL, type AssistantCaps } from "@/lib/ai/assistant-powers";
+import type { AdminCapability } from "@/lib/tools/admin-registry";
 
 export interface TgBotRow {
   id: string;
@@ -280,6 +282,72 @@ export async function reorderSearchKey(id: string, dir: "up" | "down"): Promise<
   for (let i = 0; i < ordered.length; i++) {
     await db.from("search_api_keys").update({ sort_order: i }).eq("id", ordered[i].id as string);
   }
+  revalidatePath("/admin/assistants");
+  return { ok: true };
+}
+
+/* ────────────────────  assistant powers (media / files / dev-ops)  ──────── */
+
+const CAP_COL: Record<AdminCapability, string> = {
+  media: "cap_media",
+  files: "cap_files",
+  git: "cap_git",
+  git_merge: "cap_git_merge",
+  sql: "cap_sql",
+  deploy: "cap_deploy",
+};
+
+export interface AssistantAction {
+  kind: string;
+  summary: string;
+  outcome: string;
+  at: string;
+}
+
+export async function getAssistantPowers(): Promise<{
+  caps: AssistantCaps;
+  labels: Record<string, string>;
+  recent: AssistantAction[];
+  envReady: { git: boolean; sql: boolean; deploy: boolean };
+}> {
+  await requireAdmin();
+  const db = getAdminSupabase();
+  const caps = await getAssistantCaps();
+  const { data: rows } = await db
+    .from("admin_assistant_actions")
+    .select("kind, summary, outcome, created_at")
+    .order("created_at", { ascending: false })
+    .limit(15);
+  return {
+    caps,
+    labels: CAP_LABEL,
+    recent: (rows ?? []).map((r) => ({
+      kind: r.kind as string,
+      summary: r.summary as string,
+      outcome: (r.outcome as string) ?? "ok",
+      at: r.created_at as string,
+    })),
+    envReady: {
+      git: !!process.env.GITHUB_TOKEN,
+      sql: !!(process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL),
+      deploy: !!(process.env.VERCEL_DEPLOY_TOKEN || process.env.VERCEL_API_TOKEN) && !!process.env.VERCEL_PROJECT_ID,
+    },
+  };
+}
+
+export async function setAssistantCap(
+  cap: AdminCapability,
+  on: boolean,
+): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  const col = CAP_COL[cap];
+  if (!col) return { error: "Unknown capability." };
+  const patch: Record<string, unknown> = { [col]: !!on, updated_at: new Date().toISOString(), updated_by: admin.id };
+  // enabling merge/git implies git; disabling git disables merge
+  if (cap === "git_merge" && on) patch.cap_git = true;
+  if (cap === "git" && !on) patch.cap_git_merge = false;
+  const { error } = await getAdminSupabase().from("admin_assistant_settings").update(patch).eq("id", 1);
+  if (error) return { error: "Could not save." };
   revalidatePath("/admin/assistants");
   return { ok: true };
 }

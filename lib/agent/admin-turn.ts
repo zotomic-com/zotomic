@@ -6,6 +6,8 @@
 import "server-only";
 import { getAdminSupabase } from "@/lib/supabase";
 import { runAdminAgent, type AdminMessage } from "@/lib/agent/admin-agent";
+import { ADMIN_TOOL_MAP } from "@/lib/tools/admin-registry";
+import type { MediaPart } from "@/lib/ai/media";
 
 const HISTORY = 16;
 const IDLE_RESET_MS = 6 * 60 * 60 * 1000;
@@ -17,6 +19,8 @@ export interface AdminTurnResult {
   conversationId: string;
   reply: string | null;
   pendingPreview: string | null;
+  /** word the admin must type to confirm a word-gated action */
+  confirmWord: string | null;
 }
 
 export async function adminTurn(opts: {
@@ -26,7 +30,10 @@ export async function adminTurn(opts: {
   /** required for telegram — the chat the message came from */
   telegramChatId?: string;
   message: string;
+  attachments?: MediaPart[];
   approve?: boolean;
+  /** typed word for word-gated confirmations (web) */
+  confirmText?: string;
   cancel?: boolean;
 }): Promise<AdminTurnResult> {
   const db = getAdminSupabase();
@@ -73,12 +80,34 @@ export async function adminTurn(opts: {
     .eq("chat_key", chatKey)
     .maybeSingle();
 
+  const pendTool = pend ? ADMIN_TOOL_MAP.get(pend.tool as string) : undefined;
+  const needWord = pendTool?.confirmWord;
+
   if (opts.cancel || (pend && NO.test(opts.message))) {
     if (pend) await db.from("admin_assistant_pending").delete().eq("chat_key", chatKey);
-    return { conversationId, reply: "Cancelled.", pendingPreview: null };
+    return { conversationId, reply: "Cancelled.", pendingPreview: null, confirmWord: null };
   }
 
-  const approve = opts.approve || (!!pend && YES.test(opts.message));
+  let approve = false;
+  if (pend) {
+    if (needWord) {
+      const typed = (opts.confirmText ?? opts.message ?? "").trim();
+      approve = new RegExp(`^${needWord}$`, "i").test(typed);
+      if (!approve && opts.approve && !opts.confirmText) {
+        // client clicked confirm but didn't send the word
+        return {
+          conversationId,
+          reply: `This one needs you to type ${needWord} to confirm.`,
+          pendingPreview: pend.preview as string,
+          confirmWord: needWord,
+        };
+      }
+    } else {
+      approve = opts.approve === true || YES.test(opts.message);
+    }
+  } else if (opts.approve) {
+    return { conversationId, reply: "There's nothing waiting for confirmation.", pendingPreview: null, confirmWord: null };
+  }
 
   const { data: histRows } = await db
     .from("admin_assistant_messages")
@@ -93,12 +122,15 @@ export async function adminTurn(opts: {
 
   let approved: { tool: string; args: Record<string, unknown> } | undefined;
   if (approve) {
-    if (!pend) return { conversationId, reply: "There's nothing waiting for confirmation.", pendingPreview: null };
+    if (!pend) return { conversationId, reply: "There's nothing waiting for confirmation.", pendingPreview: null, confirmWord: null };
     approved = { tool: pend.tool as string, args: (pend.args as Record<string, unknown>) ?? {} };
     await db.from("admin_assistant_pending").delete().eq("chat_key", chatKey);
   }
 
-  const outcome = await runAdminAgent(adminId, history, approve ? "Confirmed. Proceed." : opts.message, { approved });
+  const outcome = await runAdminAgent(adminId, history, approve ? "Confirmed. Proceed." : opts.message, {
+    approved,
+    attachments: approve ? undefined : opts.attachments,
+  });
 
   const rows: { conversation_id: string; admin_id: string; role: string; content: string; tool_calls: unknown }[] = [];
   if (!approve && opts.message)
@@ -117,7 +149,12 @@ export async function adminTurn(opts: {
     );
     if (rows.length) await db.from("admin_assistant_messages").insert(rows);
     await touch(conversationId);
-    return { conversationId, reply: null, pendingPreview: outcome.pendingAction.preview };
+    return {
+      conversationId,
+      reply: null,
+      pendingPreview: outcome.pendingAction.preview,
+      confirmWord: outcome.pendingAction.confirmWord ?? null,
+    };
   }
 
   rows.push({
@@ -129,7 +166,7 @@ export async function adminTurn(opts: {
   });
   await db.from("admin_assistant_messages").insert(rows);
   await touch(conversationId);
-  return { conversationId, reply: outcome.reply, pendingPreview: null };
+  return { conversationId, reply: outcome.reply, pendingPreview: null, confirmWord: null };
 }
 
 async function touch(id: string) {
