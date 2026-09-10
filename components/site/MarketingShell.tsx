@@ -94,42 +94,37 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
         </Button>
       </div>
 
-      {/* Mobile side drawer — click the icon or the backdrop to close; always closes */}
-      <div className={cn("fixed inset-0 z-50 lg:hidden", open ? "" : "pointer-events-none")} aria-hidden={!open}>
-        <div
-          onClick={() => setOpen(false)}
-          className="absolute inset-0 bg-black/40 transition-opacity duration-200"
-          style={{ opacity: open ? 1 : 0 }}
-        />
-        <aside
-          style={{ transform: open ? "translateX(0)" : "translateX(-100%)" }}
-          className="absolute inset-y-0 left-0 flex w-72 max-w-[82vw] flex-col border-r border-border bg-surface p-4 shadow-xl transition-transform duration-200 ease-out"
-        >
-          <div className="mb-5 flex items-center justify-between px-2">
-            <Link href="/" onClick={() => setOpen(false)} aria-label="Zotomic home">
-              <Logo />
-            </Link>
-            <button
-              onClick={() => setOpen(false)}
-              className="rounded-sm p-1.5 text-fg-muted hover:bg-surface-2"
-              aria-label="Close menu"
-            >
-              <PanelLeftClose className="h-5 w-5" />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <NavList onNavigate={() => setOpen(false)} />
-          </div>
-          <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
-            <Button href="/login" variant="ghost" size="sm" className="justify-start">
-              Log in
-            </Button>
-            <Button href="/signup" size="sm">
-              Start free <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </aside>
-      </div>
+      {/* Mobile side drawer — click the icon, the backdrop, a link or Escape to close */}
+      {open && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div onClick={() => setOpen(false)} className="absolute inset-0 bg-black/40 animate-fade-in-plain" />
+          <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[82vw] animate-slide-in-left flex-col border-r border-border bg-surface p-4 shadow-xl">
+            <div className="mb-5 flex items-center justify-between px-2">
+              <Link href="/" onClick={() => setOpen(false)} aria-label="Zotomic home">
+                <Logo />
+              </Link>
+              <button
+                onClick={() => setOpen(false)}
+                className="rounded-sm p-1.5 text-fg-muted hover:bg-surface-2"
+                aria-label="Close menu"
+              >
+                <PanelLeftClose className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <NavList onNavigate={() => setOpen(false)} />
+            </div>
+            <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+              <Button href="/login" variant="ghost" size="sm" className="justify-start">
+                Log in
+              </Button>
+              <Button href="/signup" size="sm">
+                Start free <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </aside>
+        </div>
+      )}
 
       <div className="flex min-h-screen flex-col">
         <main className="flex-1">{children}</main>
