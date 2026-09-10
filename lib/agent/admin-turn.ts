@@ -8,6 +8,8 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { runAdminAgent, type AdminMessage } from "@/lib/agent/admin-agent";
 import { ADMIN_TOOL_MAP } from "@/lib/tools/admin-registry";
 import type { MediaPart } from "@/lib/ai/media";
+import { getEnabledSkills, matchSkills, skillsSystemAppendix } from "@/lib/ai/skills";
+import { enabledConnectorProviders } from "@/lib/ai/connectors";
 
 const HISTORY = 16;
 const IDLE_RESET_MS = 6 * 60 * 60 * 1000;
@@ -127,9 +129,31 @@ export async function adminTurn(opts: {
     await db.from("admin_assistant_pending").delete().eq("chat_key", chatKey);
   }
 
+  // skills that match this message + which connectors are switched on
+  let extraSystem: string | undefined;
+  let enabledConnectors: Set<string> | undefined;
+  if (!approve) {
+    try {
+      const [skills, conns] = await Promise.all([getEnabledSkills(), enabledConnectorProviders()]);
+      enabledConnectors = conns as Set<string>;
+      const matched = matchSkills(opts.message, skills);
+      if (matched.length) extraSystem = skillsSystemAppendix(matched);
+    } catch {
+      /* skills/connectors are optional */
+    }
+  } else {
+    try {
+      enabledConnectors = (await enabledConnectorProviders()) as Set<string>;
+    } catch {
+      /* ignore */
+    }
+  }
+
   const outcome = await runAdminAgent(adminId, history, approve ? "Confirmed. Proceed." : opts.message, {
     approved,
     attachments: approve ? undefined : opts.attachments,
+    extraSystem,
+    enabledConnectors,
   });
 
   const rows: { conversation_id: string; admin_id: string; role: string; content: string; tool_calls: unknown }[] = [];

@@ -25,6 +25,8 @@ export interface AdminToolDef {
   handler: (adminId: string, args: Record<string, unknown>) => Promise<unknown>;
   /** the admin must have granted this power in Assistants settings for the tool to run */
   requiresCap?: AdminCapability;
+  /** the named connector must be switched on for this tool to be offered / run */
+  requiresConnector?: "slack" | "notion" | "sentry" | "google";
   /** consequential tools: an extra word the admin must type to confirm (SQL/deploy/merge) */
   confirmWord?: string;
 }
@@ -1720,43 +1722,45 @@ const delete_workspace_file: AdminToolDef = {
 
 /* ────────────────────────────  coding / repo  ──────────────────────────── */
 
+const REPO_ARG = { type: "string", description: "owner/repo — defaults to the Zotomic repo" };
+
 const repo_read_file: AdminToolDef = {
   name: "repo_read_file",
-  description: "Read a file from the Zotomic GitHub repo (defaults to the main branch). Use this to see current code before proposing a change.",
+  description: "Read a file from a GitHub repo (defaults to the Zotomic repo + main branch). Use this to see current code before proposing a change. Pass `repo` as owner/repo to read a different one.",
   risk: "read",
   requiresCap: "git",
   parameters: {
     type: "object",
-    properties: { path: { type: "string", description: "repo-relative path" }, ref: { type: "string", description: "branch or sha (optional)" } },
+    properties: { path: { type: "string", description: "repo-relative path" }, ref: { type: "string", description: "branch or sha (optional)" }, repo: REPO_ARG },
     required: ["path"],
   },
   async handler(_a, args) {
     const { repoReadFile } = await import("@/lib/ai/devops");
-    return repoReadFile(s(args.path), s(args.ref) || undefined);
+    return repoReadFile(s(args.path), s(args.ref) || undefined, s(args.repo) || undefined);
   },
 };
 
 const repo_list_dir: AdminToolDef = {
   name: "repo_list_dir",
-  description: "List a directory in the Zotomic GitHub repo.",
+  description: "List a directory in a GitHub repo (defaults to the Zotomic repo).",
   risk: "read",
   requiresCap: "git",
-  parameters: { type: "object", properties: { path: { type: "string" }, ref: { type: "string" } } },
+  parameters: { type: "object", properties: { path: { type: "string" }, ref: { type: "string" }, repo: REPO_ARG } },
   async handler(_a, args) {
     const { repoListDir } = await import("@/lib/ai/devops");
-    return repoListDir(s(args.path), s(args.ref) || undefined);
+    return repoListDir(s(args.path), s(args.ref) || undefined, s(args.repo) || undefined);
   },
 };
 
 const repo_search_code: AdminToolDef = {
   name: "repo_search_code",
-  description: "Search the Zotomic repo's code for a string or symbol. Returns matching file paths.",
+  description: "Search a repo's code for a string or symbol (defaults to the Zotomic repo). Returns matching file paths.",
   risk: "read",
   requiresCap: "git",
-  parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+  parameters: { type: "object", properties: { query: { type: "string" }, repo: REPO_ARG }, required: ["query"] },
   async handler(_a, args) {
     const { repoSearchCode } = await import("@/lib/ai/devops");
-    return repoSearchCode(s(args.query));
+    return repoSearchCode(s(args.query), s(args.repo) || undefined);
   },
 };
 
@@ -1772,6 +1776,7 @@ const git_open_pr: AdminToolDef = {
       title: { type: "string", description: "PR title" },
       body: { type: "string", description: "what and why" },
       branch: { type: "string", description: "branch name (optional, auto if omitted)" },
+      repo: REPO_ARG,
       changes: {
         type: "array",
         description: "files to create/overwrite, each with the complete new content",
@@ -1800,6 +1805,7 @@ const git_open_pr: AdminToolDef = {
       branch: s(args.branch) || `zotomic/${Date.now().toString(36)}`,
       title: s(args.title) || "Zotomic change",
       body: s(args.body) || undefined,
+      repo: s(args.repo) || undefined,
       changes,
     });
     await logAssistantAction(
@@ -1818,25 +1824,25 @@ const git_pr_status: AdminToolDef = {
   description: "Check a pull request's state (open/merged/closed) and whether it can be merged.",
   risk: "read",
   requiresCap: "git",
-  parameters: { type: "object", properties: { number: { type: "integer" } }, required: ["number"] },
+  parameters: { type: "object", properties: { number: { type: "integer" }, repo: REPO_ARG }, required: ["number"] },
   async handler(_a, args) {
     const { getPullRequest } = await import("@/lib/ai/devops");
-    return getPullRequest(Number(args.number));
+    return getPullRequest(Number(args.number), s(args.repo) || undefined);
   },
 };
 
 const git_merge_pr: AdminToolDef = {
   name: "git_merge_pr",
-  description: "Merge a pull request (squash) into main. This triggers a production deploy. Requires the git-merge power and a typed confirmation.",
+  description: "Merge a pull request (squash). For the Zotomic repo this triggers a production deploy. Requires the git-merge power and a typed confirmation.",
   risk: "consequential",
   requiresCap: "git_merge",
   confirmWord: "MERGE",
-  parameters: { type: "object", properties: { number: { type: "integer" } }, required: ["number"] },
+  parameters: { type: "object", properties: { number: { type: "integer" }, repo: REPO_ARG }, required: ["number"] },
   async handler(adminId, args) {
     const { mergePullRequest } = await import("@/lib/ai/devops");
     const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
-    const res = await mergePullRequest(Number(args.number));
-    await logAssistantAction(adminId, "git_merge", `Merged PR #${Number(args.number)}`, { number: Number(args.number) }, "error" in res ? res.error : "ok");
+    const res = await mergePullRequest(Number(args.number), "squash", s(args.repo) || undefined);
+    await logAssistantAction(adminId, "git_merge", `Merged PR #${Number(args.number)}${args.repo ? ` (${s(args.repo)})` : ""}`, { number: Number(args.number), repo: s(args.repo) }, "error" in res ? res.error : "ok");
     return res;
   },
 };
@@ -1887,11 +1893,252 @@ const trigger_deploy: AdminToolDef = {
   },
 };
 
+/* ────────────────────────────  connectors  ─────────────────────────────── */
+
+async function conn(provider: "slack" | "notion" | "sentry") {
+  const { getConnector } = await import("@/lib/ai/connectors");
+  const c = await getConnector(provider);
+  if (!c) return null;
+  return c;
+}
+
+const slack_channels: AdminToolDef = {
+  name: "slack_channels",
+  description: "List the Slack channels the bot can see. Use before posting so you pick a real channel.",
+  risk: "read",
+  requiresConnector: "slack",
+  parameters: { type: "object", properties: {} },
+  async handler() {
+    const c = await conn("slack");
+    if (!c) return { error: "Slack isn't connected." };
+    const { slackListChannels, touchConnector } = await import("@/lib/ai/connectors");
+    try {
+      const channels = await slackListChannels(c.token);
+      await touchConnector(c.id, true);
+      return { channels };
+    } catch (e) {
+      await touchConnector(c.id, false, (e as Error).message);
+      return { error: (e as Error).message };
+    }
+  },
+};
+
+const slack_read: AdminToolDef = {
+  name: "slack_read",
+  description: "Read the most recent messages in a Slack channel.",
+  risk: "read",
+  requiresConnector: "slack",
+  parameters: {
+    type: "object",
+    properties: { channel: { type: "string", description: "channel name or id" }, limit: { type: "integer" } },
+    required: ["channel"],
+  },
+  async handler(_a, args) {
+    const c = await conn("slack");
+    if (!c) return { error: "Slack isn't connected." };
+    const { slackHistory } = await import("@/lib/ai/connectors");
+    try {
+      return { messages: await slackHistory(c.token, s(args.channel), Number(args.limit) || 20) };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  },
+};
+
+const slack_post: AdminToolDef = {
+  name: "slack_post",
+  description: "Post a message to a Slack channel. Confirmed first.",
+  risk: "consequential",
+  requiresConnector: "slack",
+  parameters: {
+    type: "object",
+    properties: { channel: { type: "string" }, text: { type: "string" } },
+    required: ["channel", "text"],
+  },
+  async handler(adminId, args) {
+    const c = await conn("slack");
+    if (!c) return { error: "Slack isn't connected." };
+    const { slackPost, touchConnector } = await import("@/lib/ai/connectors");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    try {
+      const r = await slackPost(c.token, s(args.channel), s(args.text));
+      await touchConnector(c.id, true);
+      await logAssistantAction(adminId, "connector", `Posted to Slack ${s(args.channel)}`, { channel: s(args.channel) });
+      return { ok: true, ts: r.ts };
+    } catch (e) {
+      await touchConnector(c.id, false, (e as Error).message);
+      return { error: (e as Error).message };
+    }
+  },
+};
+
+const notion_search: AdminToolDef = {
+  name: "notion_search",
+  description: "Search the Notion workspace (only pages/databases shared with the integration). Returns page ids + titles.",
+  risk: "read",
+  requiresConnector: "notion",
+  parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+  async handler(_a, args) {
+    const c = await conn("notion");
+    if (!c) return { error: "Notion isn't connected." };
+    const { notionSearch } = await import("@/lib/ai/connectors");
+    try {
+      return { results: await notionSearch(c.token, s(args.query)) };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  },
+};
+
+const notion_read: AdminToolDef = {
+  name: "notion_read",
+  description: "Read a Notion page's title + text content (as markdown) by page id.",
+  risk: "read",
+  requiresConnector: "notion",
+  parameters: { type: "object", properties: { pageId: { type: "string" } }, required: ["pageId"] },
+  async handler(_a, args) {
+    const c = await conn("notion");
+    if (!c) return { error: "Notion isn't connected." };
+    const { notionReadPage } = await import("@/lib/ai/connectors");
+    try {
+      return await notionReadPage(c.token, s(args.pageId));
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  },
+};
+
+const notion_write: AdminToolDef = {
+  name: "notion_write",
+  description:
+    "Add content to Notion — append markdown to an existing page (pass pageId) OR create a new sub-page (pass parentPageId + title). Confirmed first.",
+  risk: "consequential",
+  requiresConnector: "notion",
+  parameters: {
+    type: "object",
+    properties: {
+      pageId: { type: "string", description: "append to this page" },
+      parentPageId: { type: "string", description: "create a new page under this one" },
+      title: { type: "string" },
+      markdown: { type: "string" },
+    },
+    required: ["markdown"],
+  },
+  async handler(adminId, args) {
+    const c = await conn("notion");
+    if (!c) return { error: "Notion isn't connected." };
+    const { notionAppend, notionCreatePage } = await import("@/lib/ai/connectors");
+    const { logAssistantAction } = await import("@/lib/ai/assistant-powers");
+    try {
+      if (s(args.pageId)) {
+        await notionAppend(c.token, s(args.pageId), s(args.markdown));
+        await logAssistantAction(adminId, "connector", `Appended to Notion page ${s(args.pageId)}`);
+        return { ok: true, appendedTo: s(args.pageId) };
+      }
+      if (s(args.parentPageId) && s(args.title)) {
+        const r = await notionCreatePage(c.token, s(args.parentPageId), s(args.title), s(args.markdown));
+        await logAssistantAction(adminId, "connector", `Created Notion page "${s(args.title)}"`);
+        return { ok: true, ...r };
+      }
+      return { error: "Give either pageId (append) or parentPageId + title (create)." };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  },
+};
+
+const sentry_issues: AdminToolDef = {
+  name: "sentry_issues",
+  description: "List recent Sentry issues for the connected project. Default query is:unresolved. Use for 'what's erroring'.",
+  risk: "read",
+  requiresConnector: "sentry",
+  parameters: {
+    type: "object",
+    properties: { query: { type: "string", description: "Sentry search, e.g. 'is:unresolved level:error'" }, limit: { type: "integer" } },
+  },
+  async handler(_a, args) {
+    const c = await conn("sentry");
+    if (!c) return { error: "Sentry isn't connected." };
+    const org = String(c.config.org ?? "");
+    const project = String(c.config.project ?? "");
+    if (!org || !project) return { error: "Sentry org/project not set on the connector." };
+    const { sentryIssues, touchConnector } = await import("@/lib/ai/connectors");
+    try {
+      const issues = await sentryIssues(c.token, org, project, s(args.query) || "is:unresolved", Number(args.limit) || 15);
+      await touchConnector(c.id, true);
+      return { issues };
+    } catch (e) {
+      await touchConnector(c.id, false, (e as Error).message);
+      return { error: (e as Error).message };
+    }
+  },
+};
+
+const sentry_issue: AdminToolDef = {
+  name: "sentry_issue",
+  description: "Full detail on one Sentry issue by id (from sentry_issues).",
+  risk: "read",
+  requiresConnector: "sentry",
+  parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  async handler(_a, args) {
+    const c = await conn("sentry");
+    if (!c) return { error: "Sentry isn't connected." };
+    const org = String(c.config.org ?? "");
+    if (!org) return { error: "Sentry org not set." };
+    const { sentryIssueDetail } = await import("@/lib/ai/connectors");
+    try {
+      return await sentryIssueDetail(c.token, org, s(args.id));
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  },
+};
+
+/* ─────────────────────────────  skills  ───────────────────────────── */
+
+const list_skills: AdminToolDef = {
+  name: "list_skills",
+  description: "List the saved skills (playbooks) available. The admin can also trigger one just by using its trigger phrases.",
+  risk: "read",
+  parameters: { type: "object", properties: {} },
+  async handler() {
+    const { getEnabledSkills } = await import("@/lib/ai/skills");
+    const skills = await getEnabledSkills();
+    return { skills: skills.map((s) => ({ slug: s.slug, name: s.name, triggers: s.triggers })) };
+  },
+};
+
+const run_skill: AdminToolDef = {
+  name: "run_skill",
+  description: "Load a saved skill's playbook by slug and follow it now. Use when the admin names a skill or asks you to run one.",
+  risk: "read",
+  parameters: { type: "object", properties: { slug: { type: "string" } }, required: ["slug"] },
+  async handler(_a, args) {
+    const { getEnabledSkills } = await import("@/lib/ai/skills");
+    const want = s(args.slug);
+    const skill = (await getEnabledSkills()).find(
+      (sk) => sk.slug === want || sk.name.toLowerCase() === want.toLowerCase(),
+    );
+    if (!skill) return { error: `No enabled skill "${want}".` };
+    return { skill: skill.name, playbook: skill.instructions, note: "Follow this playbook now, using your tools." };
+  },
+};
+
 /* ─────────────────────────────  registry  ───────────────────────────── */
 
 export const ADMIN_TOOLS: AdminToolDef[] = [
   web_search,
   analyze_media,
+  slack_channels,
+  slack_read,
+  slack_post,
+  notion_search,
+  notion_read,
+  notion_write,
+  sentry_issues,
+  sentry_issue,
+  list_skills,
+  run_skill,
   list_workspace,
   read_workspace_file,
   write_workspace_file,

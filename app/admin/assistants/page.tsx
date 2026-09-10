@@ -6,12 +6,23 @@ import { AdminChat } from "./AdminChat";
 import { TelegramBots } from "./TelegramBots";
 import { WebSearchKeys } from "./WebSearchKeys";
 import { AssistantPowers } from "./AssistantPowers";
-import { listTelegramBots, listSearchKeys, getAssistantPowers } from "./actions";
+import { ConnectorsPanel } from "./ConnectorsPanel";
+import { SkillsPanel } from "./SkillsPanel";
+import { McpPanel } from "./McpPanel";
+import {
+  listTelegramBots,
+  listSearchKeys,
+  getAssistantPowers,
+  listConnectors,
+  listSkillsAction,
+  listMcpTokens,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
 const TABS = [
   { value: "chat", label: "Admin chat" },
+  { value: "setup", label: "Setup" },
   { value: "storefront", label: "Storefront assistants" },
   { value: "activity", label: "Owner assistant activity" },
 ] as const;
@@ -27,18 +38,17 @@ export default async function AdminAssistantsPage({
   const { tab: raw } = await searchParams;
   const tab: Tab = TABS.some((t) => t.value === raw) ? (raw as Tab) : "chat";
 
-  const [{ bots, webhookUrl }, searchKeys, powers] =
-    tab === "chat"
-      ? await Promise.all([listTelegramBots(), listSearchKeys(), getAssistantPowers()])
-      : ([
-          { bots: [], webhookUrl: "" },
-          { keys: [], providers: [] },
-          null,
-        ] as [
-          Awaited<ReturnType<typeof listTelegramBots>>,
-          Awaited<ReturnType<typeof listSearchKeys>>,
-          Awaited<ReturnType<typeof getAssistantPowers>> | null,
-        ]);
+  const setup =
+    tab === "setup"
+      ? await Promise.all([
+          getAssistantPowers(),
+          listConnectors(),
+          listSkillsAction(),
+          listMcpTokens(),
+          listSearchKeys(),
+          listTelegramBots(),
+        ])
+      : null;
 
   return (
     <div className="space-y-5">
@@ -63,16 +73,24 @@ export default async function AdminAssistantsPage({
         ))}
       </div>
 
-      {tab === "chat" && (
+      {tab === "chat" && <AdminChat />}
+
+      {tab === "setup" && setup && (
         <div className="space-y-5">
-          <AdminChat />
-          {powers && (
-            <AssistantPowers caps={powers.caps} labels={powers.labels} recent={powers.recent} envReady={powers.envReady} />
-          )}
-          <WebSearchKeys keys={searchKeys.keys} providers={searchKeys.providers} />
-          <TelegramBots bots={bots} webhookUrl={webhookUrl} />
+          <AssistantPowers
+            caps={setup[0].caps}
+            labels={setup[0].labels}
+            recent={setup[0].recent}
+            envReady={setup[0].envReady}
+          />
+          <ConnectorsPanel connectors={setup[1].connectors} providers={setup[1].providers} />
+          <SkillsPanel skills={setup[2]} />
+          <McpPanel tokens={setup[3].tokens} url={setup[3].url} />
+          <WebSearchKeys keys={setup[4].keys} providers={setup[4].providers} />
+          <TelegramBots bots={setup[5].bots} webhookUrl={setup[5].webhookUrl} />
         </div>
       )}
+
       {tab === "storefront" && <StorefrontAssistantsPanel />}
       {tab === "activity" && <AssistantActivityPanel />}
     </div>

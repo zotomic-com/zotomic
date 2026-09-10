@@ -10,7 +10,12 @@ import "server-only";
 const GH_API = "https://api.github.com";
 const VERCEL_API = "https://api.vercel.com";
 
-export function repoSlug(): string {
+const SLUG_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+/** Which repo a git tool targets — an explicit `owner/repo` or the default. */
+export function repoSlug(override?: string): string {
+  const o = (override ?? "").trim();
+  if (o && SLUG_RE.test(o)) return o;
   return process.env.GITHUB_REPO || "zotomic-com/zotomic";
 }
 function ghToken(): string | null {
@@ -52,10 +57,11 @@ async function gh<T = unknown>(
 export async function repoReadFile(
   path: string,
   ref?: string,
+  repo?: string,
 ): Promise<{ ok: true; path: string; content: string; sha: string; size: number } | { error: string }> {
   const p = path.replace(/^\/+/, "");
   const r = await gh<{ content?: string; encoding?: string; sha?: string; size?: number; type?: string }>(
-    `/repos/${repoSlug()}/contents/${encodeURI(p)}${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`,
+    `/repos/${repoSlug(repo)}/contents/${encodeURI(p)}${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`,
   );
   if (!r.ok) return { error: r.error };
   if (r.data.type !== "file" || !r.data.content) return { error: `${p} is not a file.` };
@@ -66,10 +72,11 @@ export async function repoReadFile(
 export async function repoListDir(
   path = "",
   ref?: string,
+  repo?: string,
 ): Promise<{ ok: true; entries: { path: string; type: string; size: number }[] } | { error: string }> {
   const p = path.replace(/^\/+/, "");
   const r = await gh<{ path: string; type: string; size?: number }[]>(
-    `/repos/${repoSlug()}/contents/${encodeURI(p)}${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`,
+    `/repos/${repoSlug(repo)}/contents/${encodeURI(p)}${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`,
   );
   if (!r.ok) return { error: r.error };
   if (!Array.isArray(r.data)) return { error: `${p || "/"} is a file, not a directory.` };
@@ -81,8 +88,9 @@ export async function repoListDir(
 
 export async function repoSearchCode(
   query: string,
+  repo?: string,
 ): Promise<{ ok: true; matches: { path: string; url: string }[] } | { error: string }> {
-  const q = `${query} repo:${repoSlug()}`;
+  const q = `${query} repo:${repoSlug(repo)}`;
   const r = await gh<{ items?: { path: string; html_url: string }[] }>(`/search/code?q=${encodeURIComponent(q)}&per_page=20`);
   if (!r.ok) return { error: r.error };
   return { ok: true, matches: (r.data.items ?? []).map((i) => ({ path: i.path, url: i.html_url })) };
@@ -101,9 +109,10 @@ export async function openPullRequest(input: {
   title: string;
   body?: string;
   base?: string;
+  repo?: string;
   changes: RepoChange[];
 }): Promise<{ ok: true; number: number; url: string; branch: string } | { error: string }> {
-  const repo = repoSlug();
+  const repo = repoSlug(input.repo);
   const base = input.base || "main";
   const branch = input.branch.replace(/[^a-zA-Z0-9._/-]/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || `zotomic/${Date.now()}`;
   const changes = input.changes.filter((c) => c.path && c.path !== ".");
@@ -172,8 +181,9 @@ export async function openPullRequest(input: {
 export async function mergePullRequest(
   number: number,
   method: "squash" | "merge" | "rebase" = "squash",
+  repo?: string,
 ): Promise<{ ok: true; sha: string } | { error: string }> {
-  const r = await gh<{ sha: string; merged: boolean }>(`/repos/${repoSlug()}/pulls/${number}/merge`, {
+  const r = await gh<{ sha: string; merged: boolean }>(`/repos/${repoSlug(repo)}/pulls/${number}/merge`, {
     method: "PUT",
     body: JSON.stringify({ merge_method: method }),
   });
@@ -184,9 +194,10 @@ export async function mergePullRequest(
 
 export async function getPullRequest(
   number: number,
+  repo?: string,
 ): Promise<{ ok: true; title: string; state: string; mergeable: boolean | null; url: string; changedFiles: number } | { error: string }> {
   const r = await gh<{ title: string; state: string; mergeable: boolean | null; html_url: string; changed_files: number }>(
-    `/repos/${repoSlug()}/pulls/${number}`,
+    `/repos/${repoSlug(repo)}/pulls/${number}`,
   );
   if (!r.ok) return { error: r.error };
   return {
