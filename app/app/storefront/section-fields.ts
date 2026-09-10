@@ -3,7 +3,7 @@ import type { SectionType } from "@/lib/storefront/config";
 export interface FieldDef {
   key: string;
   label: string;
-  type: "text" | "textarea" | "number" | "url" | "bool" | "images" | "select";
+  type: "text" | "textarea" | "number" | "url" | "bool" | "image" | "images" | "select";
   options?: { value: string; label: string }[];
 }
 
@@ -45,7 +45,7 @@ export const SECTION_FIELDS: Record<SectionType, FieldDef[]> = {
   image_text: [
     { key: "heading", label: "Heading", type: "text" },
     { key: "body", label: "Body", type: "textarea" },
-    { key: "imageUrl", label: "Image URL", type: "url" },
+    { key: "imageUrl", label: "Image", type: "image" },
     { key: "flip", label: "Image on left", type: "bool" },
   ],
   rich_text: [

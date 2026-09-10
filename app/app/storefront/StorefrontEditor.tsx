@@ -503,6 +503,16 @@ function SectionCard({
                   max={heroImageLimit}
                 />
               </div>
+            ) : f.type === "image" ? (
+              <div key={f.key}>
+                <p className="mb-1 text-xs font-medium text-fg">{f.label}</p>
+                <ImageUploader
+                  value={section.data[f.key] ? [String(section.data[f.key])] : []}
+                  onChange={(urls) => onField(f.key, urls[0] ?? null)}
+                  max={1}
+                />
+                <p className="mt-1 text-[11px] text-fg-subtle">Compressed and cropped to fit automatically.</p>
+              </div>
             ) : (
               <TextRow key={f.key} label={f.label} value={String(section.data[f.key] ?? "")} onChange={(v) => onField(f.key, v)} />
             ),

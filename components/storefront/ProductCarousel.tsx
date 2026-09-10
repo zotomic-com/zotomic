@@ -57,9 +57,9 @@ export function ProductCarousel({
       onTouchStart={() => (paused.current = true)}
       onTouchEnd={() => setTimeout(() => (paused.current = false), 4000)}
     >
-      <div ref={ref} className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4">
+      <div ref={ref} className="no-scrollbar flex snap-x snap-mandatory items-stretch gap-4 overflow-x-auto pb-4">
         {products.map((p) => (
-          <div key={p.id} className="w-[47%] shrink-0 snap-start sm:w-[31%] lg:w-[23.5%]">
+          <div key={p.id} className="flex w-[47%] shrink-0 snap-start sm:w-[31%] lg:w-[23.5%]">
             <ProductCard product={p} currency={currency} basePath={basePath} storeSlug={storeSlug} />
           </div>
         ))}

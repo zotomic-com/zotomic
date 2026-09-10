@@ -25,7 +25,7 @@ export function ProductCard({
   const lowStock = stockLeft != null && stockLeft > 0 && stockLeft <= 5;
 
   return (
-    <div className="group flex flex-col">
+    <div className="group flex h-full w-full flex-col">
       <ProductCardMedia
         product={{
           id: product.id,
@@ -79,7 +79,7 @@ export function ProductCard({
       </Link>
 
       {storeSlug ? (
-        <div className="mt-2">
+        <div className="mt-auto pt-2">
           <QuickAdd
             product={{ id: product.id, name: product.name, price, image: product.imageUrls[0] ?? null, slug: product.slug }}
             currency={currency}
@@ -89,7 +89,9 @@ export function ProductCard({
             soldOut={soldOut}
           />
         </div>
-      ) : null}
+      ) : (
+        <div className="mt-auto" />
+      )}
     </div>
   );
 }
