@@ -19,6 +19,7 @@ import { verifyBot } from "@/lib/telegram";
 import { sanitizePrefs, ADMIN_EVENTS, type Prefs } from "@/lib/notify-events";
 import { saveSystemPlanCard, createCustomPlanCard, updateCustomPlanCard, deleteCustomPlanCard, reorderPlanCard } from "@/lib/plan-cards";
 import type { PlanId } from "@/lib/plans";
+import { createContactTopic, updateContactTopic, deleteContactTopic, reorderContactTopic } from "@/lib/contact-topics";
 
 async function audit(adminId: string, action: string, summary: string, targetId?: string) {
   await getAdminSupabase()
@@ -274,6 +275,44 @@ export async function reorderPlanCardAction(id: string, direction: "up" | "down"
   revalidatePath("/admin/website/pages/pricing");
   revalidatePath("/pricing");
   revalidatePath("/app/billing");
+  return { ok: true };
+}
+
+// ---------- contact form topics ----------
+
+export async function createContactTopicAction(label: string): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  if (!label.trim()) return { error: "Label is required." };
+  await createContactTopic(label);
+  await audit(admin.id, "website.contact_topic_created", `Added contact topic "${label}"`);
+  revalidatePath("/admin/website/pages/contact");
+  revalidatePath("/contact");
+  return { ok: true };
+}
+
+export async function updateContactTopicAction(id: string, patch: Partial<{ label: string; enabled: boolean }>) {
+  const admin = await requireAdmin();
+  await updateContactTopic(id, patch);
+  await audit(admin.id, "website.contact_topic_updated", `Updated contact topic`);
+  revalidatePath("/admin/website/pages/contact");
+  revalidatePath("/contact");
+  return { ok: true };
+}
+
+export async function deleteContactTopicAction(id: string) {
+  const admin = await requireAdmin();
+  await deleteContactTopic(id);
+  await audit(admin.id, "website.contact_topic_deleted", `Deleted contact topic`);
+  revalidatePath("/admin/website/pages/contact");
+  revalidatePath("/contact");
+  return { ok: true };
+}
+
+export async function reorderContactTopicAction(id: string, direction: "up" | "down") {
+  await requireAdmin();
+  await reorderContactTopic(id, direction);
+  revalidatePath("/admin/website/pages/contact");
+  revalidatePath("/contact");
   return { ok: true };
 }
 

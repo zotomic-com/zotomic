@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PageHero } from "@/components/site/marketing";
 import { getStructuralPage } from "@/lib/site-content";
+import { getContactTopics } from "@/lib/contact-topics";
 import { siteIcon } from "@/lib/site-icons";
 import { ContactFormClient } from "./ContactFormClient";
 
@@ -10,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ContactPage() {
-  const c = await getStructuralPage("contact");
+  const [c, topics] = await Promise.all([getStructuralPage("contact"), getContactTopics()]);
 
   return (
     <>
@@ -32,7 +33,7 @@ export default async function ContactPage() {
           })}
         </div>
 
-        <ContactFormClient />
+        <ContactFormClient topics={topics.map((t) => t.label)} />
       </div>
     </>
   );

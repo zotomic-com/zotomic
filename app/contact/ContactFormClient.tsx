@@ -5,9 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
-const TOPICS = ["General question", "Sales / plans", "Support", "Partnership", "Data deletion"];
-
-export function ContactFormClient() {
+export function ContactFormClient({ topics }: { topics: string[] }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", business: "", topic: "", message: "" });
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
@@ -59,7 +57,7 @@ export function ContactFormClient() {
           <Field label="Topic">
             <Select required value={form.topic} onChange={set("topic")}>
               <option value="">Select a topic…</option>
-              {TOPICS.map((t) => (
+              {topics.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
