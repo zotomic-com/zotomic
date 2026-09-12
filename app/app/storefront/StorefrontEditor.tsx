@@ -440,14 +440,14 @@ export function StorefrontEditor({
                     <input
                       value={z.name}
                       onChange={(e) => update((c) => ((c.commerce.deliveryZones[i].name = e.target.value), c))}
-                      className={`${inputCls} flex-1`}
+                      className={`${zoneFieldCls} min-w-0 flex-1`}
                       placeholder="Zone name"
                     />
                     <input
                       type="number"
                       value={z.charge}
                       onChange={(e) => update((c) => ((c.commerce.deliveryZones[i].charge = Number(e.target.value) || 0), c))}
-                      className={`${inputCls} w-24 shrink-0`}
+                      className={`${zoneFieldCls} w-24 shrink-0`}
                     />
                     <button
                       type="button"
@@ -583,6 +583,10 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 const inputCls = "mt-1 h-9 w-full rounded-sm border border-border bg-surface px-2.5 text-sm";
+// no `w-full` here — used inside flex rows (delivery zones) where flex-1/w-24 set the width instead;
+// combining w-full with those in one class string is unreliable since Tailwind's own rule order
+// (not the order classes appear in the JSX) decides which conflicting width utility wins.
+const zoneFieldCls = "mt-1 h-9 rounded-sm border border-border bg-surface px-2.5 text-sm";
 function TextRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="block text-xs font-medium text-fg">
