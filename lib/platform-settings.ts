@@ -21,22 +21,23 @@ export const PLATFORM_KEYS = {
   n8n_webhook_url: { secret: false, label: "n8n inbound webhook URL" },
   // Optional platform-wide fallback for verifying Meta webhook signatures
   meta_app_secret: { secret: true, label: "Meta app secret (webhook fallback)" },
+  // Website CMS — branding + search console (site-wide, zotomic.com)
+  google_site_verification: { secret: false, label: "Google Search Console verification code" },
+  site_logo_url: { secret: false, label: "Custom logo URL" },
+  site_favicon_url: { secret: false, label: "Custom favicon URL" },
+  footer_tagline: { secret: false, label: "Footer tagline" },
+  footer_copyright: { secret: false, label: "Footer copyright line" },
+  footer_trust_items: { secret: false, label: "Footer trust strip (JSON)" },
 } as const;
 
 export type PlatformKey = keyof typeof PLATFORM_KEYS;
 
 /** Which admin screen owns each key. */
 export const PLATFORM_KEY_GROUPS = {
-  settings: [
-    "telegram_bot_token",
-    "meta_pixel_id",
-    "ga4_measurement_id",
-    "ga4_api_secret",
-    "payment_bkash_number",
-    "payment_nagad_number",
-    "invoice_from_email",
-  ],
+  settings: ["telegram_bot_token", "payment_bkash_number", "payment_nagad_number", "invoice_from_email"],
   integrations: ["hermes_base_url", "hermes_shared_secret", "n8n_base_url", "n8n_api_key", "n8n_webhook_url", "meta_app_secret"],
+  seo: ["google_site_verification", "meta_pixel_id", "ga4_measurement_id", "ga4_api_secret"],
+  branding: ["site_logo_url", "site_favicon_url", "footer_tagline", "footer_copyright"],
 } as const satisfies Record<string, readonly PlatformKey[]>;
 
 export const DEFAULT_INVOICE_FROM = "invoice@zotomic.com";
@@ -95,6 +96,76 @@ export const getPublicTracking = unstable_cache(
   ["public-tracking"],
   { revalidate: 300, tags: ["platform-settings"] },
 );
+
+export interface FooterTrustItem {
+  icon: string;
+  title: string;
+  text: string;
+}
+
+const DEFAULT_TRUST_ITEMS: FooterTrustItem[] = [
+  { icon: "ShieldCheck", title: "Secure & Private", text: "Your data is protected with enterprise-grade security." },
+  { icon: "CloudCog", title: "Reliable", text: "Built on modern, scalable infrastructure you can trust." },
+  { icon: "Lock", title: "You're in Control", text: "You own your data. Always." },
+  { icon: "Headphones", title: "Support That Cares", text: "We're here to help you succeed." },
+];
+
+const DEFAULT_TAGLINE =
+  "Business intelligence, without the complexity. See what's happening, understand why, and act with confidence.";
+const DEFAULT_COPYRIGHT = "Zotomic. All rights reserved.";
+
+/** Site-wide branding, GSC verification, and footer copy for the marketing site. Cached 5 min. */
+export const getSiteBranding = unstable_cache(
+  async (): Promise<{
+    logoUrl: string;
+    faviconUrl: string;
+    googleSiteVerification: string;
+    footerTagline: string;
+    footerCopyright: string;
+    footerTrust: FooterTrustItem[];
+  }> => {
+    try {
+      const db = getAdminSupabase();
+      const { data } = await db
+        .from("platform_settings")
+        .select("key, value")
+        .in("key", ["site_logo_url", "site_favicon_url", "google_site_verification", "footer_tagline", "footer_copyright", "footer_trust_items"]);
+      const map = Object.fromEntries((data ?? []).map((r) => [r.key, r.value]));
+      let trust = DEFAULT_TRUST_ITEMS;
+      if (map.footer_trust_items) {
+        try {
+          const parsed = JSON.parse(map.footer_trust_items);
+          if (Array.isArray(parsed) && parsed.length) trust = parsed;
+        } catch {
+          /* keep defaults */
+        }
+      }
+      return {
+        logoUrl: map.site_logo_url ?? "",
+        faviconUrl: map.site_favicon_url ?? "",
+        googleSiteVerification: map.google_site_verification ?? "",
+        footerTagline: map.footer_tagline || DEFAULT_TAGLINE,
+        footerCopyright: map.footer_copyright || DEFAULT_COPYRIGHT,
+        footerTrust: trust,
+      };
+    } catch {
+      return {
+        logoUrl: "",
+        faviconUrl: "",
+        googleSiteVerification: "",
+        footerTagline: DEFAULT_TAGLINE,
+        footerCopyright: DEFAULT_COPYRIGHT,
+        footerTrust: DEFAULT_TRUST_ITEMS,
+      };
+    }
+  },
+  ["site-branding"],
+  { revalidate: 300, tags: ["platform-settings"] },
+);
+
+export async function setFooterTrustItems(items: FooterTrustItem[], adminId: string) {
+  await setPlatformSetting("footer_trust_items", JSON.stringify(items.slice(0, 8)), adminId);
+}
 
 /** Server-side GA4 event (Measurement Protocol) for the marketing site. */
 export async function ga4ServerEvent(clientId: string, name: string, params: Record<string, unknown> = {}) {

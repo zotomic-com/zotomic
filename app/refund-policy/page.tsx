@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-import { getPlatformPage } from "@/lib/platform-pages";
+import { notFound } from "next/navigation";
+import { getPublishedCustomPage } from "@/lib/site-content";
 import { RichLegal } from "@/components/site/RichLegal";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const p = await getPlatformPage("refund");
-  return { title: p.title, description: "Zotomic's refund policy for subscription plans." };
+  const p = await getPublishedCustomPage("refund");
+  return { title: p?.seoTitle || p?.title, description: p?.seoDescription || "Zotomic's refund policy for subscription plans." };
 }
 
 export default async function RefundPolicyPage() {
-  const p = await getPlatformPage("refund");
+  const p = await getPublishedCustomPage("refund");
+  if (!p) notFound();
   return <RichLegal title={p.title} body={p.body} updated={p.updatedAt} />;
 }

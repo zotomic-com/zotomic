@@ -1,43 +1,26 @@
 import type { Metadata } from "next";
 import { CtaBand, PageHero, Steps } from "@/components/site/marketing";
 import { FlowDiagram } from "@/components/site/FlowDiagram";
+import { getStructuralPage } from "@/lib/site-content";
 
-export const metadata: Metadata = {
-  title: "How it works",
-  description:
-    "Connect your business information, let Zotomic analyze it, and receive clear insights and actions every week.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const c = await getStructuralPage("how-it-works");
+  return { title: c.seoTitle, description: c.seoDescription };
+}
 
-const STEPS = [
-  {
-    title: "Connect your data",
-    text: "Add products and orders manually, import a CSV, or connect your Facebook Page. All optional, all skippable.",
-  },
-  {
-    title: "Zotomic analyzes it",
-    text: "Deterministic calculations turn raw numbers into revenue, profit, returns and trends — compared to the period before.",
-  },
-  {
-    title: "You get insights & actions",
-    text: "A weekly report tells you what changed, why it matters, and what to do next. Ask the assistant to dig deeper.",
-  },
-];
+export default async function HowItWorksPage() {
+  const c = await getStructuralPage("how-it-works");
 
-export default function HowItWorksPage() {
   return (
     <>
-      <PageHero
-        eyebrow="How it works"
-        title="From data to decision, every week"
-        subtitle="Zotomic is built around one loop: See what happened, understand why, act on it."
-      />
+      <PageHero eyebrow={c.badge} title={c.title} subtitle={c.subtitle} />
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
-        <Steps items={STEPS} />
+        <Steps items={c.items} />
       </div>
       <div className="mx-auto max-w-5xl px-4 py-14 sm:px-6">
         <FlowDiagram />
       </div>
-      <CtaBand />
+      {c.ctaEnabled && <CtaBand title={c.ctaTitle || undefined} subtitle={c.ctaSubtitle || undefined} />}
     </>
   );
 }

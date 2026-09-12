@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { MarketingShell } from "./site/MarketingShell";
 import { GA4, MetaPixel } from "./tracking/Pixel";
+import type { NavLink } from "@/lib/site-nav";
 
 /** Routes that render their own chrome (no marketing shell). */
 const BARE_PREFIXES = [
@@ -21,7 +22,8 @@ const BARE_PREFIXES = [
  * First path segments the marketing site actually owns. Anything else with a
  * single slug-like segment is a storefront served from zotomic.com/<slug> and
  * must NOT get the marketing chrome. Keep in sync with middleware RESERVED_PATHS
- * and the app/* route folders.
+ * and the app/* route folders. "p" is the namespace for admin-created custom
+ * CMS pages (/p/<slug>) — see lib/site-content.ts.
  */
 const MARKETING_SEGMENTS = new Set([
   "about",
@@ -39,14 +41,21 @@ const MARKETING_SEGMENTS = new Set([
   "refund-policy",
   "data-deletion",
   "legal",
+  "p",
 ]);
 
 export default function ConditionalLayout({
   children,
   tracking,
+  branding,
+  headerNav,
+  footerNav,
 }: {
   children: React.ReactNode;
   tracking?: { metaPixelId: string; ga4Id: string };
+  branding?: { logoUrl: string; footerTagline: string; footerCopyright: string; footerTrust: { icon: string; title: string; text: string }[] };
+  headerNav?: NavLink[];
+  footerNav?: NavLink[];
 }) {
   const pathname = usePathname();
   const seg = pathname.split("/")[1] ?? "";
@@ -61,7 +70,9 @@ export default function ConditionalLayout({
     <>
       {tracking?.metaPixelId ? <MetaPixel id={tracking.metaPixelId} /> : null}
       {tracking?.ga4Id ? <GA4 id={tracking.ga4Id} /> : null}
-      <MarketingShell>{children}</MarketingShell>
+      <MarketingShell nav={headerNav ?? []} footerNav={footerNav ?? []} branding={branding}>
+        {children}
+      </MarketingShell>
     </>
   );
 }

@@ -7,10 +7,28 @@ import { ArrowRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import { MARKETING_NAV } from "./marketing-nav";
+import { siteIcon } from "@/lib/site-icons";
+import type { NavLink } from "@/lib/site-nav";
 import { SiteFooter } from "./SiteFooter";
 
-export function MarketingShell({ children }: { children: React.ReactNode }) {
+interface Branding {
+  logoUrl: string;
+  footerTagline: string;
+  footerCopyright: string;
+  footerTrust: { icon: string; title: string; text: string }[];
+}
+
+export function MarketingShell({
+  children,
+  nav,
+  footerNav,
+  branding,
+}: {
+  children: React.ReactNode;
+  nav: NavLink[];
+  footerNav: NavLink[];
+  branding?: Branding;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -29,25 +47,22 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
 
   const NavList = ({ onNavigate }: { onNavigate?: () => void }) => (
     <nav className="flex flex-col gap-0.5">
-      {MARKETING_NAV.map((item, i) => {
+      {nav.map((item, i) => {
         const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-        const prevGroup = MARKETING_NAV[i - 1]?.group;
+        const prevSection = nav[i - 1]?.section;
+        const Icon = siteIcon(item.icon);
         return (
-          <div key={item.href}>
-            {prevGroup === "primary" && item.group === "secondary" && (
-              <div className="my-2 border-t border-border" />
-            )}
+          <div key={item.id}>
+            {prevSection === "primary" && item.section === "secondary" && <div className="my-2 border-t border-border" />}
             <Link
               href={item.href}
               onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 rounded-sm px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-primary-soft text-primary"
-                  : "text-fg-muted hover:bg-surface-2 hover:text-fg",
+                active ? "bg-primary-soft text-primary" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
               )}
             >
-              <item.icon className="h-4 w-4 shrink-0" />
+              <Icon className="h-4 w-4 shrink-0" />
               {item.label}
             </Link>
           </div>
@@ -70,7 +85,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
             {open ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
           </button>
           <Link href="/" aria-label="Zotomic home">
-            <Logo size={24} />
+            <Logo size={24} src={branding?.logoUrl} />
           </Link>
         </div>
         <div className="flex items-center gap-2">
@@ -90,7 +105,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[82vw] animate-slide-in-left flex-col border-r border-border bg-surface p-4 shadow-xl">
             <div className="mb-5 flex items-center justify-between px-2">
               <Link href="/" onClick={() => setOpen(false)} aria-label="Zotomic home">
-                <Logo />
+                <Logo src={branding?.logoUrl} />
               </Link>
               <button
                 onClick={() => setOpen(false)}
@@ -116,7 +131,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
       )}
 
       <main className="flex-1">{children}</main>
-      <SiteFooter />
+      <SiteFooter nav={footerNav} branding={branding} />
     </div>
   );
 }

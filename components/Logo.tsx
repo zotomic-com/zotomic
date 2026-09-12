@@ -5,11 +5,23 @@ export function Logo({
   className,
   showText = true,
   size = 28,
+  src,
 }: {
   className?: string;
   showText?: boolean;
   size?: number;
+  /** custom logo image URL (from the admin Website → Branding settings) — falls back to the default mark */
+  src?: string;
 }) {
+  if (src) {
+    // A custom upload is treated as a complete logo lockup (mark + name already in the image).
+    return (
+      <span className={cn("inline-flex items-center", className)}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="Zotomic" style={{ height: size }} className="w-auto shrink-0 object-contain" />
+      </span>
+    );
+  }
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       <svg

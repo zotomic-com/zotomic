@@ -26,12 +26,18 @@ export function ImageUploader({
   onChange,
   max = 6,
   compact = false,
+  signEndpoint = "/api/app/media/sign",
+  recordMetadata = true,
 }: {
   value: string[];
   onChange: (urls: string[]) => void;
   max?: number;
   /** single tiny thumbnail that is itself the upload/replace trigger */
   compact?: boolean;
+  /** where to fetch the Cloudinary signature from — defaults to the tenant media endpoint */
+  signEndpoint?: string;
+  /** POST the upload to the tenant media library — off for platform-wide (admin) assets */
+  recordMetadata?: boolean;
 }) {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,7 +46,7 @@ export function ImageUploader({
   const upload = async (files: FileList) => {
     setBusy(true);
     try {
-      const sigRes = await fetch("/api/app/media/sign", { method: "POST" });
+      const sigRes = await fetch(signEndpoint, { method: "POST" });
       if (!sigRes.ok) {
         toast(sigRes.status === 503 ? "Image uploads aren't configured yet." : "Upload failed", "error");
         return;
@@ -70,18 +76,20 @@ export function ImageUploader({
           toast("Cloudinary rejected the upload", "error");
           continue;
         }
-        await fetch("/api/app/media", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            public_id: data.public_id,
-            url: data.secure_url,
-            width: data.width,
-            height: data.height,
-            bytes: data.bytes,
-            format: data.format,
-          }),
-        });
+        if (recordMetadata) {
+          await fetch("/api/app/media", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              public_id: data.public_id,
+              url: data.secure_url,
+              width: data.width,
+              height: data.height,
+              bytes: data.bytes,
+              format: data.format,
+            }),
+          });
+        }
         added.push(data.secure_url);
       }
       if (added.length) onChange([...value, ...added]);

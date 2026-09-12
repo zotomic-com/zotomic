@@ -4,20 +4,19 @@ import { cn } from "@/lib/cn";
 import { PLANS, formatPrice } from "@/lib/plans";
 import { Button } from "@/components/ui/button";
 import { PageHero } from "@/components/site/marketing";
+import { getStructuralPage } from "@/lib/site-content";
 
-export const metadata: Metadata = {
-  title: "Pricing",
-  description: "Simple, transparent plans. Free to start — no credit card required.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const c = await getStructuralPage("pricing");
+  return { title: c.seoTitle, description: c.seoDescription };
+}
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const c = await getStructuralPage("pricing");
+
   return (
     <>
-      <PageHero
-        eyebrow="Pricing"
-        title="Start free. Upgrade when it pays for itself."
-        subtitle="Plan limits are configurable — these are starting points, not commercial law."
-      />
+      <PageHero eyebrow={c.badge} title={c.title} subtitle={c.subtitle} />
 
       <div className="mx-auto grid max-w-5xl gap-4 px-4 pb-6 sm:px-6 lg:grid-cols-3">
         {PLANS.map((p) => (
@@ -62,10 +61,7 @@ export default function PricingPage() {
         ))}
       </div>
 
-      <p className="mx-auto max-w-5xl px-4 pb-16 text-center text-xs text-fg-subtle sm:px-6">
-        Prices in BDT. Billing is confirmed manually — pay by bKash, submit your transaction ID, and
-        your account unlocks as soon as we confirm it.
-      </p>
+      {c.body && <p className="mx-auto max-w-5xl px-4 pb-16 text-center text-xs text-fg-subtle sm:px-6">{c.body}</p>}
     </>
   );
 }

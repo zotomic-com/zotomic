@@ -37,6 +37,7 @@ const RESERVED_PATHS = new Set([
   "data-deletion",
   "faq",
   "legal",
+  "p",
   "robots.txt",
   "sitemap.xml",
   "icon.svg",

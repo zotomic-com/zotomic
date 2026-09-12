@@ -25,11 +25,21 @@ export function parseDoc(body: string): Block[] {
   return blocks.map((b) => ({ ...b, paras: b.paras.filter(Boolean) }));
 }
 
-export function RichLegal({ title, body, updated }: { title: string; body: string; updated?: string | null }) {
+export function RichLegal({
+  title,
+  body,
+  updated,
+  kicker = "Legal",
+}: {
+  title: string;
+  body: string;
+  updated?: string | null;
+  kicker?: string;
+}) {
   const blocks = parseDoc(body);
   return (
     <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
-      <p className="text-xs font-bold uppercase tracking-widest text-primary">Legal</p>
+      <p className="text-xs font-bold uppercase tracking-widest text-primary">{kicker}</p>
       <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-navy">{title}</h1>
       {updated && (
         <p className="mt-2 text-sm text-fg-subtle">

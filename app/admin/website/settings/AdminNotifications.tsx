@@ -3,7 +3,7 @@
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { NotificationMatrix } from "@/components/app/NotificationMatrix";
 import { ADMIN_EVENTS, type Prefs } from "@/lib/notify-events";
-import { saveAdminNotificationPrefs } from "./actions";
+import { saveAdminNotificationPrefs } from "../actions";
 
 export function AdminNotifications({ prefs }: { prefs: Prefs }) {
   return (
