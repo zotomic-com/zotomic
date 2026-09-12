@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { planName } from "@/lib/billing";
-import { PLANS, formatPrice } from "@/lib/plans";
+import { getPlanCards } from "@/lib/plan-cards";
 import { money } from "@/lib/money";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,10 +57,11 @@ export default async function BillingPage() {
       .limit(20),
   ]);
 
-  const [credit, payment, creditLog] = await Promise.all([
+  const [credit, payment, creditLog, planCards] = await Promise.all([
     getCreditAccount(tenant.businessId),
     getPaymentNumbers(),
     recentCreditLedger(tenant.businessId, 8),
+    getPlanCards(),
   ]);
 
   const invRows = (invoices ?? []).map((i) => ({
@@ -186,11 +187,11 @@ export default async function BillingPage() {
           </CardHeader>
           <CardBody>
             <div className="grid gap-3 sm:grid-cols-2">
-              {PLANS.filter((p) => p.id !== "free").map((p) => (
+              {planCards.filter((p) => p.id !== "free").map((p) => (
                 <div key={p.id} className="rounded-sm border border-border p-4">
                   <p className="text-sm font-bold text-fg">{p.name}</p>
                   <p className="mt-1 text-xl font-extrabold text-navy">
-                    {formatPrice(p)}
+                    {p.priceLabel}
                     {p.priceBDT ? <span className="text-xs font-medium text-fg-subtle">/mo</span> : null}
                   </p>
                   <p className="mt-1 text-xs text-fg-muted">{p.tagline}</p>

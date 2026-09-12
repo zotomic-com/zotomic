@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { PLANS, formatPrice } from "@/lib/plans";
 import { Button } from "@/components/ui/button";
 import { PageHero } from "@/components/site/marketing";
 import { getStructuralPage } from "@/lib/site-content";
+import { getPlanCards } from "@/lib/plan-cards";
 
 export async function generateMetadata(): Promise<Metadata> {
   const c = await getStructuralPage("pricing");
@@ -12,14 +12,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PricingPage() {
-  const c = await getStructuralPage("pricing");
+  const [c, cards] = await Promise.all([getStructuralPage("pricing"), getPlanCards()]);
 
   return (
     <>
       <PageHero eyebrow={c.badge} title={c.title} subtitle={c.subtitle} />
 
       <div className="mx-auto grid max-w-5xl gap-4 px-4 pb-6 sm:px-6 lg:grid-cols-3">
-        {PLANS.map((p) => (
+        {cards.map((p) => (
           <div
             key={p.id}
             className={cn(
@@ -29,29 +29,27 @@ export default async function PricingPage() {
           >
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-fg">{p.name}</p>
-              {p.featured && (
+              {p.badge && (
                 <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary">
-                  Popular
+                  {p.badge}
                 </span>
               )}
             </div>
             <p className="mt-3 text-3xl font-extrabold tracking-tight text-navy">
-              {formatPrice(p)}
+              {p.priceLabel}
               {p.priceBDT ? <span className="text-sm font-medium text-fg-subtle">/mo</span> : null}
             </p>
             <p className="mt-1 text-sm text-fg-muted">{p.tagline}</p>
 
-            <Button
-              href={p.id === "pro" ? "/contact" : "/signup"}
-              variant={p.featured ? "primary" : "outline"}
-              className="mt-5 w-full"
-            >
-              {p.id === "pro" ? "Contact us" : "Start free"}
-            </Button>
+            {p.buttonText && (
+              <Button href={p.buttonHref || "/signup"} variant={p.featured ? "primary" : "outline"} className="mt-5 w-full">
+                {p.buttonText}
+              </Button>
+            )}
 
             <ul className="mt-6 space-y-2">
-              {p.features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-fg-muted">
+              {p.features.map((f, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-fg-muted">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   {f}
                 </li>

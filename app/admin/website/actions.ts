@@ -17,6 +17,8 @@ import { createNavLink, updateNavLink, deleteNavLink, reorderNavLink } from "@/l
 import { createBusinessCategory, updateBusinessCategory, deleteBusinessCategory, reorderBusinessCategory } from "@/lib/business-categories";
 import { verifyBot } from "@/lib/telegram";
 import { sanitizePrefs, ADMIN_EVENTS, type Prefs } from "@/lib/notify-events";
+import { saveSystemPlanCard, createCustomPlanCard, updateCustomPlanCard, deleteCustomPlanCard, reorderPlanCard } from "@/lib/plan-cards";
+import type { PlanId } from "@/lib/plans";
 
 async function audit(adminId: string, action: string, summary: string, targetId?: string) {
   await getAdminSupabase()
@@ -189,6 +191,89 @@ export async function reorderCategoryAction(id: string, direction: "up" | "down"
   await requireAdmin();
   await reorderBusinessCategory(id, direction);
   revalidatePath("/admin/website/categories");
+  return { ok: true };
+}
+
+// ---------- pricing cards ----------
+
+export async function saveSystemPlanCardAction(
+  id: PlanId,
+  patch: { name: string; priceBDT: number | null; tagline: string; badge: string; features: string[]; buttonText: string; buttonHref: string },
+) {
+  const admin = await requireAdmin();
+  await saveSystemPlanCard(id, patch, admin.id);
+  await audit(admin.id, "website.plan_card_updated", `Updated pricing card "${patch.name}"`, id);
+  revalidatePath("/admin/website/pages/pricing");
+  revalidatePath("/pricing");
+  revalidatePath("/app/billing");
+  return { ok: true };
+}
+
+export async function createCustomPlanCardAction(input: {
+  id: string;
+  name: string;
+  priceBDT: number | null;
+  tagline: string;
+  badge: string;
+  features: string[];
+  buttonText: string;
+  buttonHref: string;
+  featured: boolean;
+}) {
+  const admin = await requireAdmin();
+  const res = await createCustomPlanCard(input, admin.id);
+  if ("ok" in res) {
+    await audit(admin.id, "website.plan_card_created", `Added pricing card "${input.name}"`, input.id);
+    revalidatePath("/admin/website/pages/pricing");
+    revalidatePath("/pricing");
+    revalidatePath("/app/billing");
+  }
+  return res;
+}
+
+export async function updateCustomPlanCardAction(
+  id: string,
+  patch: Partial<{
+    name: string;
+    priceBDT: number | null;
+    tagline: string;
+    badge: string;
+    features: string[];
+    buttonText: string;
+    buttonHref: string;
+    featured: boolean;
+    enabled: boolean;
+  }>,
+) {
+  const admin = await requireAdmin();
+  const res = await updateCustomPlanCard(id, patch, admin.id);
+  if ("ok" in res) {
+    await audit(admin.id, "website.plan_card_updated", `Updated pricing card "${patch.name ?? id}"`, id);
+    revalidatePath("/admin/website/pages/pricing");
+    revalidatePath("/pricing");
+    revalidatePath("/app/billing");
+  }
+  return res;
+}
+
+export async function deleteCustomPlanCardAction(id: string) {
+  const admin = await requireAdmin();
+  const res = await deleteCustomPlanCard(id);
+  if ("ok" in res) {
+    await audit(admin.id, "website.plan_card_deleted", `Deleted pricing card "${id}"`, id);
+    revalidatePath("/admin/website/pages/pricing");
+    revalidatePath("/pricing");
+    revalidatePath("/app/billing");
+  }
+  return res;
+}
+
+export async function reorderPlanCardAction(id: string, direction: "up" | "down") {
+  await requireAdmin();
+  await reorderPlanCard(id, direction);
+  revalidatePath("/admin/website/pages/pricing");
+  revalidatePath("/pricing");
+  revalidatePath("/app/billing");
   return { ok: true };
 }
 
