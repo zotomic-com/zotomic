@@ -19,7 +19,9 @@ export type SectionType =
   | "faq"
   | "logo_strip"
   | "newsletter"
-  | "contact";
+  | "contact"
+  | "video_carousel"
+  | "video_gallery";
 
 export interface Section {
   id: string;
@@ -82,6 +84,8 @@ export interface StorefrontConfig {
     shipping: StorePage;
     faq: { enabled: boolean; title: string; items: { q: string; a: string }[] };
   };
+  /** the dedicated /videos page — its own owner-composed section list (hero, video carousel/gallery, image+text, text) */
+  videoPage: { enabled: boolean; title: string; sections: Section[] };
 }
 
 export interface StorePage {
@@ -134,6 +138,8 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   logo_strip: "Logo strip",
   newsletter: "Newsletter signup",
   contact: "Contact block",
+  video_carousel: "Video carousel",
+  video_gallery: "Video gallery",
 };
 
 let _sid = 0;
@@ -185,6 +191,10 @@ export function defaultSection(type: SectionType): Section {
       return { ...base, data: { heading: "Get 10% off your first order", subheading: "Join our list." } };
     case "contact":
       return { ...base, data: { heading: "Visit us" } };
+    case "video_carousel":
+      return { ...base, data: { heading: "Watch", limit: 8 } };
+    case "video_gallery":
+      return { ...base, data: { heading: "Video gallery", limit: 12 } };
   }
 }
 
@@ -280,6 +290,11 @@ export function makeDefaultConfig(storeName: string): StorefrontConfig {
         ],
       },
     },
+    videoPage: {
+      enabled: false,
+      title: "Videos",
+      sections: [defaultSection("video_gallery")],
+    },
   };
 }
 
@@ -295,32 +310,43 @@ function deepMerge<T>(base: T, patch: unknown): T {
   return out as T;
 }
 
+/** Clean + defaults-fill a raw stored section array (shared by the home page and the video page). */
+function normalizeSections(raw: unknown): Section[] | null {
+  if (!Array.isArray(raw)) return null;
+  return (raw as Section[])
+    .filter((s) => s && typeof s.type === "string" && s.id)
+    .map((s) => {
+      const data = isObj(s.data) ? { ...s.data } : {};
+      // hero: fold the legacy single `imageUrl` into the `images` array + defaults
+      if (s.type === "hero") {
+        const imgs = Array.isArray(data.images)
+          ? (data.images as unknown[]).filter((x): x is string => typeof x === "string")
+          : [];
+        if (!imgs.length && typeof data.imageUrl === "string" && data.imageUrl) imgs.push(data.imageUrl);
+        data.images = imgs;
+        if (data.style !== "card" && data.style !== "full") data.style = "full";
+        if (!["surface", "dark", "accent"].includes(data.tone as string)) data.tone = "surface";
+      }
+      return { ...s, data };
+    });
+}
+
 /** Merge a stored partial onto a fresh default so the renderer gets a full object. */
 export function normalizeConfig(stored: unknown, storeName: string): StorefrontConfig {
   const def = makeDefaultConfig(storeName);
   if (!isObj(stored)) return def;
   const merged = deepMerge(def, stored);
-  // sections/nav/footer.columns are arrays — take stored if it's a valid array
-  if (Array.isArray((stored as Record<string, unknown>).sections)) {
-    merged.sections = ((stored as Record<string, unknown>).sections as Section[])
-      .filter((s) => s && typeof s.type === "string" && s.id)
-      .map((s) => {
-        const data = isObj(s.data) ? { ...s.data } : {};
-        // hero: fold the legacy single `imageUrl` into the `images` array + defaults
-        if (s.type === "hero") {
-          const imgs = Array.isArray(data.images)
-            ? (data.images as unknown[]).filter((x): x is string => typeof x === "string")
-            : [];
-          if (!imgs.length && typeof data.imageUrl === "string" && data.imageUrl) imgs.push(data.imageUrl);
-          data.images = imgs;
-          if (data.style !== "card" && data.style !== "full") data.style = "full";
-          if (!["surface", "dark", "accent"].includes(data.tone as string)) data.tone = "surface";
-        }
-        return { ...s, data };
-      });
-  }
-  if (Array.isArray((stored as Record<string, unknown>).nav)) {
-    merged.nav = (stored as Record<string, unknown>).nav as StorefrontConfig["nav"];
+  const storedRec = stored as Record<string, unknown>;
+
+  const sections = normalizeSections(storedRec.sections);
+  if (sections) merged.sections = sections;
+
+  const videoPageRaw = isObj(storedRec.videoPage) ? (storedRec.videoPage as Record<string, unknown>) : null;
+  const videoSections = videoPageRaw ? normalizeSections(videoPageRaw.sections) : null;
+  if (videoSections) merged.videoPage.sections = videoSections;
+
+  if (Array.isArray(storedRec.nav)) {
+    merged.nav = storedRec.nav as StorefrontConfig["nav"];
   }
   return merged;
 }

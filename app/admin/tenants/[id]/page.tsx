@@ -8,7 +8,9 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TenantAdminClient } from "./TenantAdminClient";
 import { StorefrontAssistantAdmin } from "./StorefrontAssistantAdmin";
+import { VideoAccessAdmin } from "./VideoAccessAdmin";
 import { SF_CHAT_QUOTA, utcPeriod } from "@/lib/storefront/assistant";
+import { getVideoAccess } from "@/lib/storefront/videos";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,7 @@ export default async function AdminTenantDetailPage({ params }: { params: Promis
     .maybeSingle();
   if (!biz) notFound();
   const currency = biz.currency as string;
+  const videoAccess = await getVideoAccess(id);
 
   const [
     { data: sub },
@@ -218,6 +221,8 @@ export default async function AdminTenantDetailPage({ params }: { params: Promis
           at: d(t.submitted_at as string),
         }))}
       />
+
+      <VideoAccessAdmin businessId={biz.id as string} access={videoAccess} />
 
       <TenantAdminClient
         businessId={biz.id as string}

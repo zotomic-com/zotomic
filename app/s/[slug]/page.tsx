@@ -4,6 +4,7 @@ import { getStoreBySlug, getStoreCategories, getStoreProducts } from "@/lib/stor
 import { storeBasePath } from "@/lib/storefront/base-path";
 import { SectionRenderer } from "@/components/storefront/Sections";
 import { CategoryChips } from "@/components/storefront/CategoryChips";
+import { getStorefrontVideosForRender } from "@/lib/storefront/videos";
 
 export const revalidate = 120;
 
@@ -23,13 +24,15 @@ export default async function StoreHomePage({ params }: { params: Promise<{ slug
     );
   }
 
-  const [products, categories] = await Promise.all([
+  const sections = store.config.sections;
+  const needsVideos = sections.some((s) => s.enabled && (s.type === "video_carousel" || s.type === "video_gallery"));
+
+  const [products, categories, videos] = await Promise.all([
     getStoreProducts(store.businessId),
     getStoreCategories(store.businessId),
+    needsVideos ? getStorefrontVideosForRender(store.businessId) : Promise.resolve([]),
   ]);
-  const ctx = { products, categories, currency: store.currency, basePath, storeSlug: store.slug };
-
-  const sections = store.config.sections;
+  const ctx = { products, categories, videos, currency: store.currency, basePath, storeSlug: store.slug };
   const firstEnabled = sections.find((s) => s.enabled);
   // auto-place a category strip right under the hero, unless the owner put a
   // "Shop by category" section somewhere themselves

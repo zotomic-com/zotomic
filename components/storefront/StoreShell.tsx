@@ -25,7 +25,10 @@ export function StoreShell({
   storeSlug?: string;
   children: React.ReactNode;
 }) {
-  const { brand, announcement, nav, footer } = config;
+  const { brand, announcement, footer } = config;
+  const nav = config.videoPage.enabled && !config.nav.some((n) => n.href === "/videos")
+    ? [...config.nav, { label: config.videoPage.title || "Videos", href: "/videos" }]
+    : config.nav;
   const dark = brand.theme === "dark";
   const href = (h: string) => (h.startsWith("/") ? `${basePath}${h === "/" ? "" : h}` || "/" : h);
 

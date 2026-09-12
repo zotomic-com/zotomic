@@ -6,10 +6,14 @@ import { ProductCard } from "./ProductCard";
 import { ProductCarousel } from "./ProductCarousel";
 import { CategoryChips } from "./CategoryChips";
 import { HeroCard } from "./HeroCard";
+import { VideoCarousel } from "./VideoCarousel";
+import { VideoGallery } from "./VideoGallery";
+import type { StorefrontVideo } from "./VideoCard";
 
 interface Ctx {
   products: StoreProduct[];
   categories: StoreCategory[];
+  videos?: StorefrontVideo[];
   currency: string;
   basePath: string;
   storeSlug: string;
@@ -108,6 +112,30 @@ export function SectionRenderer({ section, ctx }: { section: Section; ctx: Ctx }
           <Grid products={ctx.products} {...gridCtx} />
         </Wrap>
       );
+
+    case "video_carousel": {
+      const limit = Number(d.limit) > 0 ? Number(d.limit) : 8;
+      const videos = (ctx.videos ?? []).slice(0, limit);
+      if (!videos.length) return null;
+      return (
+        <Wrap>
+          <SectionHead title={s(d, "heading", "Watch")} />
+          <VideoCarousel videos={videos} />
+        </Wrap>
+      );
+    }
+
+    case "video_gallery": {
+      const limit = Number(d.limit) > 0 ? Number(d.limit) : 12;
+      const videos = (ctx.videos ?? []).slice(0, limit);
+      if (!videos.length) return null;
+      return (
+        <Wrap>
+          <SectionHead title={s(d, "heading", "Video gallery")} />
+          <VideoGallery videos={videos} />
+        </Wrap>
+      );
+    }
 
     case "category_grid": {
       if (!ctx.categories.length) return null;

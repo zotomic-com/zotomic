@@ -3,6 +3,8 @@ import { getTenant } from "@/lib/tenant-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { normalizeConfig } from "@/lib/storefront/config";
 import { getPlanLimits } from "@/lib/plan-limits";
+import { getStoreVideos, getVideoAccess } from "@/lib/storefront/videos";
+import { youtubeChannelConfigured } from "@/lib/youtube";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StorefrontEditor } from "./StorefrontEditor";
 
@@ -21,7 +23,11 @@ export default async function StorefrontPage() {
     .single();
 
   const config = normalizeConfig(row?.draft_json, tenant.business.name);
-  const planLimits = await getPlanLimits(tenant.businessId);
+  const [planLimits, videos, videoAccess] = await Promise.all([
+    getPlanLimits(tenant.businessId),
+    getStoreVideos(tenant.businessId),
+    getVideoAccess(tenant.businessId),
+  ]);
   const published = !!row?.published_at;
   const root = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
   const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
@@ -41,6 +47,9 @@ export default async function StorefrontPage() {
         storeUrl={storeUrl}
         subdomainUrl={subdomainUrl}
         heroImageLimit={planLimits.heroImages}
+        videos={videos}
+        videoAccess={videoAccess}
+        channelConnectAvailable={youtubeChannelConfigured()}
       />
     </div>
   );

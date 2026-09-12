@@ -207,6 +207,30 @@ export async function adminResolveStorefrontChatTopup(
   return { ok: true };
 }
 
+/** Numeric override for the video-gallery cap (null = fall back to the plan default). */
+export async function adminSetVideoCap(businessId: string, cap: number | null) {
+  const admin = await requireAdmin();
+  const db = getAdminSupabase();
+  const { data: biz } = await db.from("businesses").select("feature_overrides").eq("id", businessId).single();
+  const overrides = { ...((biz?.feature_overrides as Record<string, unknown>) ?? {}) };
+  if (cap === null || cap < 0) delete overrides.video_gallery_cap;
+  else overrides.video_gallery_cap = Math.round(cap);
+  await db.from("businesses").update({ feature_overrides: overrides }).eq("id", businessId);
+  await audit(businessId, admin.id, "admin.video_cap_set", cap === null ? "Reset video cap to plan default" : `Set video cap to ${cap}`);
+  revalidatePath(`/admin/tenants/${businessId}`);
+  return { ok: true };
+}
+
+/** Abuse cleanup — wipe a store's entire video library. */
+export async function adminWipeStoreVideos(businessId: string) {
+  const admin = await requireAdmin();
+  const { wipeStoreVideos } = await import("@/lib/storefront/videos");
+  const n = await wipeStoreVideos(businessId);
+  await audit(businessId, admin.id, "admin.videos_wiped", `Deleted ${n} video(s)`);
+  revalidatePath(`/admin/tenants/${businessId}`);
+  return { ok: true, count: n };
+}
+
 export async function adminDeleteBusiness(businessId: string, confirmName: string) {
   const admin = await requireAdmin();
   const db = getAdminSupabase();

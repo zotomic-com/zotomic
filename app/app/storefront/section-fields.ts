@@ -60,4 +60,12 @@ export const SECTION_FIELDS: Record<SectionType, FieldDef[]> = {
     { key: "subheading", label: "Subheading", type: "text" },
   ],
   contact: [{ key: "heading", label: "Heading", type: "text" }],
+  video_carousel: [
+    { key: "heading", label: "Heading", type: "text" },
+    { key: "limit", label: "How many videos", type: "number" },
+  ],
+  video_gallery: [
+    { key: "heading", label: "Heading", type: "text" },
+    { key: "limit", label: "How many videos", type: "number" },
+  ],
 };

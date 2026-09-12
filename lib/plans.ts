@@ -23,6 +23,8 @@ export interface Plan {
     /** legacy per-day assistant message cap — superseded by the credit system (Phase 9C) */
     assistantMessagesPerDay: number;
     seats: number;
+    /** YouTube videos an owner can add to their storefront video library (admin can override per store) */
+    videos: number;
   };
   /** weekly assistant-credit allowance (Phase 9C). Resets every Friday. */
   weeklyCredits: number;
@@ -51,6 +53,7 @@ export const PLANS: Plan[] = [
       heroImages: 1,
       assistantMessagesPerDay: 10,
       seats: 1,
+      videos: 10,
     },
     weeklyCredits: 15,
     webSearchPerDay: 5,
@@ -78,6 +81,7 @@ export const PLANS: Plan[] = [
       heroImages: 3,
       assistantMessagesPerDay: 100,
       seats: 3,
+      videos: 25,
     },
     weeklyCredits: 250,
     webSearchPerDay: 30,
@@ -102,6 +106,7 @@ export const PLANS: Plan[] = [
       heroImages: 3,
       assistantMessagesPerDay: 500,
       seats: 10,
+      videos: 50,
     },
     weeklyCredits: 1200,
     webSearchPerDay: 100,

@@ -8,6 +8,9 @@ import { getAdminSupabase } from "@/lib/supabase";
  *  courier          — all plans
  *  server_tracking  — paid plans only, or admin-granted
  *  custom_domain    — paid plans only, or admin-granted
+ *  video_gallery    — all plans by default (caps differ by plan, see lib/storefront/videos.ts);
+ *                     admin can force it off (suspend/block a store) or on for a store that
+ *                     wouldn't otherwise have it, same override mechanism as everything else here.
  */
 export type Feature =
   | "payment_gateway"
@@ -15,7 +18,8 @@ export type Feature =
   | "server_tracking"
   | "custom_domain"
   | "branded_invoice"
-  | "weekly_report";
+  | "weekly_report"
+  | "video_gallery";
 
 const PAID_ONLY: Feature[] = ["payment_gateway", "server_tracking", "custom_domain", "branded_invoice"];
 
@@ -33,6 +37,8 @@ export interface Entitlements {
    * `feature_overrides.weekly_report = false` to revoke for a tenant).
    */
   weekly_report: boolean;
+  /** the video gallery/carousel feature — on by default for every plan, admin-overridable */
+  video_gallery: boolean;
 }
 
 export function deriveEntitlements(
@@ -53,6 +59,7 @@ export function deriveEntitlements(
     custom_domain: has("custom_domain"),
     branded_invoice: has("branded_invoice"),
     weekly_report: has("weekly_report"),
+    video_gallery: has("video_gallery"),
   };
 }
 

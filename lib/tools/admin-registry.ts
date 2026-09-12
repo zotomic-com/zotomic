@@ -1109,6 +1109,86 @@ const set_store_status: AdminToolDef = {
   },
 };
 
+const store_video_status: AdminToolDef = {
+  name: "store_video_status",
+  description: "Video-gallery status for one store: on/off, video count vs cap, and its video library (title, aspect, hidden/shown).",
+  risk: "read",
+  parameters: { type: "object", properties: { store: { type: "string" } }, required: ["store"] },
+  async handler(_a, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const { getVideoAccess, getStoreVideos } = await import("@/lib/storefront/videos");
+    const [access, videos] = await Promise.all([getVideoAccess(st.id), getStoreVideos(st.id)]);
+    return {
+      store: st.name,
+      plan: access.plan,
+      featureOn: access.featureOn,
+      cap: access.cap,
+      capIsOverride: access.capIsOverride,
+      used: access.used,
+      videos: videos.map((v) => ({ title: v.title ?? v.videoId, aspect: v.aspect, enabled: v.enabled, url: v.url })),
+    };
+  },
+};
+
+const set_store_video_access: AdminToolDef = {
+  name: "set_store_video_access",
+  description:
+    "Grant, suspend, or block a store's video-gallery feature, and/or set a custom video-count limit for it — independent of its plan. Give any store, free or paid, more (or less) than its default at any time.",
+  risk: "consequential",
+  parameters: {
+    type: "object",
+    properties: {
+      store: { type: "string" },
+      access: { type: "string", enum: ["granted", "blocked"], description: "granted = on, blocked = suspended/off" },
+      cap: { type: "integer", description: "custom video-count limit; omit to leave unchanged" },
+      resetCapToPlanDefault: { type: "boolean" },
+    },
+    required: ["store"],
+  },
+  async handler(adminId, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const db = getAdminSupabase();
+    const { data: biz } = await db.from("businesses").select("feature_overrides").eq("id", st.id).single();
+    const overrides = { ...((biz?.feature_overrides as Record<string, unknown>) ?? {}) };
+    const notes: string[] = [];
+    if (s(args.access) === "granted") {
+      overrides.video_gallery = true;
+      notes.push("access granted");
+    } else if (s(args.access) === "blocked") {
+      overrides.video_gallery = false;
+      notes.push("access blocked");
+    }
+    if (args.resetCapToPlanDefault === true) {
+      delete overrides.video_gallery_cap;
+      notes.push("cap reset to plan default");
+    } else if (nz(args.cap) != null) {
+      overrides.video_gallery_cap = Math.max(0, Math.round(nz(args.cap)!));
+      notes.push(`cap set to ${overrides.video_gallery_cap}`);
+    }
+    if (!notes.length) return { error: "Nothing to change — pass access and/or cap." };
+    await db.from("businesses").update({ feature_overrides: overrides }).eq("id", st.id);
+    await writeAudit(st.id, adminId, "business.video_access_changed", `${st.name}: ${notes.join(", ")}`);
+    return { store: st.name, changed: notes };
+  },
+};
+
+const wipe_store_videos: AdminToolDef = {
+  name: "wipe_store_videos",
+  description: "Delete a store's entire video library (abuse cleanup). The gallery stays enabled/disabled as it was — only the videos are removed.",
+  risk: "consequential",
+  parameters: { type: "object", properties: { store: { type: "string" } }, required: ["store"] },
+  async handler(adminId, args) {
+    const st = await resolveStore(s(args.store));
+    if ("error" in st) return st;
+    const { wipeStoreVideos } = await import("@/lib/storefront/videos");
+    const count = await wipeStoreVideos(st.id);
+    await writeAudit(st.id, adminId, "business.videos_wiped", `${st.name}: deleted ${count} video(s)`);
+    return { store: st.name, deleted: count };
+  },
+};
+
 const set_owner_assistant: AdminToolDef = {
   name: "set_owner_assistant",
   description: "Suspend or re-enable the store OWNER's Zotomic Assistant (the dashboard chat). Does not touch the storefront chatbot.",
@@ -2180,6 +2260,9 @@ export const ADMIN_TOOLS: AdminToolDef[] = [
   clear_fraud_flag,
   run_fraud_scan,
   set_store_status,
+  store_video_status,
+  set_store_video_access,
+  wipe_store_videos,
   set_owner_assistant,
   set_storefront_assistant,
   edit_storefront_knowledge,

@@ -16,8 +16,11 @@ import { useToast } from "@/components/ui/toast";
 import { ImageUploader } from "@/components/app/ImageUploader";
 import { publishStorefront, saveDraft, unpublishStorefront } from "./actions";
 import { SECTION_FIELDS } from "./section-fields";
+import { VideoLibraryPanel } from "./VideoLibraryPanel";
+import type { StoreVideo, VideoAccess } from "@/lib/storefront/videos";
 
 const ALL_SECTIONS = Object.keys(SECTION_LABELS) as SectionType[];
+const VIDEO_PAGE_SECTIONS: SectionType[] = ["hero", "video_carousel", "video_gallery", "image_text", "rich_text"];
 
 export function StorefrontEditor({
   initialConfig,
@@ -25,12 +28,18 @@ export function StorefrontEditor({
   storeUrl,
   subdomainUrl,
   heroImageLimit = 1,
+  videos = [],
+  videoAccess,
+  channelConnectAvailable = false,
 }: {
   initialConfig: StorefrontConfig;
   published: boolean;
   storeUrl: string | null;
   subdomainUrl?: string | null;
   heroImageLimit?: number;
+  videos?: StoreVideo[];
+  videoAccess?: VideoAccess;
+  channelConnectAvailable?: boolean;
 }) {
   const { toast } = useToast();
   const [config, setConfig] = useState<StorefrontConfig>(initialConfig);
@@ -38,7 +47,7 @@ export function StorefrontEditor({
   const [saving, startSave] = useTransition();
   const [publishing, startPublish] = useTransition();
   const [previewKey, setPreviewKey] = useState(0);
-  const [tab, setTab] = useState<"content" | "design" | "pages" | "settings">("content");
+  const [tab, setTab] = useState<"content" | "design" | "pages" | "videos" | "settings">("content");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const update = useCallback((fn: (c: StorefrontConfig) => StorefrontConfig) => {
@@ -100,6 +109,21 @@ export function StorefrontEditor({
   const setSectionField = (i: number, key: string, val: unknown) =>
     update((c) => ((c.sections[i].data[key] = val), c));
 
+  // ── video-page section ops (same shape, scoped to config.videoPage.sections) ──
+  const moveVideoSection = (i: number, dir: -1 | 1) =>
+    update((c) => {
+      const j = i + dir;
+      if (j < 0 || j >= c.videoPage.sections.length) return c;
+      [c.videoPage.sections[i], c.videoPage.sections[j]] = [c.videoPage.sections[j], c.videoPage.sections[i]];
+      return c;
+    });
+  const toggleVideoSection = (i: number) =>
+    update((c) => ((c.videoPage.sections[i].enabled = !c.videoPage.sections[i].enabled), c));
+  const deleteVideoSection = (i: number) => update((c) => ((c.videoPage.sections.splice(i, 1), c)));
+  const addVideoSection = (t: SectionType) => update((c) => ((c.videoPage.sections.push(defaultSection(t)), c)));
+  const setVideoSectionField = (i: number, key: string, val: unknown) =>
+    update((c) => ((c.videoPage.sections[i].data[key] = val), c));
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,420px)_1fr]">
       {/* ── editor panel ── */}
@@ -150,7 +174,7 @@ export function StorefrontEditor({
         )}
 
         <div className="flex gap-1 rounded border border-border bg-surface-2 p-1 text-sm">
-          {(["content", "design", "pages", "settings"] as const).map((t) => (
+          {(["content", "design", "pages", "videos", "settings"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -307,6 +331,65 @@ export function StorefrontEditor({
                 + Add question
               </button>
             </Panel>
+          </>
+        )}
+
+        {tab === "videos" && (
+          <>
+            <Panel title="Video page">
+              <BoolRow
+                label="Publish the /videos page"
+                value={config.videoPage.enabled}
+                onChange={(v) => update((c) => ((c.videoPage.enabled = v), c))}
+              />
+              <TextRow label="Page title" value={config.videoPage.title} onChange={(v) => update((c) => ((c.videoPage.title = v), c))} />
+              <p className="text-xs text-fg-subtle">
+                Build the page from blocks — a hero banner, a video carousel, a video gallery, image + text, or plain
+                text — in any order. Both the carousel and gallery pull from your video library below.
+              </p>
+              <div className="space-y-2">
+                {config.videoPage.sections.map((s, i) => (
+                  <SectionCard
+                    key={s.id}
+                    section={s}
+                    onUp={() => moveVideoSection(i, -1)}
+                    onDown={() => moveVideoSection(i, 1)}
+                    onToggle={() => toggleVideoSection(i)}
+                    onDelete={() => deleteVideoSection(i)}
+                    onField={(k, v) => setVideoSectionField(i, k, v)}
+                    heroImageLimit={heroImageLimit}
+                  />
+                ))}
+              </div>
+              <details>
+                <summary className="cursor-pointer text-xs font-semibold text-primary">
+                  <Plus className="mr-1 inline h-3.5 w-3.5" /> Add block
+                </summary>
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  {VIDEO_PAGE_SECTIONS.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => addVideoSection(t)}
+                      className="rounded-sm border border-border px-2 py-1.5 text-left text-xs hover:border-primary hover:bg-primary-soft"
+                    >
+                      {SECTION_LABELS[t]}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            </Panel>
+
+            <Panel title="Video library">
+              {videoAccess ? (
+                <VideoLibraryPanel videos={videos} access={videoAccess} channelConnectAvailable={channelConnectAvailable} />
+              ) : (
+                <p className="text-xs text-fg-subtle">Loading…</p>
+              )}
+            </Panel>
+
+            <p className="text-xs text-fg-subtle">
+              Tip: a video carousel/gallery block can also be added to your <button onClick={() => setTab("content")} className="font-semibold text-primary hover:underline">home page sections</button> to preview clips up front.
+            </p>
           </>
         )}
 
