@@ -16,6 +16,7 @@ import { MenuDrawer } from "./MenuDrawer";
 import { BottomSheet } from "./BottomSheet";
 import { ImageZoom } from "./ImageZoom";
 import type { ProductBadge } from "@/lib/storefront/store";
+import type { DeliveryZone } from "@/lib/storefront/delivery";
 
 interface Variant {
   id: string;
@@ -77,7 +78,13 @@ export function ProductDetail({
   reviews: Review[];
   reviewAverage: number;
   reviewCount: number;
-  commerce: { codEnabled: boolean; shippingFlatRate: number; freeShippingOver: number | null; sizeChartUrl: string | null };
+  commerce: {
+    codEnabled: boolean;
+    deliveryZones: DeliveryZone[];
+    deliveryDefaultCharge: number;
+    freeShippingOver: number | null;
+    sizeChartUrl: string | null;
+  };
   nav: { label: string; href: string }[];
 }) {
   const router = useRouter();
@@ -446,18 +453,21 @@ export function ProductDetail({
     );
   };
 
-  const DeliveryNote = () => (
-    <div className="space-y-1.5 rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-card)] p-3 text-sm text-[var(--sf-muted)]">
-      <p className="flex items-center gap-2">
-        <Truck className="h-4 w-4 shrink-0" />
-        {commerce.codEnabled ? "Cash on delivery available" : "Prepaid orders only"}
-      </p>
-      <p className="pl-6">
-        Delivery {money(commerce.shippingFlatRate, currency)}
-        {commerce.freeShippingOver ? ` · free over ${money(commerce.freeShippingOver, currency)}` : ""}
-      </p>
-    </div>
-  );
+  const DeliveryNote = () => {
+    const cheapest = Math.min(commerce.deliveryDefaultCharge, ...commerce.deliveryZones.map((z) => z.charge));
+    return (
+      <div className="space-y-1.5 rounded-[var(--sf-radius)] border border-[var(--sf-line)] bg-[var(--sf-card)] p-3 text-sm text-[var(--sf-muted)]">
+        <p className="flex items-center gap-2">
+          <Truck className="h-4 w-4 shrink-0" />
+          {commerce.codEnabled ? "Cash on delivery available" : "Prepaid orders only"}
+        </p>
+        <p className="pl-6">
+          Delivery from {money(cheapest, currency)} — exact charge shown at checkout
+          {commerce.freeShippingOver ? ` · free over ${money(commerce.freeShippingOver, currency)}` : ""}
+        </p>
+      </div>
+    );
+  };
 
   const ReviewsList = () =>
     reviewCount === 0 ? (

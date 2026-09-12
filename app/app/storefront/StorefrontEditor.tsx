@@ -18,6 +18,7 @@ import { publishStorefront, saveDraft, unpublishStorefront } from "./actions";
 import { SECTION_FIELDS } from "./section-fields";
 import { VideoLibraryPanel } from "./VideoLibraryPanel";
 import type { StoreVideo, VideoAccess } from "@/lib/storefront/videos";
+import { BD_DIVISIONS, newDeliveryZoneId } from "@/lib/storefront/delivery";
 
 const ALL_SECTIONS = Object.keys(SECTION_LABELS) as SectionType[];
 const VIDEO_PAGE_SECTIONS: SectionType[] = ["hero", "video_carousel", "video_gallery", "image_text", "rich_text"];
@@ -31,6 +32,7 @@ export function StorefrontEditor({
   videos = [],
   videoAccess,
   channelConnectAvailable = false,
+  connectedCouriers = [],
 }: {
   initialConfig: StorefrontConfig;
   published: boolean;
@@ -40,6 +42,7 @@ export function StorefrontEditor({
   videos?: StoreVideo[];
   videoAccess?: VideoAccess;
   channelConnectAvailable?: boolean;
+  connectedCouriers?: string[];
 }) {
   const { toast } = useToast();
   const [config, setConfig] = useState<StorefrontConfig>(initialConfig);
@@ -397,7 +400,111 @@ export function StorefrontEditor({
           <>
             <Panel title="Commerce">
               <BoolRow label="Cash on delivery" value={config.commerce.codEnabled} onChange={(v) => update((c) => ((c.commerce.codEnabled = v), c))} />
-              <NumberRow label="Flat shipping" value={config.commerce.shippingFlatRate} onChange={(v) => update((c) => ((c.commerce.shippingFlatRate = v), c))} />
+              {!config.commerce.codEnabled && (
+                <p className="text-xs text-danger">
+                  Customers won&apos;t see cash on delivery at checkout — make sure a payment gateway is connected under Integrations, or they won&apos;t be able to pay.
+                </p>
+              )}
+
+              <TextRow
+                label="Delivery method (e.g. Steadfast Courier, Pathao, Self delivery)"
+                value={config.commerce.deliveryMethodLabel}
+                onChange={(v) => update((c) => ((c.commerce.deliveryMethodLabel = v), c))}
+              />
+              {connectedCouriers.length > 0 && (
+                <p className="text-xs text-fg-subtle">
+                  Connected: {connectedCouriers.map((name, i) => (
+                    <span key={name}>
+                      {i > 0 && ", "}
+                      <button
+                        type="button"
+                        onClick={() => update((c) => ((c.commerce.deliveryMethodLabel = name), c))}
+                        className="font-semibold text-primary hover:underline"
+                      >
+                        {name}
+                      </button>
+                    </span>
+                  ))}{" "}
+                  — click to use as your delivery method, then enter their published rates below.
+                </p>
+              )}
+
+              <div>
+                <p className="mb-1 text-xs font-medium text-fg">Delivery zones</p>
+                <p className="mb-2 text-xs text-fg-subtle">
+                  Add a charge for each area you deliver to — rename or reprice &ldquo;Inside Dhaka City&rdquo; freely, add a
+                  division that costs more to reach, or add your own local area and set it to 0 for free delivery.
+                </p>
+                {config.commerce.deliveryZones.map((z, i) => (
+                  <div key={z.id} className="mb-1.5 flex items-center gap-2">
+                    <input
+                      value={z.name}
+                      onChange={(e) => update((c) => ((c.commerce.deliveryZones[i].name = e.target.value), c))}
+                      className={`${inputCls} flex-1`}
+                      placeholder="Zone name"
+                    />
+                    <input
+                      type="number"
+                      value={z.charge}
+                      onChange={(e) => update((c) => ((c.commerce.deliveryZones[i].charge = Number(e.target.value) || 0), c))}
+                      className={`${inputCls} w-24 shrink-0`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => update((c) => (c.commerce.deliveryZones.splice(i, 1), c))}
+                      className="shrink-0 text-fg-subtle hover:text-danger"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      update((c) => (
+                        c.commerce.deliveryZones.push({ id: newDeliveryZoneId(), name: "", charge: c.commerce.deliveryDefaultCharge }),
+                        c
+                      ))
+                    }
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add a zone
+                  </Button>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const division = e.target.value;
+                      if (!division) return;
+                      update((c) => (
+                        c.commerce.deliveryZones.push({ id: newDeliveryZoneId(), name: division, charge: c.commerce.deliveryDefaultCharge }),
+                        c
+                      ));
+                    }}
+                    className={`${inputCls} max-w-[220px]`}
+                  >
+                    <option value="">…or pick a division</option>
+                    {BD_DIVISIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <TextRow
+                label="Catch-all label (any area not listed above)"
+                value={config.commerce.deliveryDefaultLabel}
+                onChange={(v) => update((c) => ((c.commerce.deliveryDefaultLabel = v), c))}
+              />
+              <NumberRow
+                label="Catch-all charge"
+                value={config.commerce.deliveryDefaultCharge}
+                onChange={(v) => update((c) => ((c.commerce.deliveryDefaultCharge = v), c))}
+              />
+
               <NumberRow label="Free shipping over (0 = off)" value={config.commerce.freeShippingOver ?? 0} onChange={(v) => update((c) => ((c.commerce.freeShippingOver = v || null), c))} />
               <NumberRow label="Minimum order" value={config.commerce.minOrder} onChange={(v) => update((c) => ((c.commerce.minOrder = v), c))} />
               <div>

@@ -14,7 +14,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ slug:
   const store = await getStoreBySlug(slug);
   if (!store || !store.published) notFound();
   const basePath = await storeBasePath(slug);
-  const paymentOptions = await getStorePaymentOptions(store.businessId);
+  const paymentOptions = await getStorePaymentOptions(store.businessId, store.config.commerce.codEnabled);
   const account = await getStoreAccount(store.businessId);
 
   let prefill = account
@@ -55,7 +55,9 @@ export default async function CheckoutPage({ params }: { params: Promise<{ slug:
         storeSlug={store.slug}
         basePath={basePath}
         currency={store.currency}
-        shipping={store.config.commerce.shippingFlatRate}
+        deliveryMethodLabel={store.config.commerce.deliveryMethodLabel}
+        deliveryZones={store.config.commerce.deliveryZones}
+        deliveryDefaultCharge={store.config.commerce.deliveryDefaultCharge}
         freeOver={store.config.commerce.freeShippingOver}
         paymentOptions={paymentOptions}
         prefill={prefill}

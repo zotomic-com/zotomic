@@ -234,7 +234,10 @@ const TOOLS: SfTool[] = [
         },
         payment: c.commerce.codEnabled ? "Cash on delivery available" : "Online payment only",
         shipping: {
-          flat_rate: money(c.commerce.shippingFlatRate, ctx.currency),
+          zones: [
+            ...c.commerce.deliveryZones.map((z) => `${z.name}: ${z.charge === 0 ? "Free" : money(z.charge, ctx.currency)}`),
+            `${c.commerce.deliveryDefaultLabel}: ${c.commerce.deliveryDefaultCharge === 0 ? "Free" : money(c.commerce.deliveryDefaultCharge, ctx.currency)}`,
+          ],
           free_over: c.commerce.freeShippingOver ? money(c.commerce.freeShippingOver, ctx.currency) : null,
           min_order: c.commerce.minOrder ? money(c.commerce.minOrder, ctx.currency) : null,
           policy: c.pages.shipping.enabled ? c.pages.shipping.body || null : null,

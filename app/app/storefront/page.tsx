@@ -5,6 +5,7 @@ import { normalizeConfig } from "@/lib/storefront/config";
 import { getPlanLimits } from "@/lib/plan-limits";
 import { getStoreVideos, getVideoAccess } from "@/lib/storefront/videos";
 import { youtubeChannelConfigured } from "@/lib/youtube";
+import { listIntegrations, COURIER_PROVIDERS } from "@/lib/adapters/registry";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StorefrontEditor } from "./StorefrontEditor";
 
@@ -23,11 +24,15 @@ export default async function StorefrontPage() {
     .single();
 
   const config = normalizeConfig(row?.draft_json, tenant.business.name);
-  const [planLimits, videos, videoAccess] = await Promise.all([
+  const [planLimits, videos, videoAccess, integrations] = await Promise.all([
     getPlanLimits(tenant.businessId),
     getStoreVideos(tenant.businessId),
     getVideoAccess(tenant.businessId),
+    listIntegrations(tenant.businessId),
   ]);
+  const connectedCouriers = integrations
+    .filter((i) => i.category === "courier" && i.status === "connected")
+    .map((i) => COURIER_PROVIDERS[i.provider]?.name ?? i.provider);
   const published = !!row?.published_at;
   const root = process.env.STOREFRONT_ROOT_DOMAIN ?? "zotomic.com";
   const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
@@ -50,6 +55,7 @@ export default async function StorefrontPage() {
         videos={videos}
         videoAccess={videoAccess}
         channelConnectAvailable={youtubeChannelConfigured()}
+        connectedCouriers={connectedCouriers}
       />
     </div>
   );

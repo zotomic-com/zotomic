@@ -38,7 +38,14 @@ export async function GET(
     store.config.commerce.codEnabled
       ? "Cash on delivery available. Checkout collects name, phone and address."
       : "Payment on delivery. Checkout collects name, phone and address.",
-    `Flat shipping: ${money(store.config.commerce.shippingFlatRate, store.currency)}.`,
+    `Delivery: ${[
+      ...store.config.commerce.deliveryZones.map(
+        (z) => `${z.name} ${z.charge === 0 ? "free" : money(z.charge, store.currency)}`,
+      ),
+      `${store.config.commerce.deliveryDefaultLabel} ${
+        store.config.commerce.deliveryDefaultCharge === 0 ? "free" : money(store.config.commerce.deliveryDefaultCharge, store.currency)
+      }`,
+    ].join(", ")}.`,
   ]
     .filter(Boolean)
     .join("\n");

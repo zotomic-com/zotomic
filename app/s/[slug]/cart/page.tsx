@@ -19,7 +19,8 @@ export default async function CartPage({ params }: { params: Promise<{ slug: str
         storeSlug={store.slug}
         basePath={basePath}
         currency={store.currency}
-        shipping={store.config.commerce.shippingFlatRate}
+        deliveryZones={store.config.commerce.deliveryZones}
+        deliveryDefaultCharge={store.config.commerce.deliveryDefaultCharge}
         freeOver={store.config.commerce.freeShippingOver}
       />
     </div>

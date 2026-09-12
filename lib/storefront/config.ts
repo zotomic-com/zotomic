@@ -60,7 +60,14 @@ export interface StorefrontConfig {
   social: { facebook: string; instagram: string; youtube: string; tiktok: string };
   commerce: {
     codEnabled: boolean;
-    shippingFlatRate: number;
+    /** who delivers — a connected courier's name (e.g. "Steadfast Courier") or "Self delivery" */
+    deliveryMethodLabel: string;
+    /** owner-managed named zones (e.g. "Inside Dhaka City", a free local area, a distant division) — the buyer picks one at checkout */
+    deliveryZones: { id: string; name: string; charge: number }[];
+    /** label for the catch-all option covering any area not listed above (default "Outside Dhaka / other area") */
+    deliveryDefaultLabel: string;
+    /** charge for that catch-all — always present so checkout always has a price */
+    deliveryDefaultCharge: number;
     freeShippingOver: number | null;
     minOrder: number;
     /** optional size-chart image shown from a link on product pages with size options */
@@ -249,7 +256,16 @@ export function makeDefaultConfig(storeName: string): StorefrontConfig {
     },
     contact: { address: "", phone: "", whatsapp: "", email: "", hours: "", mapEmbedUrl: "" },
     social: { facebook: "", instagram: "", youtube: "", tiktok: "" },
-    commerce: { codEnabled: true, shippingFlatRate: 60, freeShippingOver: null, minOrder: 0, sizeChartUrl: null },
+    commerce: {
+      codEnabled: true,
+      deliveryMethodLabel: "Self delivery",
+      deliveryZones: [{ id: "inside_dhaka", name: "Inside Dhaka City", charge: 60 }],
+      deliveryDefaultLabel: "Outside Dhaka / other area",
+      deliveryDefaultCharge: 120,
+      freeShippingOver: null,
+      minOrder: 0,
+      sizeChartUrl: null,
+    },
     seo: {
       titleSuffix: ` — ${storeName}`,
       description: `Shop ${storeName}.`,
@@ -348,5 +364,16 @@ export function normalizeConfig(stored: unknown, storeName: string): StorefrontC
   if (Array.isArray(storedRec.nav)) {
     merged.nav = storedRec.nav as StorefrontConfig["nav"];
   }
+
+  // Migrate stores saved before the delivery-zones system — a single old flat
+  // rate becomes the "Inside Dhaka City" zone and the outside-Dhaka default,
+  // so nothing changes until the owner customizes their zones.
+  const storedCommerce = isObj(storedRec.commerce) ? (storedRec.commerce as Record<string, unknown>) : null;
+  if (storedCommerce && typeof storedCommerce.shippingFlatRate === "number" && !Array.isArray(storedCommerce.deliveryZones)) {
+    const rate = storedCommerce.shippingFlatRate as number;
+    merged.commerce.deliveryZones = [{ id: "inside_dhaka", name: "Inside Dhaka City", charge: rate }];
+    merged.commerce.deliveryDefaultCharge = rate;
+  }
+
   return merged;
 }

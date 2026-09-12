@@ -274,10 +274,10 @@ export interface StorePaymentOption {
   label: string;
 }
 
-/** COD (always) + any connected payment gateway. */
-export async function getStorePaymentOptions(businessId: string): Promise<StorePaymentOption[]> {
+/** COD (unless the owner turned it off) + any connected payment gateway. */
+export async function getStorePaymentOptions(businessId: string, codEnabled = true): Promise<StorePaymentOption[]> {
   const db = getAdminSupabase();
-  const opts: StorePaymentOption[] = [{ id: "cod", label: "Cash on delivery" }];
+  const opts: StorePaymentOption[] = codEnabled ? [{ id: "cod", label: "Cash on delivery" }] : [];
   const { data } = await db
     .from("integrations")
     .select("provider, mode")

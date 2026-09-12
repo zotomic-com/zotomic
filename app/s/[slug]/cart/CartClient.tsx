@@ -8,20 +8,24 @@ import { cldUrl } from "@/lib/cloudinary";
 import { readCart, writeCart, type CartItem } from "@/components/storefront/cart-store";
 import { QtyStepper } from "@/components/storefront/QtyStepper";
 import { StockLine, useLineStock } from "@/components/storefront/StockLine";
+import type { DeliveryZone } from "@/lib/storefront/delivery";
 
 export function CartClient({
   storeSlug,
   basePath,
   currency,
-  shipping,
+  deliveryZones,
+  deliveryDefaultCharge,
   freeOver,
 }: {
   storeSlug: string;
   basePath: string;
   currency: string;
-  shipping: number;
+  deliveryZones: DeliveryZone[];
+  deliveryDefaultCharge: number;
   freeOver: number | null;
 }) {
+  const cheapestDelivery = Math.min(deliveryDefaultCharge, ...deliveryZones.map((z) => z.charge));
   const [items, setItems] = useState<CartItem[] | null>(null);
   const stock = useLineStock(storeSlug, (items ?? []).map((i) => i.variantId ?? i.productId));
 
@@ -55,8 +59,7 @@ export function CartClient({
   }
 
   const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
-  const ship = freeOver && subtotal >= freeOver ? 0 : shipping;
-  const total = subtotal + ship;
+  const freeShipping = !!(freeOver && subtotal >= freeOver);
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
@@ -101,17 +104,18 @@ export function CartClient({
             <span>{money(subtotal, currency)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-[var(--sf-muted)]">Shipping</span>
-            <span>{ship === 0 ? "Free" : money(ship, currency)}</span>
+            <span className="text-[var(--sf-muted)]">Delivery</span>
+            <span>{freeShipping ? "Free" : `from ${money(cheapestDelivery, currency)}`}</span>
           </div>
-          {freeOver != null && ship > 0 && (
+          {!freeShipping && (
             <p className="text-xs text-[var(--sf-muted)]">
-              Add {money(freeOver - subtotal, currency)} for free shipping
+              Exact charge depends on your delivery area — shown at checkout.
+              {freeOver != null && ` Add ${money(freeOver - subtotal, currency)} more for free delivery.`}
             </p>
           )}
           <div className="flex justify-between border-t border-[var(--sf-line)] pt-2 text-base font-bold">
-            <span>Total</span>
-            <span>{money(total, currency)}</span>
+            <span>Subtotal</span>
+            <span>{money(subtotal, currency)}</span>
           </div>
         </div>
         <Link

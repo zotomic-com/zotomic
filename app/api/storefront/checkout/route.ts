@@ -7,11 +7,20 @@ import { sendOrderConfirmation } from "@/lib/emails";
 import { loadIntegration, paymentProvider } from "@/lib/adapters/registry";
 import { enforceRateLimit } from "@/lib/ratelimit";
 import { resolveInvoiceSender } from "@/lib/invoice-sender";
+import { resolveDeliveryCharge, deliveryZoneName } from "@/lib/storefront/delivery";
 
 interface Body {
   storeSlug: string;
   items: { id: string; qty: number; productId?: string; variantId?: string }[];
-  customer: { name: string; phone: string; email?: string; address: string; city?: string; note?: string };
+  customer: {
+    name: string;
+    phone: string;
+    email?: string;
+    address: string;
+    city?: string;
+    note?: string;
+    zoneId?: string;
+  };
   paymentMethod?: string;
 }
 
@@ -129,8 +138,16 @@ export async function POST(req: NextRequest) {
   if (c.minOrder && subtotal < c.minOrder) {
     return NextResponse.json({ error: `Minimum order is ${c.minOrder}.` }, { status: 400 });
   }
-  const shipping = c.freeShippingOver && subtotal >= c.freeShippingOver ? 0 : c.shippingFlatRate;
+
+  const zoneId = body.customer?.zoneId && c.deliveryZones.some((z) => z.id === body.customer.zoneId) ? body.customer.zoneId : null;
+  const deliveryCharge = resolveDeliveryCharge(c, zoneId);
+  const shipping = c.freeShippingOver && subtotal >= c.freeShippingOver ? 0 : deliveryCharge;
   const total = subtotal + shipping;
+
+  const chosenMethod = clean(body.paymentMethod, 20) || "cod";
+  if (chosenMethod === "cod" && !c.codEnabled) {
+    return NextResponse.json({ error: "Cash on delivery isn't available for this store. Please choose another payment method." }, { status: 400 });
+  }
 
   // Signed-in shopper (optional).
   const account = await getStoreAccount(store.businessId);
@@ -172,7 +189,6 @@ export async function POST(req: NextRequest) {
   const orderNumber = `ZF-${Date.now().toString(36).toUpperCase().slice(-6)}`;
 
   // Resolve a gateway if one was chosen and is actually connected.
-  const chosenMethod = clean(body.paymentMethod, 20) || "cod";
   let gateway: { provider: string; mode: "sandbox" | "live"; creds: Record<string, string> } | null = null;
   if (chosenMethod !== "cod") {
     const integ = await loadIntegration(store.businessId, chosenMethod);
@@ -197,7 +213,13 @@ export async function POST(req: NextRequest) {
       discount: 0,
       total,
       currency: store.currency,
-      address: { line: address, city: clean(body.customer.city, 80), note: clean(body.customer.note, 300) },
+      address: {
+        line: address,
+        city: clean(body.customer.city, 80),
+        note: clean(body.customer.note, 300),
+        deliveryZone: deliveryZoneName(c, zoneId),
+        deliveryCharge,
+      },
       placed_at: new Date().toISOString(),
     })
     .select("id, order_number")

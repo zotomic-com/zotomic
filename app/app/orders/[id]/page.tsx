@@ -71,7 +71,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     | { id?: string; name?: string; phone?: string; email?: string; city?: string; total_orders?: number; total_spent?: number }
     | null;
   const items = (order.order_items ?? []) as { name: string; qty: number; unit_price: number; line_total: number }[];
-  const addr = (order.address ?? {}) as { line?: string; city?: string; note?: string };
+  const addr = (order.address ?? {}) as { line?: string; city?: string; note?: string; deliveryZone?: string; deliveryCharge?: number };
   const cur = order.currency as string;
   const status = order.status as string;
   const flowIdx = FLOW.indexOf(status);
@@ -137,6 +137,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                 {addr.line}
                 {addr.city ? `, ${addr.city}` : ""}
               </p>
+              {addr.deliveryZone && (
+                <p className="mt-1 text-xs text-fg-subtle">
+                  Delivery zone: {addr.deliveryZone}
+                  {addr.deliveryCharge != null && ` (${money(addr.deliveryCharge, cur)})`}
+                </p>
+              )}
               {addr.note && <p className="mt-1 text-xs text-fg-subtle">Note: {addr.note}</p>}
             </CardBody>
           </Card>

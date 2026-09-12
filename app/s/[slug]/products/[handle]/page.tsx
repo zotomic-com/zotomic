@@ -119,7 +119,8 @@ export default async function StoreProductPage({
         reviewCount={count}
         commerce={{
           codEnabled: store.config.commerce.codEnabled,
-          shippingFlatRate: store.config.commerce.shippingFlatRate,
+          deliveryZones: store.config.commerce.deliveryZones,
+          deliveryDefaultCharge: store.config.commerce.deliveryDefaultCharge,
           freeShippingOver: store.config.commerce.freeShippingOver,
           sizeChartUrl: store.config.commerce.sizeChartUrl,
         }}

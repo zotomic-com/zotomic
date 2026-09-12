@@ -8,12 +8,17 @@ import { cldUrl } from "@/lib/cloudinary";
 import { readCart, writeCart, type CartItem } from "@/components/storefront/cart-store";
 import { QtyStepper } from "@/components/storefront/QtyStepper";
 import { StockLine, useLineStock } from "@/components/storefront/StockLine";
+import { resolveDeliveryCharge, type DeliveryZone } from "@/lib/storefront/delivery";
+
+const OTHER_ZONE = ""; // empty string = "not in the list" → deliveryDefaultCharge
 
 export function CheckoutClient({
   storeSlug,
   basePath,
   currency,
-  shipping,
+  deliveryMethodLabel,
+  deliveryZones,
+  deliveryDefaultCharge,
   freeOver,
   paymentOptions,
   prefill,
@@ -21,7 +26,9 @@ export function CheckoutClient({
   storeSlug: string;
   basePath: string;
   currency: string;
-  shipping: number;
+  deliveryMethodLabel: string;
+  deliveryZones: DeliveryZone[];
+  deliveryDefaultCharge: number;
   freeOver: number | null;
   paymentOptions: { id: string; label: string }[];
   prefill?: { name: string; phone: string; email: string; address: string; city: string; note: string } | null;
@@ -32,7 +39,8 @@ export function CheckoutClient({
   const [form, setForm] = useState(
     prefill ?? { name: "", phone: "", email: "", address: "", city: "", note: "" },
   );
-  const [method, setMethod] = useState(paymentOptions[0]?.id ?? "cod");
+  const [zoneId, setZoneId] = useState<string>(deliveryZones[0]?.id ?? OTHER_ZONE);
+  const [method, setMethod] = useState(paymentOptions[0]?.id ?? "");
   const [status, setStatus] = useState<"idle" | "placing" | "error">("idle");
   const [error, setError] = useState("");
 
@@ -57,7 +65,8 @@ export function CheckoutClient({
   }
 
   const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
-  const ship = freeOver && subtotal >= freeOver ? 0 : shipping;
+  const deliveryCharge = resolveDeliveryCharge({ deliveryZones, deliveryDefaultCharge }, zoneId);
+  const ship = freeOver && subtotal >= freeOver ? 0 : deliveryCharge;
   const total = subtotal + ship;
 
   const stockIssue = items.some((i) => {
@@ -81,7 +90,7 @@ export function CheckoutClient({
             productId: i.productId ?? i.id,
             variantId: i.variantId,
           })),
-          customer: form,
+          customer: { ...form, zoneId },
           paymentMethod: method,
         }),
       });
@@ -122,20 +131,42 @@ export function CheckoutClient({
         </div>
 
         <div className="rounded-[var(--sf-radius-lg)] border border-[var(--sf-line)] p-4 text-sm">
-          <p className="mb-2.5 font-bold">Payment</p>
-          <div className="space-y-2">
-            {paymentOptions.map((o) => (
-              <label
-                key={o.id}
-                className={`flex cursor-pointer items-center gap-2.5 rounded-[var(--sf-radius)] border px-3 py-2.5 ${
-                  method === o.id ? "border-[var(--sf-accent)] bg-[var(--sf-accent-soft)]" : "border-[var(--sf-line)]"
-                }`}
-              >
-                <input type="radio" name="method" value={o.id} checked={method === o.id} onChange={() => setMethod(o.id)} />
-                {o.label}
-              </label>
+          <p className="mb-1 font-bold">Delivery area</p>
+          <p className="mb-2.5 text-xs text-[var(--sf-muted)]">
+            &ldquo;Inside Dhaka City&rdquo; means within Dhaka city itself — not the wider Dhaka division.
+          </p>
+          <select required className={field} value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+            {deliveryZones.map((z) => (
+              <option key={z.id} value={z.id}>
+                {z.name} — {z.charge === 0 ? "Free" : money(z.charge, currency)}
+              </option>
             ))}
-          </div>
+            <option value={OTHER_ZONE}>
+              Outside Dhaka / other area — {deliveryDefaultCharge === 0 ? "Free" : money(deliveryDefaultCharge, currency)}
+            </option>
+          </select>
+          <p className="mt-2 text-xs text-[var(--sf-muted)]">Delivered via {deliveryMethodLabel}.</p>
+        </div>
+
+        <div className="rounded-[var(--sf-radius-lg)] border border-[var(--sf-line)] p-4 text-sm">
+          <p className="mb-2.5 font-bold">Payment</p>
+          {paymentOptions.length === 0 ? (
+            <p className="text-xs text-[var(--sf-muted)]">No payment method is available right now — please contact the store.</p>
+          ) : (
+            <div className="space-y-2">
+              {paymentOptions.map((o) => (
+                <label
+                  key={o.id}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-[var(--sf-radius)] border px-3 py-2.5 ${
+                    method === o.id ? "border-[var(--sf-accent)] bg-[var(--sf-accent-soft)]" : "border-[var(--sf-line)]"
+                  }`}
+                >
+                  <input type="radio" name="method" value={o.id} checked={method === o.id} onChange={() => setMethod(o.id)} />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -178,7 +209,7 @@ export function CheckoutClient({
         )}
         <button
           type="submit"
-          disabled={status === "placing" || stockIssue}
+          disabled={status === "placing" || stockIssue || !method}
           className="mt-4 w-full rounded-full bg-[var(--sf-accent)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
         >
           {status === "placing" ? "Placing order…" : "Place order"}
