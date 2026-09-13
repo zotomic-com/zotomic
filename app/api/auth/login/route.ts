@@ -71,14 +71,7 @@ export async function POST(req: NextRequest) {
 
     const token = await signToken({ id: user.id, email: user.email, role: user.role, name: user.name });
 
-    let redirect = user.role === "admin" ? "/admin" : "/app";
-    if (user.role === "owner") {
-      const { count } = await db
-        .from("business_members")
-        .select("business_id", { count: "exact", head: true })
-        .eq("user_id", user.id);
-      if (!count) redirect = "/onboarding";
-    }
+    const redirect = user.role === "admin" ? "/admin" : "/app";
 
     const res = NextResponse.json({
       success: true,

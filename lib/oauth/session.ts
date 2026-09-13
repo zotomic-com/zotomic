@@ -13,9 +13,8 @@ interface OAuthUser {
 /**
  * Shared find-or-link-or-create logic for both Google and Facebook. Mirrors
  * the exact session/redirect shape of /api/auth/login and /api/auth/signup —
- * same signToken call, same "owner with zero business_members → /onboarding"
- * check — so a social sign-in is indistinguishable downstream from a
- * password one.
+ * same signToken call, same "/app" landing regardless of business state — so
+ * a social sign-in is indistinguishable downstream from a password one.
  */
 export async function completeOAuthSignIn(params: {
   provider: "google" | "facebook";
@@ -67,12 +66,7 @@ export async function completeOAuthSignIn(params: {
   if (user.status === "suspended") return { error: "Your account has been suspended. Contact support." };
 
   const token = await signToken({ id: user.id, email: user.email, role: user.role, name: user.name });
-
-  let redirect = user.role === "admin" ? "/admin" : "/app";
-  if (user.role === "owner") {
-    const { count } = await db.from("business_members").select("business_id", { count: "exact", head: true }).eq("user_id", user.id);
-    if (!count) redirect = "/onboarding";
-  }
+  const redirect = user.role === "admin" ? "/admin" : "/app";
 
   return { token, redirect, userId: user.id };
 }

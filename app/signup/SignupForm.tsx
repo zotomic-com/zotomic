@@ -36,7 +36,7 @@ export function SignupForm({ googleEnabled, facebookEnabled }: { googleEnabled: 
       });
       const d = await res.json();
       if (res.ok && d.success) {
-        router.push(next || d.redirect || "/onboarding");
+        router.push(next || d.redirect || "/app");
       } else {
         setError(d.error ?? "Signup failed");
       }

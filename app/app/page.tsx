@@ -5,11 +5,15 @@ import {
   Boxes,
   FileText,
   ListChecks,
+  LayoutTemplate,
+  Network,
   PlusCircle,
+  Server,
   ShoppingCart,
   Store,
   TrendingDown,
   TrendingUp,
+  Zap,
 } from "lucide-react";
 import { getTenant } from "@/lib/tenant-server";
 import { getDashboardData } from "@/lib/metrics";
@@ -96,10 +100,61 @@ const QUICK_ACTIONS = [
   { icon: FileText, label: "Weekly report", href: "/app/intelligence" },
 ];
 
+const STORELESS_QUICK_ACTIONS = [
+  { icon: Store, label: "Set up storefront", href: "/app/storefront" },
+  { icon: Network, label: "Buy a domain", href: "/app/domains" },
+  { icon: Server, label: "Hosting", href: "/app/hosting" },
+  { icon: LayoutTemplate, label: "Custom website", href: "/app/custom-website" },
+  { icon: Zap, label: "Automation", href: "/app/automation" },
+];
+
+function StorelessDashboard({ name }: { name: string }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-extrabold text-fg">
+          {greeting()}, {name.split(" ")[0]} 👋
+        </h1>
+        <p className="mt-1 text-sm text-fg-muted">Welcome to Zotomic — here&apos;s what you can do next.</p>
+      </div>
+
+      <Card>
+        <CardBody className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-fg">Ready to sell online?</p>
+            <p className="text-sm text-fg-muted">Set up your storefront to unlock products, orders, customers, and more.</p>
+          </div>
+          <Link href="/onboarding">
+            <span className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-fg">
+              Set up your store <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </Link>
+        </CardBody>
+      </Card>
+
+      <div>
+        <h2 className="text-sm font-semibold text-fg-muted">Quick actions</h2>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {STORELESS_QUICK_ACTIONS.map((a) => (
+            <Link
+              key={a.label}
+              href={a.href}
+              className="flex flex-col items-center gap-2 rounded-sm border border-border bg-surface p-4 text-center text-xs font-medium text-fg-muted transition-colors hover:border-primary hover:bg-primary-soft hover:text-fg"
+            >
+              <a.icon className="h-5 w-5 text-primary" />
+              {a.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   const tenant = await getTenant();
   if (!tenant) redirect("/login");
-  if (!tenant.businessId || !tenant.business) redirect("/onboarding");
+  if (!tenant.businessId || !tenant.business) return <StorelessDashboard name={tenant.user.name} />;
 
   const { business, businessId, user } = tenant;
   const currency = business.currency ?? "BDT";

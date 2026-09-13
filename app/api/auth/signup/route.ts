@@ -85,10 +85,11 @@ export async function POST(req: NextRequest) {
       name: user.name,
     });
 
-    // Business + membership are created in /onboarding, not here.
+    // Business + membership are created in /onboarding, but signup no longer forces
+    // it — land on the dashboard; the user sets up a store whenever they choose to.
     const res = NextResponse.json({
       success: true,
-      redirect: "/onboarding",
+      redirect: "/app",
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
     });
 

@@ -28,8 +28,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const onBilling = pathname === "/app/billing";
   // Every route in STORELESS_APP_NAV must work before a business exists — derive the
   // redirect carve-out from that list instead of hardcoding each path (so adding a new
-  // storeless-safe page there doesn't silently need a second edit here too).
-  const storelessAllowed = STORELESS_APP_NAV.some((item) => pathname === item.href || pathname.startsWith(item.href + "/"));
+  // storeless-safe page there doesn't silently need a second edit here too). "/app" itself
+  // is exact-match only — as a startsWith prefix it would match every nested /app/* route
+  // and disable this guard entirely.
+  const storelessAllowed = STORELESS_APP_NAV.some(
+    (item) => pathname === item.href || (item.href !== "/app" && pathname.startsWith(item.href + "/")),
+  );
 
   useEffect(() => {
     fetch("/api/auth/me")

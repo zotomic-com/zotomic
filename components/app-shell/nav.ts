@@ -63,8 +63,14 @@ export const APP_NAV: NavItem[] = [
   { href: "/app/settings", label: "Settings", icon: Settings },
 ];
 
-/** Reduced sidebar for a signed-up account with no store yet — everything else stays locked until onboarding. */
+/**
+ * Reduced sidebar for a signed-up account with no store yet. Dashboard shows a
+ * welcome view instead of business metrics; Storefront redirects into
+ * onboarding when clicked — nothing here forces setup before the user chooses to.
+ */
 export const STORELESS_APP_NAV: NavItem[] = [
+  { href: "/app", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/app/storefront", label: "Storefront", icon: Store },
   { href: "/app/domains", label: "Domain", icon: Network },
   { href: "/app/hosting", label: "Hosting", icon: Server },
   { href: "/app/custom-website", label: "Custom Website", icon: LayoutTemplate },
