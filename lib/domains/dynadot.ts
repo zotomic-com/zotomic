@@ -64,7 +64,10 @@ async function call(creds: Creds, method: "GET" | "POST" | "PUT", path: string, 
 export interface DomainQuote {
   domain: string;
   available: boolean;
+  /** 1-year registration cost, wholesale USD. */
   wholesaleCost: number | null;
+  /** 1-year renewal cost, wholesale USD — often, but not always, the same as registration. */
+  wholesaleRenewalCost: number | null;
 }
 
 export async function dynadotConfigured(): Promise<boolean> {
@@ -84,11 +87,31 @@ function extractError(json: unknown, status: number, fallback: string): string {
   return typeof msg === "string" && msg ? msg : `${fallback} (HTTP ${status})`;
 }
 
+interface DynadotPriceEntry {
+  unit?: string;
+  registration_price?: string;
+  renewal_price?: string;
+}
+
+interface DynadotSearchData {
+  domain_name?: string;
+  available?: string;
+  price_list?: DynadotPriceEntry[];
+}
+
+/**
+ * Dynadot's RESTful v2 search response nests everything under `data`;
+ * `available` is the string "Yes"/"No" (never boolean-coerce it — "No" is a
+ * truthy non-empty string); pricing is a `price_list` array of per-year-term
+ * entries, only present when the request asked for `show_price=true`.
+ */
 function extractQuote(domain: string, json: Record<string, unknown> | null): DomainQuote {
-  const available = Boolean(json?.available ?? json?.isAvailable ?? false);
-  const priceRaw = json?.price ?? json?.wholesalePrice ?? json?.registerPrice;
-  const price = typeof priceRaw === "object" && priceRaw !== null ? (priceRaw as Record<string, unknown>).amount : priceRaw;
-  return { domain, available, wholesaleCost: price != null ? Number(price) : null };
+  const data = (json?.data ?? {}) as DynadotSearchData;
+  const available = String(data.available ?? "").toLowerCase() === "yes";
+  const oneYear = (data.price_list ?? []).find((p) => (p.unit ?? "").includes("1 year")) ?? data.price_list?.[0];
+  const wholesaleCost = oneYear?.registration_price != null ? Number(oneYear.registration_price) : null;
+  const wholesaleRenewalCost = oneYear?.renewal_price != null ? Number(oneYear.renewal_price) : null;
+  return { domain, available, wholesaleCost, wholesaleRenewalCost };
 }
 
 /** One GET per domain (the RESTful v2 search endpoint is single-domain) — run in parallel. */
@@ -101,7 +124,8 @@ export async function checkAvailability(domains: string[]): Promise<DomainQuote[
   try {
     const results = await Promise.all(
       domains.slice(0, 20).map(async (domain) => {
-        const { ok, status, json } = await call(creds, "GET", `/restful/v2/domains/${encodeURIComponent(domain)}/search`);
+        const path = `/restful/v2/domains/${encodeURIComponent(domain)}/search?show_price=true&currency=USD`;
+        const { ok, status, json } = await call(creds, "GET", path);
         if (!ok) {
           // 401/403 mean the whole request is unauthorized — an infrastructure problem,
           // not a real "taken" signal, so it must fail the entire batch rather than being

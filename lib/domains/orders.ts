@@ -23,6 +23,7 @@ export interface PricedDomain {
   available: boolean;
   wholesaleUsd: number | null;
   priceBDT: number | null;
+  renewalPriceBDT: number | null;
 }
 
 function retailPriceBDT(wholesaleUsd: number, settings: { usdToBdtRate: number; markupPercent: number }): number {
@@ -42,11 +43,13 @@ export async function searchWithSuggestions(query: string): Promise<PricedDomain
   return unique.map((d) => {
     const r = byDomain.get(d);
     const wholesaleUsd = r?.wholesaleCost ?? null;
+    const wholesaleRenewalUsd = r?.wholesaleRenewalCost ?? null;
     return {
       domain: d,
       available: r?.available ?? false,
       wholesaleUsd,
       priceBDT: wholesaleUsd != null ? retailPriceBDT(wholesaleUsd, settings) : null,
+      renewalPriceBDT: wholesaleRenewalUsd != null ? retailPriceBDT(wholesaleRenewalUsd, settings) : null,
     };
   });
 }

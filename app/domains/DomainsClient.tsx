@@ -12,6 +12,7 @@ interface PricedDomain {
   available: boolean;
   wholesaleUsd: number | null;
   priceBDT: number | null;
+  renewalPriceBDT: number | null;
 }
 
 export function DomainsClient() {
@@ -99,15 +100,20 @@ export function DomainsClient() {
             >
               <span className="flex items-center gap-2.5">
                 {r.available ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <XCircle className="h-4 w-4 text-fg-subtle" />}
-                <span className="font-medium text-fg">{r.domain}</span>
+                <span>
+                  <span className="font-medium text-fg">{r.domain}</span>
+                  {r.available && r.priceBDT != null && (
+                    <span className="block text-xs text-fg-subtle">
+                      Register ৳{r.priceBDT}/yr
+                      {r.renewalPriceBDT != null && r.renewalPriceBDT !== r.priceBDT && ` · Renews at ৳${r.renewalPriceBDT}/yr`}
+                    </span>
+                  )}
+                </span>
               </span>
               {r.available && r.priceBDT != null ? (
-                <span className="flex items-center gap-3">
-                  <span className="font-bold text-navy">৳{r.priceBDT}/yr</span>
-                  <Button size="sm" onClick={() => buy(r)} disabled={added.has(r.domain)}>
-                    {added.has(r.domain) ? "Added" : "Buy"}
-                  </Button>
-                </span>
+                <Button size="sm" onClick={() => buy(r)} disabled={added.has(r.domain)}>
+                  {added.has(r.domain) ? "Added" : "Buy"}
+                </Button>
               ) : (
                 <span className="text-sm text-fg-subtle">{r.available ? "Unavailable" : "Taken"}</span>
               )}
