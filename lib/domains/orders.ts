@@ -4,8 +4,8 @@ import { checkAvailability, registerDomain, renewDomain, setNameservers, transfe
 import { createZone, addDnsRecord, setupEmailRouting } from "./cloudflare";
 import { addProjectDomain, dnsRecords } from "@/lib/vercel-domains";
 
-/** A curated set of alternates offered alongside whatever TLD the customer actually searched. */
-export const SUGGESTED_TLDS = ["com", "net", "org", "shop", "store", "online", "xyz", "info", "co", "com.bd"];
+/** A curated set of alternates offered alongside whatever TLD the customer actually searched. Excludes com.bd — Dynadot's RESTful v2 search doesn't support that domain type. */
+export const SUGGESTED_TLDS = ["com", "net", "org", "shop", "store", "online", "xyz", "info", "co"];
 const TWO_PART_TLDS = ["com.bd", "net.bd", "org.bd", "co.uk"];
 
 export function splitDomain(input: string): { base: string; tld: string } {

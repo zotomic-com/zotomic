@@ -102,15 +102,21 @@ export async function checkAvailability(domains: string[]): Promise<DomainQuote[
     const results = await Promise.all(
       domains.slice(0, 20).map(async (domain) => {
         const { ok, status, json } = await call(creds, "GET", `/restful/v2/domains/${encodeURIComponent(domain)}/search`);
-        // A failed call (auth, IP allowlist, rate limit, 5xx, ...) is an infrastructure
-        // problem, not a real "taken" signal — never mask it as unavailable.
-        if (!ok) return { error: extractError(json, status, "Could not check availability") };
+        if (!ok) {
+          // 401/403 mean the whole request is unauthorized — an infrastructure problem,
+          // not a real "taken" signal, so it must fail the entire batch rather than being
+          // silently treated as unavailable. Other 4xx (e.g. "Unsupported domain type" for
+          // a TLD Dynadot can't quote via this endpoint) are specific to that one domain —
+          // drop just that domain rather than failing every other result alongside it.
+          if (status === 401 || status === 403) return { fatal: extractError(json, status, "Could not check availability") };
+          return null;
+        }
         return extractQuote(domain, json as Record<string, unknown> | null);
       }),
     );
-    const failed = results.find((r): r is { error: string } => "error" in r);
-    if (failed) return failed;
-    return results as DomainQuote[];
+    const fatal = results.find((r): r is { fatal: string } => r !== null && "fatal" in r);
+    if (fatal) return { error: fatal.fatal };
+    return results.filter((r): r is DomainQuote => r !== null && !("fatal" in r));
   } catch {
     return { error: "Could not reach the domain search service." };
   }
