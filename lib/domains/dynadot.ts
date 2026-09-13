@@ -78,6 +78,12 @@ export async function dynadotMode(): Promise<"sandbox" | "live"> {
   return s.dynadotUseSandbox ? "sandbox" : "live";
 }
 
+function extractError(json: unknown, status: number, fallback: string): string {
+  const j = json as { message?: string; error?: { description?: string } } | null;
+  const msg = j?.error?.description ?? j?.message;
+  return typeof msg === "string" && msg ? msg : `${fallback} (HTTP ${status})`;
+}
+
 function extractQuote(domain: string, json: Record<string, unknown> | null): DomainQuote {
   const available = Boolean(json?.available ?? json?.isAvailable ?? false);
   const priceRaw = json?.price ?? json?.wholesalePrice ?? json?.registerPrice;
@@ -95,12 +101,16 @@ export async function checkAvailability(domains: string[]): Promise<DomainQuote[
   try {
     const results = await Promise.all(
       domains.slice(0, 20).map(async (domain) => {
-        const { ok, json } = await call(creds, "GET", `/restful/v2/domains/${encodeURIComponent(domain)}/search`);
-        if (!ok) return { domain, available: false, wholesaleCost: null };
+        const { ok, status, json } = await call(creds, "GET", `/restful/v2/domains/${encodeURIComponent(domain)}/search`);
+        // A failed call (auth, IP allowlist, rate limit, 5xx, ...) is an infrastructure
+        // problem, not a real "taken" signal — never mask it as unavailable.
+        if (!ok) return { error: extractError(json, status, "Could not check availability") };
         return extractQuote(domain, json as Record<string, unknown> | null);
       }),
     );
-    return results;
+    const failed = results.find((r): r is { error: string } => "error" in r);
+    if (failed) return failed;
+    return results as DomainQuote[];
   } catch {
     return { error: "Could not reach the domain search service." };
   }
@@ -110,8 +120,8 @@ export async function registerDomain(domain: string, years = 1): Promise<{ ok: t
   const s = await getDomainSettings();
   const creds = resolveCreds(s);
   if (!creds) return { error: "Dynadot isn't configured." };
-  const { ok, json } = await call(creds, "POST", "/restful/v2/domains/register", { domainName: domain, duration: years });
-  if (!ok) return { error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Dynadot rejected the registration." };
+  const { ok, status, json } = await call(creds, "POST", "/restful/v2/domains/register", { domainName: domain, duration: years });
+  if (!ok) return { error: extractError(json, status, "Dynadot rejected the registration") };
   return { ok: true };
 }
 
@@ -119,8 +129,8 @@ export async function renewDomain(domain: string, years = 1): Promise<{ ok: true
   const s = await getDomainSettings();
   const creds = resolveCreds(s);
   if (!creds) return { error: "Dynadot isn't configured." };
-  const { ok, json } = await call(creds, "POST", `/restful/v2/domains/${encodeURIComponent(domain)}/renew`, { duration: years });
-  if (!ok) return { error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Dynadot rejected the renewal." };
+  const { ok, status, json } = await call(creds, "POST", `/restful/v2/domains/${encodeURIComponent(domain)}/renew`, { duration: years });
+  if (!ok) return { error: extractError(json, status, "Dynadot rejected the renewal") };
   return { ok: true };
 }
 
@@ -128,10 +138,10 @@ export async function setNameservers(domain: string, nameservers: string[]): Pro
   const s = await getDomainSettings();
   const creds = resolveCreds(s);
   if (!creds) return { error: "Dynadot isn't configured." };
-  const { ok, json } = await call(creds, "PUT", `/restful/v2/domains/${encodeURIComponent(domain)}/nameserver`, {
+  const { ok, status, json } = await call(creds, "PUT", `/restful/v2/domains/${encodeURIComponent(domain)}/nameserver`, {
     nameservers: nameservers.slice(0, 13),
   });
-  if (!ok) return { error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Dynadot rejected the nameserver update." };
+  if (!ok) return { error: extractError(json, status, "Dynadot rejected the nameserver update") };
   return { ok: true };
 }
 
@@ -145,11 +155,11 @@ export async function transferDomain(domain: string, authCode: string, years = 1
   const s = await getDomainSettings();
   const creds = resolveCreds(s);
   if (!creds) return { error: "Dynadot isn't configured." };
-  const { ok, json } = await call(creds, "POST", `/restful/v2/domains/${encodeURIComponent(domain)}/transfer_in`, {
+  const { ok, status, json } = await call(creds, "POST", `/restful/v2/domains/${encodeURIComponent(domain)}/transfer_in`, {
     authCode,
     duration: years,
   });
-  if (!ok) return { error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Dynadot rejected the transfer." };
+  if (!ok) return { error: extractError(json, status, "Dynadot rejected the transfer") };
   return { ok: true };
 }
 
@@ -157,12 +167,12 @@ export async function getTransferStatus(domain: string): Promise<{ status: "pend
   const s = await getDomainSettings();
   const creds = resolveCreds(s);
   if (!creds) return { status: "failed", error: "Dynadot isn't configured." };
-  const { ok, json } = await call(creds, "GET", `/restful/v2/domains/${encodeURIComponent(domain)}/transfer/status`);
-  if (!ok) return { status: "failed", error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Could not check transfer status." };
-  const status = String((json as Record<string, unknown> | null)?.status ?? "").toLowerCase();
-  if (status.includes("complete") || status.includes("success")) return { status: "completed" };
-  if (status.includes("fail") || status.includes("reject") || status.includes("cancel")) {
-    return { status: "failed", error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Transfer failed or was rejected." };
+  const { ok, status: httpStatus, json } = await call(creds, "GET", `/restful/v2/domains/${encodeURIComponent(domain)}/transfer/status`);
+  if (!ok) return { status: "failed", error: extractError(json, httpStatus, "Could not check transfer status") };
+  const transferStatus = String((json as Record<string, unknown> | null)?.status ?? "").toLowerCase();
+  if (transferStatus.includes("complete") || transferStatus.includes("success")) return { status: "completed" };
+  if (transferStatus.includes("fail") || transferStatus.includes("reject") || transferStatus.includes("cancel")) {
+    return { status: "failed", error: extractError(json, httpStatus, "Transfer failed or was rejected") };
   }
   return { status: "pending" };
 }
