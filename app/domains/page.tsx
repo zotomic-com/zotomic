@@ -20,7 +20,7 @@ export default async function DomainsPage() {
       <PageHero
         eyebrow="Domains"
         title="Find your domain"
-        subtitle="Search a name, pay by bKash or Nagad, and it's registered and ready — no card, no account needed."
+        subtitle="Search a name, add it to your cart, and pay by bKash or Nagad — no card needed."
       />
       <DomainsClient />
     </>

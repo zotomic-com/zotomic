@@ -20,8 +20,19 @@ export async function requireBusiness(opts: { allowReadOnly?: boolean } = {}) {
   return { ...tenant, businessId: tenant.businessId, db: getAdminSupabase() };
 }
 
+/**
+ * Guard for server actions / server components that only need a signed-in
+ * user, not a business — e.g. the storeless domain-buying dashboard. Unlike
+ * requireBusiness(), this never throws on a missing business.
+ */
+export async function requireUser() {
+  const tenant = await getTenant();
+  if (!tenant?.user) throw new Error("Not authenticated");
+  return { user: tenant.user, businessId: tenant.businessId, db: getAdminSupabase() };
+}
+
 export async function writeAudit(
-  businessId: string,
+  businessId: string | null,
   actorId: string,
   action: string,
   opts: { targetType?: string; targetId?: string; summary?: string; before?: unknown; after?: unknown } = {},

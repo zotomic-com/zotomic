@@ -6,15 +6,18 @@ import { Card } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
-import { markOrderPaidAction, retryFulfillmentAction, cancelOrderAction, renewOrderAction } from "./actions";
+import { markOrderPaidAction, retryFulfillmentAction, cancelItemAction, renewItemAction } from "./actions";
 
-interface Order {
+interface OrderRow {
   id: string;
+  cartOrderId: string;
   orderNumber: string;
   domainName: string;
+  itemType: string;
   customerName: string;
   customerPhone: string;
   status: string;
+  orderStatus: string;
   paymentMethod: string;
   retailPrice: number;
   invoiceAmount: number;
@@ -24,10 +27,12 @@ interface Order {
 }
 
 const STATUS_TONE: Record<string, "neutral" | "success" | "danger" | "warning" | "info"> = {
-  pending_payment: "warning",
-  paid: "info",
+  pending: "warning",
   registering: "info",
+  transferring: "info",
   active: "success",
+  grace: "warning",
+  dropped: "danger",
   failed: "danger",
   cancelled: "neutral",
 };
@@ -39,7 +44,7 @@ function expiryBadge(expiresAt: string | null) {
   return <Badge tone={tone}>{days < 0 ? "expired" : `${days}d left`}</Badge>;
 }
 
-export function OrdersTable({ orders }: { orders: Order[] }) {
+export function OrdersTable({ orders }: { orders: OrderRow[] }) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, start] = useTransition();
@@ -54,14 +59,16 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
       }
     });
 
-  const cols: Column<Order>[] = [
+  const cols: Column<OrderRow>[] = [
     {
       key: "domain",
       header: "Domain",
       render: (o) => (
         <div>
           <p className="font-medium text-fg">{o.domainName}</p>
-          <p className="text-xs text-fg-subtle">{o.orderNumber}</p>
+          <p className="text-xs text-fg-subtle">
+            {o.orderNumber} · {o.itemType === "transfer" ? "transfer" : "new"}
+          </p>
         </div>
       ),
     },
@@ -80,7 +87,11 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
       header: "Status",
       render: (o) => (
         <div>
-          <Badge tone={STATUS_TONE[o.status] ?? "neutral"}>{o.status.replace("_", " ")}</Badge>
+          {o.orderStatus === "pending_payment" ? (
+            <Badge tone="warning">awaiting payment</Badge>
+          ) : (
+            <Badge tone={STATUS_TONE[o.status] ?? "neutral"}>{o.status.replace("_", " ")}</Badge>
+          )}
           {o.lastError && <p className="mt-1 max-w-[220px] text-xs text-danger">{o.lastError}</p>}
         </div>
       ),
@@ -103,8 +114,8 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
       align: "right",
       render: (o) => (
         <div className="flex justify-end gap-2 text-xs">
-          {o.status === "pending_payment" && (
-            <button disabled={pending} onClick={() => run(() => markOrderPaidAction(o.id), "Marked paid")} className="font-medium text-primary hover:underline">
+          {o.orderStatus === "pending_payment" && (
+            <button disabled={pending} onClick={() => run(() => markOrderPaidAction(o.cartOrderId), "Marked paid")} className="font-medium text-primary hover:underline">
               Mark paid
             </button>
           )}
@@ -113,16 +124,16 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
               Retry
             </button>
           )}
-          {o.status === "active" && (
-            <button disabled={pending} onClick={() => run(() => renewOrderAction(o.id), "Renewed")} className="font-medium text-primary hover:underline">
+          {(o.status === "active" || o.status === "grace") && (
+            <button disabled={pending} onClick={() => run(() => renewItemAction(o.id), "Renewed")} className="font-medium text-primary hover:underline">
               Renew now
             </button>
           )}
-          {(o.status === "pending_payment" || o.status === "failed") && (
+          {(o.status === "pending" || o.status === "failed") && (
             <button
               disabled={pending}
               onClick={() => {
-                if (confirm(`Cancel the order for ${o.domainName}?`)) run(() => cancelOrderAction(o.id), "Cancelled");
+                if (confirm(`Cancel ${o.domainName}?`)) run(() => cancelItemAction(o.id), "Cancelled");
               }}
               className="font-medium text-fg-subtle hover:text-danger"
             >

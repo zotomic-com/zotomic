@@ -74,7 +74,7 @@ export default async function AdminDomainSettingsPage() {
             Retail price = wholesale (USD, from Dynadot) × the exchange rate below × (1 + markup), rounded to the
             nearest ৳10.
           </p>
-          <SettingsFieldsForm fields={fieldsFor(["domain_markup_percent", "domain_usd_to_bdt_rate"], stored)} />
+          <SettingsFieldsForm fields={fieldsFor(["domain_markup_percent", "domain_usd_to_bdt_rate", "domain_grace_days"], stored)} />
         </CardBody>
       </Card>
 

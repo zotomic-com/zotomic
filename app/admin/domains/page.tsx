@@ -12,24 +12,34 @@ export default async function AdminDomainsPage() {
   await requireAdmin();
   const [settings, { data }] = await Promise.all([
     getPlatformSettings(),
-    adminDb().from("domain_orders").select("*").order("created_at", { ascending: false }).limit(200),
+    adminDb()
+      .from("domain_cart_items")
+      .select("*, domain_cart_orders(order_number, customer_name, customer_phone, payment_method, invoice_amount, status)")
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
 
   const enabled = settings.domain_reseller_enabled === "true";
-  const orders = (data ?? []).map((o) => ({
-    id: o.id as string,
-    orderNumber: o.order_number as string,
-    domainName: o.domain_name as string,
-    customerName: o.customer_name as string,
-    customerPhone: o.customer_phone as string,
-    status: o.status as string,
-    paymentMethod: o.payment_method as string,
-    retailPrice: Number(o.retail_price),
-    invoiceAmount: Number(o.invoice_amount),
-    expiresAt: (o.expires_at as string) ?? null,
-    lastError: (o.last_error as string) ?? null,
-    createdAt: o.created_at as string,
-  }));
+  const orders = (data ?? []).map((row) => {
+    const order = (row.domain_cart_orders ?? {}) as Record<string, unknown>;
+    return {
+      id: row.id as string,
+      cartOrderId: row.cart_order_id as string,
+      orderNumber: (order.order_number as string) ?? "",
+      domainName: row.domain_name as string,
+      itemType: row.item_type as string,
+      customerName: (order.customer_name as string) ?? "",
+      customerPhone: (order.customer_phone as string) ?? "",
+      status: row.status as string,
+      orderStatus: (order.status as string) ?? "",
+      paymentMethod: (order.payment_method as string) ?? "",
+      retailPrice: Number(row.retail_price),
+      invoiceAmount: Number(order.invoice_amount ?? 0),
+      expiresAt: (row.expires_at as string) ?? null,
+      lastError: (row.last_error as string) ?? null,
+      createdAt: row.created_at as string,
+    };
+  });
 
   return (
     <div className="space-y-5">

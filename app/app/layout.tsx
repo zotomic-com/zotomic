@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Lock, LogOut, TriangleAlert } from "lucide-react";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
-import { APP_NAV } from "@/components/app-shell/nav";
+import { APP_NAV, STORELESS_APP_NAV } from "@/components/app-shell/nav";
 import { AppContext, type AppBusiness, type AppUser } from "./context";
 
 interface Billing {
@@ -26,6 +26,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const onBilling = pathname === "/app/billing";
+  const onDomains = pathname === "/app/domains" || pathname.startsWith("/app/domains/");
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -39,12 +40,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         setBusinesses(d.businesses ?? []);
         setBilling(d.billing ?? null);
         setUnread(d.unreadNotifications ?? 0);
-        if (d.user.role === "owner" && (!d.businesses || d.businesses.length === 0)) {
+        if (d.user.role === "owner" && (!d.businesses || d.businesses.length === 0) && !onDomains) {
           router.replace("/onboarding");
         }
       })
       .catch(() => router.replace("/login"));
-  }, [router]);
+  }, [router, onDomains]);
 
   useEffect(() => {
     if (billing?.hardLocked && !onBilling) router.replace("/app/billing");
@@ -60,7 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{ user, business, businesses, logout }}>
       <Sidebar
-        nav={APP_NAV}
+        nav={businesses.length > 0 ? APP_NAV : STORELESS_APP_NAV}
         variant="app"
         mobileOpen={menuOpen}
         onClose={() => setMenuOpen(false)}

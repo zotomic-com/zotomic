@@ -20,6 +20,7 @@ import { sanitizePrefs, ADMIN_EVENTS, type Prefs } from "@/lib/notify-events";
 import { saveSystemPlanCard, createCustomPlanCard, updateCustomPlanCard, deleteCustomPlanCard, reorderPlanCard } from "@/lib/plan-cards";
 import type { PlanId } from "@/lib/plans";
 import { createContactTopic, updateContactTopic, deleteContactTopic, reorderContactTopic } from "@/lib/contact-topics";
+import { createServiceCard, updateServiceCard, deleteServiceCard, reorderServiceCard, type ServiceCardInput } from "@/lib/service-cards";
 
 async function audit(adminId: string, action: string, summary: string, targetId?: string) {
   await getAdminSupabase()
@@ -313,6 +314,44 @@ export async function reorderContactTopicAction(id: string, direction: "up" | "d
   await reorderContactTopic(id, direction);
   revalidatePath("/admin/website/pages/contact");
   revalidatePath("/contact");
+  return { ok: true };
+}
+
+// ---------- services catalog ----------
+
+export async function createServiceCardAction(input: ServiceCardInput): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  if (!input.title.trim()) return { error: "Title is required." };
+  await createServiceCard(input);
+  await audit(admin.id, "website.service_card_created", `Added service "${input.title}"`);
+  revalidatePath("/admin/website/services");
+  revalidatePath("/services");
+  return { ok: true };
+}
+
+export async function updateServiceCardAction(id: string, patch: Partial<ServiceCardInput & { enabled: boolean }>) {
+  const admin = await requireAdmin();
+  await updateServiceCard(id, patch);
+  await audit(admin.id, "website.service_card_updated", `Updated service card`);
+  revalidatePath("/admin/website/services");
+  revalidatePath("/services");
+  return { ok: true };
+}
+
+export async function deleteServiceCardAction(id: string) {
+  const admin = await requireAdmin();
+  await deleteServiceCard(id);
+  await audit(admin.id, "website.service_card_deleted", `Deleted service card`);
+  revalidatePath("/admin/website/services");
+  revalidatePath("/services");
+  return { ok: true };
+}
+
+export async function reorderServiceCardAction(id: string, direction: "up" | "down") {
+  await requireAdmin();
+  await reorderServiceCard(id, direction);
+  revalidatePath("/admin/website/services");
+  revalidatePath("/services");
   return { ok: true };
 }
 

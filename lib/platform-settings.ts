@@ -38,6 +38,7 @@ export const PLATFORM_KEYS = {
   domain_sms_webhook_secret: { secret: true, label: "SMS webhook secret" },
   domain_markup_percent: { secret: false, label: "Markup over wholesale (%)" },
   domain_usd_to_bdt_rate: { secret: false, label: "USD → BDT rate (Dynadot prices in USD)" },
+  domain_grace_days: { secret: false, label: "Grace period after expiry (days)" },
 } as const;
 
 export type PlatformKey = keyof typeof PLATFORM_KEYS;
@@ -58,6 +59,7 @@ export const PLATFORM_KEY_GROUPS = {
     "domain_sms_webhook_secret",
     "domain_markup_percent",
     "domain_usd_to_bdt_rate",
+    "domain_grace_days",
   ],
 } as const satisfies Record<string, readonly PlatformKey[]>;
 
@@ -109,6 +111,7 @@ export interface DomainSettings {
   smsWebhookSecret: string;
   markupPercent: number;
   usdToBdtRate: number;
+  graceDays: number;
 }
 
 /** Domain-reseller config for /domains, the admin panel, and the fulfillment lib. Cached 5 min. */
@@ -128,6 +131,7 @@ export const getDomainSettings = unstable_cache(
         "domain_sms_webhook_secret",
         "domain_markup_percent",
         "domain_usd_to_bdt_rate",
+        "domain_grace_days",
       ]);
     const map = new Map((data ?? []).map((r) => [r.key as string, r.value as string | null]));
     const decryptIf = (key: PlatformKey) => {
@@ -145,6 +149,7 @@ export const getDomainSettings = unstable_cache(
       smsWebhookSecret: decryptIf("domain_sms_webhook_secret"),
       markupPercent: Number(map.get("domain_markup_percent")) || 40,
       usdToBdtRate: Number(map.get("domain_usd_to_bdt_rate")) || 122,
+      graceDays: Number(map.get("domain_grace_days")) || 30,
     };
   },
   ["domain-settings"],

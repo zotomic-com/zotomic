@@ -70,6 +70,41 @@ export async function renewDomain(domain: string, years = 1): Promise<{ ok: true
   return { ok: true };
 }
 
+/**
+ * Transfer a domain IN from another registrar. Requires the auth/EPP code
+ * from the losing registrar. Unlike register/renew, a transfer is an async,
+ * multi-day ICANN process — a successful call here means the transfer was
+ * *initiated*, not completed; poll getTransferStatus for completion.
+ */
+export async function transferDomain(domain: string, authCode: string, years = 1): Promise<{ ok: true } | { error: string }> {
+  const s = await getDomainSettings();
+  if (!s.dynadotApiKey) return { error: "Dynadot isn't configured." };
+  const { ok, json } = await call(s.dynadotApiKey, "transfer", {
+    domain,
+    auth: authCode,
+    duration: String(years),
+    currency: "USD",
+  });
+  const code = json?.TransferResponse?.ResponseCode;
+  if (!ok || String(code) !== "0") {
+    return { error: json?.TransferResponse?.Error ?? "Dynadot rejected the transfer." };
+  }
+  return { ok: true };
+}
+
+export async function getTransferStatus(domain: string): Promise<{ status: "pending" | "completed" | "failed"; error?: string }> {
+  const s = await getDomainSettings();
+  if (!s.dynadotApiKey) return { status: "failed", error: "Dynadot isn't configured." };
+  const { ok, json } = await call(s.dynadotApiKey, "get_transfer_status", { domain, transfer_type: "in" });
+  const status = String(json?.GetTransferStatusResponse?.Status ?? "").toLowerCase();
+  if (!ok) return { status: "failed", error: json?.GetTransferStatusResponse?.Error ?? "Could not check transfer status." };
+  if (status.includes("complete") || status.includes("success")) return { status: "completed" };
+  if (status.includes("fail") || status.includes("reject") || status.includes("cancel")) {
+    return { status: "failed", error: json?.GetTransferStatusResponse?.Error ?? "Transfer failed or was rejected." };
+  }
+  return { status: "pending" };
+}
+
 export async function setNameservers(domain: string, nameservers: string[]): Promise<{ ok: true } | { error: string }> {
   const s = await getDomainSettings();
   if (!s.dynadotApiKey) return { error: "Dynadot isn't configured." };

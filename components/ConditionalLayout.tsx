@@ -43,6 +43,9 @@ const MARKETING_SEGMENTS = new Set([
   "legal",
   "p",
   "domains",
+  "services",
+  "cart",
+  "checkout",
 ]);
 
 export default function ConditionalLayout({

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Palette, ListTree, Search, Tags, Settings2, ArrowRight } from "lucide-react";
+import { FileText, Palette, ListTree, Search, Tags, LayoutGrid, Settings2, ArrowRight } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-server";
 import { PageHeader } from "@/components/app/PageHeader";
 import { getAllStructuralPages, getAllCustomPages } from "@/lib/site-content";
@@ -38,6 +38,12 @@ const SECTIONS = [
     icon: Tags,
     title: "Store categories",
     text: "The business-type options shown when a new store owner registers.",
+  },
+  {
+    href: "/admin/website/services",
+    icon: LayoutGrid,
+    title: "Services catalog",
+    text: "The service cards on /services — domain, hosting, web design and more. Add, edit, delete, reorder.",
   },
   {
     href: "/admin/website/settings",
