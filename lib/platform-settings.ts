@@ -40,7 +40,8 @@ export const PLATFORM_KEYS = {
   domain_bkash_number: { secret: false, label: "bKash number (domain sales)" },
   domain_nagad_number: { secret: false, label: "Nagad number (domain sales)" },
   domain_sms_webhook_secret: { secret: true, label: "SMS webhook secret" },
-  domain_markup_percent: { secret: false, label: "Markup over wholesale (%)" },
+  domain_markup_percent: { secret: false, label: "Markup over wholesale — first year (%)" },
+  domain_markup_percent_renewal: { secret: false, label: "Markup over wholesale — renewal (%)" },
   domain_usd_to_bdt_rate: { secret: false, label: "Fallback USD → BDT rate (used only if the live feed is unreachable)" },
   domain_grace_days: { secret: false, label: "Grace period after expiry (days)" },
 } as const;
@@ -66,6 +67,7 @@ export const PLATFORM_KEY_GROUPS = {
     "domain_nagad_number",
     "domain_sms_webhook_secret",
     "domain_markup_percent",
+    "domain_markup_percent_renewal",
     "domain_usd_to_bdt_rate",
     "domain_grace_days",
   ],
@@ -122,6 +124,7 @@ export interface DomainSettings {
   nagadNumber: string;
   smsWebhookSecret: string;
   markupPercent: number;
+  markupPercentRenewal: number;
   usdToBdtRate: number;
   graceDays: number;
 }
@@ -146,6 +149,7 @@ export const getDomainSettings = unstable_cache(
         "domain_nagad_number",
         "domain_sms_webhook_secret",
         "domain_markup_percent",
+        "domain_markup_percent_renewal",
         "domain_usd_to_bdt_rate",
         "domain_grace_days",
       ]);
@@ -168,6 +172,7 @@ export const getDomainSettings = unstable_cache(
       nagadNumber: map.get("domain_nagad_number") ?? "",
       smsWebhookSecret: decryptIf("domain_sms_webhook_secret"),
       markupPercent: Number(map.get("domain_markup_percent")) || 40,
+      markupPercentRenewal: Number(map.get("domain_markup_percent_renewal")) || 40,
       usdToBdtRate: Number(map.get("domain_usd_to_bdt_rate")) || 122,
       graceDays: Number(map.get("domain_grace_days")) || 30,
     };

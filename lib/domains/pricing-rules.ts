@@ -5,7 +5,8 @@ export interface PricingRule {
   id: string;
   provider: string;
   tld: string;
-  commissionPercent: number | null;
+  commissionPercentFirstYear: number | null;
+  commissionPercentRenewal: number | null;
   buyingPriceUsd: number | null;
   enabled: boolean;
 }
@@ -15,7 +16,8 @@ function rowToRule(r: Record<string, unknown>): PricingRule {
     id: r.id as string,
     provider: r.provider as string,
     tld: r.tld as string,
-    commissionPercent: r.commission_percent != null ? Number(r.commission_percent) : null,
+    commissionPercentFirstYear: r.commission_percent_first_year != null ? Number(r.commission_percent_first_year) : null,
+    commissionPercentRenewal: r.commission_percent_renewal != null ? Number(r.commission_percent_renewal) : null,
     buyingPriceUsd: r.buying_price_usd != null ? Number(r.buying_price_usd) : null,
     enabled: r.enabled as boolean,
   };
@@ -42,7 +44,8 @@ export async function getAllPricingRules(): Promise<PricingRule[]> {
 export interface PricingRuleInput {
   provider: string;
   tld: string;
-  commissionPercent: number | null;
+  commissionPercentFirstYear: number | null;
+  commissionPercentRenewal: number | null;
   buyingPriceUsd: number | null;
 }
 
@@ -51,7 +54,8 @@ export async function createPricingRule(input: PricingRuleInput): Promise<{ ok: 
   const { error } = await db.from("domain_pricing_rules").insert({
     provider: input.provider.trim().toLowerCase().slice(0, 40) || "dynadot",
     tld: input.tld.trim().toLowerCase().replace(/^\./, "").slice(0, 40),
-    commission_percent: input.commissionPercent,
+    commission_percent_first_year: input.commissionPercentFirstYear,
+    commission_percent_renewal: input.commissionPercentRenewal,
     buying_price_usd: input.buyingPriceUsd,
   });
   revalidateTag("domain-pricing");
@@ -64,7 +68,8 @@ export async function updatePricingRule(id: string, patch: Partial<PricingRuleIn
   const update: Record<string, unknown> = {};
   if (patch.provider !== undefined) update.provider = patch.provider.trim().toLowerCase().slice(0, 40);
   if (patch.tld !== undefined) update.tld = patch.tld.trim().toLowerCase().replace(/^\./, "").slice(0, 40);
-  if (patch.commissionPercent !== undefined) update.commission_percent = patch.commissionPercent;
+  if (patch.commissionPercentFirstYear !== undefined) update.commission_percent_first_year = patch.commissionPercentFirstYear;
+  if (patch.commissionPercentRenewal !== undefined) update.commission_percent_renewal = patch.commissionPercentRenewal;
   if (patch.buyingPriceUsd !== undefined) update.buying_price_usd = patch.buyingPriceUsd;
   if (patch.enabled !== undefined) update.enabled = patch.enabled;
   update.updated_at = new Date().toISOString();
@@ -78,8 +83,18 @@ export async function deletePricingRule(id: string) {
   revalidateTag("domain-pricing");
 }
 
-/** Resolve the effective commission % for a TLD — a matching rule, else the global default. */
-export function resolveCommissionPercent(rules: PricingRule[], provider: string, tld: string, globalDefault: number): number {
+export type PriceKind = "first_year" | "renewal";
+
+/** Resolve the effective commission % for a TLD + price kind — a matching rule, else the global default for that kind. */
+export function resolveCommissionPercent(
+  rules: PricingRule[],
+  provider: string,
+  tld: string,
+  kind: PriceKind,
+  globalDefault: number,
+): number {
   const rule = rules.find((r) => r.provider === provider && r.tld === tld);
-  return rule?.commissionPercent ?? globalDefault;
+  if (!rule) return globalDefault;
+  const override = kind === "first_year" ? rule.commissionPercentFirstYear : rule.commissionPercentRenewal;
+  return override ?? globalDefault;
 }

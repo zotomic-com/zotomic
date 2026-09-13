@@ -50,10 +50,13 @@ interface ItemRow {
   itemType: string;
   customerName: string;
   customerPhone: string;
+  customerEmail: string;
+  pointTo: string;
   status: string;
   orderStatus: string;
   paymentMethod: string;
   retailPrice: number;
+  wholesaleCost: number;
   invoiceAmount: number;
   expiresAt: string | null;
   lastError: string | null;
@@ -64,7 +67,7 @@ interface ItemRow {
 async function fetchDomainItems(): Promise<ItemRow[]> {
   const { data } = await adminDb()
     .from("domain_cart_items")
-    .select("*, domain_cart_orders(order_number, customer_name, customer_phone, payment_method, invoice_amount, status)")
+    .select("*, domain_cart_orders(order_number, customer_name, customer_phone, customer_email, payment_method, invoice_amount, status)")
     .order("created_at", { ascending: false })
     .limit(500);
 
@@ -78,10 +81,13 @@ async function fetchDomainItems(): Promise<ItemRow[]> {
       itemType: row.item_type as string,
       customerName: (order.customer_name as string) ?? "",
       customerPhone: (order.customer_phone as string) ?? "",
+      customerEmail: (order.customer_email as string) ?? "",
+      pointTo: (row.point_to as string) ?? "self",
       status: row.status as string,
       orderStatus: (order.status as string) ?? "",
       paymentMethod: (order.payment_method as string) ?? "",
       retailPrice: Number(row.retail_price),
+      wholesaleCost: Number(row.wholesale_cost ?? 0),
       invoiceAmount: Number(order.invoice_amount ?? 0),
       expiresAt: (row.expires_at as string) ?? null,
       lastError: (row.last_error as string) ?? null,
@@ -237,7 +243,9 @@ async function CustomerDetailContent({ userId }: { userId: string }) {
   // fetchDomainItems() doesn't carry user_id — re-query directly scoped to this customer instead.
   const { data: rows } = await adminDb()
     .from("domain_cart_items")
-    .select("*, domain_cart_orders!inner(user_id, order_number, customer_name, customer_phone, payment_method, invoice_amount, status)")
+    .select(
+      "*, domain_cart_orders!inner(user_id, order_number, customer_name, customer_phone, customer_email, payment_method, invoice_amount, status)",
+    )
     .eq("domain_cart_orders.user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -251,10 +259,13 @@ async function CustomerDetailContent({ userId }: { userId: string }) {
       itemType: row.item_type as string,
       customerName: (order.customer_name as string) ?? "",
       customerPhone: (order.customer_phone as string) ?? "",
+      customerEmail: (order.customer_email as string) ?? "",
+      pointTo: (row.point_to as string) ?? "self",
       status: row.status as string,
       orderStatus: (order.status as string) ?? "",
       paymentMethod: (order.payment_method as string) ?? "",
       retailPrice: Number(row.retail_price),
+      wholesaleCost: Number(row.wholesale_cost ?? 0),
       invoiceAmount: Number(order.invoice_amount ?? 0),
       expiresAt: (row.expires_at as string) ?? null,
       lastError: (row.last_error as string) ?? null,
@@ -291,8 +302,9 @@ async function PricingTabContent() {
     return {
       tld,
       wholesaleUsd: ref.wholesaleUsd,
-      sellingFirstYear: ref.wholesaleUsd != null ? retailPriceBDT(ref.wholesaleUsd, tld, ctx) : null,
-      sellingRenewal: ref.wholesaleRenewalUsd != null ? retailPriceBDT(ref.wholesaleRenewalUsd, tld, ctx) : null,
+      wholesaleRenewalUsd: ref.wholesaleRenewalUsd,
+      sellingFirstYear: ref.wholesaleUsd != null ? retailPriceBDT(ref.wholesaleUsd, tld, "first_year", ctx) : null,
+      sellingRenewal: ref.wholesaleRenewalUsd != null ? retailPriceBDT(ref.wholesaleRenewalUsd, tld, "renewal", ctx) : null,
     };
   });
 
@@ -306,7 +318,12 @@ async function PricingTabContent() {
           <Badge tone={ctx.fxSource === "live" ? "success" : "warning"}>{ctx.fxSource === "live" ? "Live feed" : "Fallback rate"}</Badge>
         </CardBody>
       </Card>
-      <PricingRulesEditor rules={rules} preview={preview} globalMarkupPercent={ctx.markupPercent} />
+      <PricingRulesEditor
+        rules={rules}
+        preview={preview}
+        globalMarkupPercentFirstYear={ctx.markupPercentFirstYear}
+        globalMarkupPercentRenewal={ctx.markupPercentRenewal}
+      />
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { checkAvailability, registerDomain, renewDomain, setNameservers, transfe
 import { createZone, addDnsRecord, setupEmailRouting } from "./cloudflare";
 import { addProjectDomain, dnsRecords } from "@/lib/vercel-domains";
 import { getLiveUsdToBdtRate } from "@/lib/fx-rate";
-import { getPricingRules, resolveCommissionPercent } from "./pricing-rules";
+import { getPricingRules, resolveCommissionPercent, type PriceKind } from "./pricing-rules";
 
 /** A curated set of alternates offered alongside whatever TLD the customer actually searched. Excludes com.bd — Dynadot's RESTful v2 search doesn't support that domain type. */
 export const SUGGESTED_TLDS = ["com", "net", "org", "shop", "store", "online", "xyz", "info", "co"];
@@ -32,18 +32,26 @@ export interface PricedDomain {
 export interface PricingContext {
   usdToBdtRate: number;
   fxSource: "live" | "fallback";
-  markupPercent: number;
+  markupPercentFirstYear: number;
+  markupPercentRenewal: number;
   rules: import("./pricing-rules").PricingRule[];
 }
 
 export async function getPricingContext(): Promise<PricingContext> {
   const [settings, fx, rules] = await Promise.all([getDomainSettings(), getLiveUsdToBdtRate(), getPricingRules()]);
-  return { usdToBdtRate: fx.rate, fxSource: fx.source, markupPercent: settings.markupPercent, rules };
+  return {
+    usdToBdtRate: fx.rate,
+    fxSource: fx.source,
+    markupPercentFirstYear: settings.markupPercent,
+    markupPercentRenewal: settings.markupPercentRenewal,
+    rules,
+  };
 }
 
-/** Retail price for a given TLD — a per-TLD commission override if one exists, else the global markup; live FX rate. */
-export function retailPriceBDT(wholesaleUsd: number, tld: string, ctx: PricingContext): number {
-  const commission = resolveCommissionPercent(ctx.rules, "dynadot", tld, ctx.markupPercent);
+/** Retail price for a given TLD + price kind — a per-TLD commission override if one exists, else the matching global default; live FX rate. */
+export function retailPriceBDT(wholesaleUsd: number, tld: string, kind: PriceKind, ctx: PricingContext): number {
+  const globalDefault = kind === "first_year" ? ctx.markupPercentFirstYear : ctx.markupPercentRenewal;
+  const commission = resolveCommissionPercent(ctx.rules, "dynadot", tld, kind, globalDefault);
   return Math.round((wholesaleUsd * ctx.usdToBdtRate * (1 + commission / 100)) / 10) * 10;
 }
 
@@ -66,8 +74,8 @@ export async function searchWithSuggestions(query: string): Promise<PricedDomain
       domain: d,
       available: r?.available ?? false,
       wholesaleUsd,
-      priceBDT: wholesaleUsd != null ? retailPriceBDT(wholesaleUsd, domainTld, ctx) : null,
-      renewalPriceBDT: wholesaleRenewalUsd != null ? retailPriceBDT(wholesaleRenewalUsd, domainTld, ctx) : null,
+      priceBDT: wholesaleUsd != null ? retailPriceBDT(wholesaleUsd, domainTld, "first_year", ctx) : null,
+      renewalPriceBDT: wholesaleRenewalUsd != null ? retailPriceBDT(wholesaleRenewalUsd, domainTld, "renewal", ctx) : null,
     };
   });
 }
@@ -150,12 +158,12 @@ export async function createCartOrder(
       if (!q || !q.available || q.wholesaleCost == null) {
         return { error: `${item.domainName} is no longer available.` };
       }
-      priced.push({ item, wholesaleCost: q.wholesaleCost, retailPrice: retailPriceBDT(q.wholesaleCost, tld, ctx) });
+      priced.push({ item, wholesaleCost: q.wholesaleCost, retailPrice: retailPriceBDT(q.wholesaleCost, tld, "first_year", ctx) });
     } else {
       if (!item.authCode?.trim()) return { error: `An auth/EPP code is required to transfer ${item.domainName}.` };
       // Dynadot doesn't price transfers via `search` — a transfer is a flat one-year-equivalent fee.
       const wholesaleCost = 12;
-      priced.push({ item, wholesaleCost, retailPrice: retailPriceBDT(wholesaleCost, tld, ctx) });
+      priced.push({ item, wholesaleCost, retailPrice: retailPriceBDT(wholesaleCost, tld, "first_year", ctx) });
     }
   }
 

@@ -104,3 +104,115 @@ export async function deletePricingRuleAction(id: string) {
   revalidatePath("/admin/domains");
   return { ok: true };
 }
+
+// ---------- manual domain records (add / edit / delete) ----------
+
+export interface DomainRecordInput {
+  domainName: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  pointTo: "self" | "zotomic";
+  paymentMethod: "bkash" | "nagad";
+  retailPrice: number;
+  wholesaleCost?: number;
+  status: string;
+  expiresAt?: string;
+}
+
+const ITEM_STATUSES = ["pending", "registering", "transferring", "active", "grace", "dropped", "failed", "cancelled"];
+
+/** For sales made outside the automated /domains checkout — e.g. an offline/phone customer, or a pre-existing domain being tracked. */
+export async function createManualDomainAction(input: DomainRecordInput): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  if (!input.domainName.trim()) return { error: "Domain name is required." };
+  if (!input.customerName.trim() || !input.customerPhone.trim()) return { error: "Customer name and phone are required." };
+  if (!ITEM_STATUSES.includes(input.status)) return { error: "Invalid status." };
+
+  const db = getAdminSupabase();
+  const orderNumber = `DC-M${Date.now().toString(36).toUpperCase().slice(-5)}`;
+  const { data: order, error } = await db
+    .from("domain_cart_orders")
+    .insert({
+      order_number: orderNumber,
+      user_id: null,
+      customer_name: input.customerName.slice(0, 120),
+      customer_phone: input.customerPhone.slice(0, 32),
+      customer_email: input.customerEmail?.slice(0, 200) || null,
+      payment_method: input.paymentMethod,
+      subtotal: input.retailPrice,
+      invoice_amount: input.retailPrice,
+      status: "paid",
+      paid_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error || !order) return { error: "Could not create the order." };
+
+  const { error: itemError } = await db.from("domain_cart_items").insert({
+    cart_order_id: order.id,
+    item_type: "register",
+    domain_name: input.domainName.trim().toLowerCase(),
+    point_to: input.pointTo,
+    wholesale_cost: input.wholesaleCost ?? 0,
+    retail_price: input.retailPrice,
+    status: input.status,
+    expires_at: input.expiresAt || null,
+    registered_at: new Date().toISOString(),
+  });
+  if (itemError) {
+    await db.from("domain_cart_orders").delete().eq("id", order.id);
+    return { error: "Could not create the domain record." };
+  }
+
+  await audit(admin.id, "domains.manual_entry_created", `Manually added ${input.domainName} for ${input.customerName}`, order.id);
+  revalidatePath("/admin/domains");
+  return { ok: true };
+}
+
+export async function updateDomainRecordAction(
+  itemId: string,
+  patch: Partial<DomainRecordInput>,
+): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  const db = getAdminSupabase();
+  const { data: item } = await db.from("domain_cart_items").select("cart_order_id, domain_name").eq("id", itemId).maybeSingle();
+  if (!item) return { error: "Domain not found." };
+  if (patch.status !== undefined && !ITEM_STATUSES.includes(patch.status)) return { error: "Invalid status." };
+
+  const itemUpdate: Record<string, unknown> = {};
+  if (patch.domainName !== undefined) itemUpdate.domain_name = patch.domainName.trim().toLowerCase();
+  if (patch.pointTo !== undefined) itemUpdate.point_to = patch.pointTo;
+  if (patch.retailPrice !== undefined) itemUpdate.retail_price = patch.retailPrice;
+  if (patch.wholesaleCost !== undefined) itemUpdate.wholesale_cost = patch.wholesaleCost;
+  if (patch.status !== undefined) itemUpdate.status = patch.status;
+  if (patch.expiresAt !== undefined) itemUpdate.expires_at = patch.expiresAt || null;
+  if (Object.keys(itemUpdate).length) await db.from("domain_cart_items").update(itemUpdate).eq("id", itemId);
+
+  const orderUpdate: Record<string, unknown> = {};
+  if (patch.customerName !== undefined) orderUpdate.customer_name = patch.customerName.slice(0, 120);
+  if (patch.customerPhone !== undefined) orderUpdate.customer_phone = patch.customerPhone.slice(0, 32);
+  if (patch.customerEmail !== undefined) orderUpdate.customer_email = patch.customerEmail.slice(0, 200) || null;
+  if (patch.paymentMethod !== undefined) orderUpdate.payment_method = patch.paymentMethod;
+  if (Object.keys(orderUpdate).length) await db.from("domain_cart_orders").update(orderUpdate).eq("id", item.cart_order_id);
+
+  await audit(admin.id, "domains.record_edited", `Edited ${patch.domainName ?? item.domain_name}`, itemId);
+  revalidatePath("/admin/domains");
+  return { ok: true };
+}
+
+/** Permanently removes the record — for cleaning up test/erroneous entries. Also removes the parent order if this was its only item. */
+export async function deleteDomainRecordAction(itemId: string): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  const db = getAdminSupabase();
+  const { data: item } = await db.from("domain_cart_items").select("cart_order_id, domain_name").eq("id", itemId).maybeSingle();
+  if (!item) return { error: "Domain not found." };
+
+  await db.from("domain_cart_items").delete().eq("id", itemId);
+  const { count } = await db.from("domain_cart_items").select("id", { count: "exact", head: true }).eq("cart_order_id", item.cart_order_id);
+  if (!count) await db.from("domain_cart_orders").delete().eq("id", item.cart_order_id);
+
+  await audit(admin.id, "domains.record_deleted", `Deleted ${item.domain_name}`, itemId);
+  revalidatePath("/admin/domains");
+  return { ok: true };
+}
