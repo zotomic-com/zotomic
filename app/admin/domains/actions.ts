@@ -194,6 +194,16 @@ export async function updateDomainRecordAction(
   if (patch.customerPhone !== undefined) orderUpdate.customer_phone = patch.customerPhone.slice(0, 32);
   if (patch.customerEmail !== undefined) orderUpdate.customer_email = patch.customerEmail.slice(0, 200) || null;
   if (patch.paymentMethod !== undefined) orderUpdate.payment_method = patch.paymentMethod;
+  // The displayed price is the order's invoice_amount, not the item's retail_price — for a
+  // single-item order (true for every manual entry, and most real ones) keep them in sync,
+  // rather than silently editing a number nothing else reads.
+  if (patch.retailPrice !== undefined) {
+    const { count } = await db.from("domain_cart_items").select("id", { count: "exact", head: true }).eq("cart_order_id", item.cart_order_id);
+    if (count === 1) {
+      orderUpdate.subtotal = patch.retailPrice;
+      orderUpdate.invoice_amount = patch.retailPrice;
+    }
+  }
   if (Object.keys(orderUpdate).length) await db.from("domain_cart_orders").update(orderUpdate).eq("id", item.cart_order_id);
 
   await audit(admin.id, "domains.record_edited", `Edited ${patch.domainName ?? item.domain_name}`, itemId);
