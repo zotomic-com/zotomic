@@ -38,6 +38,7 @@ const RESERVED_PATHS = new Set([
   "faq",
   "legal",
   "p",
+  "domains",
   "robots.txt",
   "sitemap.xml",
   "icon.svg",

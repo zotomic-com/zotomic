@@ -28,6 +28,16 @@ export const PLATFORM_KEYS = {
   footer_tagline: { secret: false, label: "Footer tagline" },
   footer_copyright: { secret: false, label: "Footer copyright line" },
   footer_trust_items: { secret: false, label: "Footer trust strip (JSON)" },
+  // Domain reseller — /domains, funded from the admin's own Dynadot balance
+  domain_reseller_enabled: { secret: false, label: "Publish the /domains page" },
+  dynadot_api_key: { secret: true, label: "Dynadot API key" },
+  cloudflare_api_token: { secret: true, label: "Cloudflare API token" },
+  cloudflare_account_id: { secret: false, label: "Cloudflare account ID" },
+  domain_bkash_number: { secret: false, label: "bKash number (domain sales)" },
+  domain_nagad_number: { secret: false, label: "Nagad number (domain sales)" },
+  domain_sms_webhook_secret: { secret: true, label: "SMS webhook secret" },
+  domain_markup_percent: { secret: false, label: "Markup over wholesale (%)" },
+  domain_usd_to_bdt_rate: { secret: false, label: "USD → BDT rate (Dynadot prices in USD)" },
 } as const;
 
 export type PlatformKey = keyof typeof PLATFORM_KEYS;
@@ -38,6 +48,17 @@ export const PLATFORM_KEY_GROUPS = {
   integrations: ["hermes_base_url", "hermes_shared_secret", "n8n_base_url", "n8n_api_key", "n8n_webhook_url", "meta_app_secret"],
   seo: ["google_site_verification", "meta_pixel_id", "ga4_measurement_id", "ga4_api_secret"],
   branding: ["site_logo_url", "site_favicon_url", "footer_tagline", "footer_copyright"],
+  domains: [
+    "domain_reseller_enabled",
+    "dynadot_api_key",
+    "cloudflare_api_token",
+    "cloudflare_account_id",
+    "domain_bkash_number",
+    "domain_nagad_number",
+    "domain_sms_webhook_secret",
+    "domain_markup_percent",
+    "domain_usd_to_bdt_rate",
+  ],
 } as const satisfies Record<string, readonly PlatformKey[]>;
 
 export const DEFAULT_INVOICE_FROM = "invoice@zotomic.com";
@@ -77,6 +98,58 @@ export async function setPlatformSetting(key: PlatformKey, value: string, adminI
     .from("platform_settings")
     .upsert({ key, value: stored, updated_by: adminId, updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
+
+export interface DomainSettings {
+  enabled: boolean;
+  dynadotApiKey: string;
+  cloudflareApiToken: string;
+  cloudflareAccountId: string;
+  bkashNumber: string;
+  nagadNumber: string;
+  smsWebhookSecret: string;
+  markupPercent: number;
+  usdToBdtRate: number;
+}
+
+/** Domain-reseller config for /domains, the admin panel, and the fulfillment lib. Cached 5 min. */
+export const getDomainSettings = unstable_cache(
+  async (): Promise<DomainSettings> => {
+    const db = getAdminSupabase();
+    const { data } = await db
+      .from("platform_settings")
+      .select("key, value")
+      .in("key", [
+        "domain_reseller_enabled",
+        "dynadot_api_key",
+        "cloudflare_api_token",
+        "cloudflare_account_id",
+        "domain_bkash_number",
+        "domain_nagad_number",
+        "domain_sms_webhook_secret",
+        "domain_markup_percent",
+        "domain_usd_to_bdt_rate",
+      ]);
+    const map = new Map((data ?? []).map((r) => [r.key as string, r.value as string | null]));
+    const decryptIf = (key: PlatformKey) => {
+      const raw = map.get(key);
+      if (!raw) return "";
+      return PLATFORM_KEYS[key].secret ? decrypt(raw) || "" : raw;
+    };
+    return {
+      enabled: map.get("domain_reseller_enabled") === "true",
+      dynadotApiKey: decryptIf("dynadot_api_key"),
+      cloudflareApiToken: decryptIf("cloudflare_api_token"),
+      cloudflareAccountId: map.get("cloudflare_account_id") ?? "",
+      bkashNumber: map.get("domain_bkash_number") ?? "",
+      nagadNumber: map.get("domain_nagad_number") ?? "",
+      smsWebhookSecret: decryptIf("domain_sms_webhook_secret"),
+      markupPercent: Number(map.get("domain_markup_percent")) || 40,
+      usdToBdtRate: Number(map.get("domain_usd_to_bdt_rate")) || 122,
+    };
+  },
+  ["domain-settings"],
+  { revalidate: 300, tags: ["platform-settings"] },
+);
 
 /** Public (non-secret) platform tracking config for the marketing site. Cached 5 min. */
 export const getPublicTracking = unstable_cache(

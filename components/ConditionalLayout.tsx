@@ -42,6 +42,7 @@ const MARKETING_SEGMENTS = new Set([
   "data-deletion",
   "legal",
   "p",
+  "domains",
 ]);
 
 export default function ConditionalLayout({
