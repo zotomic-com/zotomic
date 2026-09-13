@@ -20,6 +20,7 @@ export default async function AdminDomainsPage() {
   ]);
 
   const enabled = settings.domain_reseller_enabled === "true";
+  const sandbox = settings.dynadot_use_sandbox === "true";
   const orders = (data ?? []).map((row) => {
     const order = (row.domain_cart_orders ?? {}) as Record<string, unknown>;
     return {
@@ -52,9 +53,15 @@ export default async function AdminDomainsPage() {
           </Link>
         }
       />
-      <div className="flex items-center gap-2 text-sm">
-        <span className="text-fg-subtle">/domains is</span>
-        <Badge tone={enabled ? "success" : "neutral"}>{enabled ? "Published" : "Unpublished"}</Badge>
+      <div className="flex items-center gap-3 text-sm">
+        <span className="flex items-center gap-2">
+          <span className="text-fg-subtle">/domains is</span>
+          <Badge tone={enabled ? "success" : "neutral"}>{enabled ? "Published" : "Unpublished"}</Badge>
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="text-fg-subtle">Dynadot mode</span>
+          <Badge tone={sandbox ? "warning" : "danger"}>{sandbox ? "Sandbox" : "Live"}</Badge>
+        </span>
       </div>
       <OrdersTable orders={orders} />
     </div>

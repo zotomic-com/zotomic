@@ -1,19 +1,64 @@
-import { getDomainSettings } from "@/lib/platform-settings";
+import { createHmac, randomUUID } from "crypto";
+import { getDomainSettings, type DomainSettings } from "@/lib/platform-settings";
 
 /**
- * Thin wrapper over the Dynadot API (https://api.dynadot.com/api3.json).
- * Registration relies on the account's default contact set in the Dynadot
- * dashboard — the API's contact fields are optional and we don't collect
- * full WHOIS contact details from domain-reseller customers.
+ * Wrapper over Dynadot's newer RESTful API v2 (key + secret, HMAC-signed) —
+ * NOT the legacy single-key `api3.json` API. Sandbox and live use different
+ * base URLs and different credential pairs; which one is active is an admin
+ * toggle (`dynadot_use_sandbox`), so the whole reseller pipeline can be
+ * exercised against the sandbox before ever touching the live account.
+ *
+ * Signature scheme per Dynadot's docs: HMAC-SHA256, base64-encoded, over
+ * `${apiKey}\n${pathAndQuery}\n${requestId}\n${body}` using the API secret as
+ * the HMAC key. Only `search`/`register` endpoints are independently
+ * confirmed from Dynadot's own docs — `renew`/`nameserver`/`transfer_in`/
+ * `transfer status` paths and response field names below are inferred from
+ * the RESTful API's own resource-oriented convention and need live
+ * verification against a real sandbox call before being trusted blindly.
  */
 
-const BASE = "https://api.dynadot.com/api3.json";
+const LIVE_BASE = "https://api.dynadot.com";
+const SANDBOX_BASE = "https://api-sandbox.dynadot.com";
 
-async function call(apiKey: string, command: string, params: Record<string, string>) {
-  const qs = new URLSearchParams({ key: apiKey, command, ...params });
-  const res = await fetch(`${BASE}?${qs.toString()}`, { cache: "no-store" });
+interface Creds {
+  baseUrl: string;
+  apiKey: string;
+  apiSecret: string;
+}
+
+function resolveCreds(s: DomainSettings): Creds | null {
+  if (s.dynadotUseSandbox) {
+    if (!s.dynadotSandboxApiKey || !s.dynadotSandboxApiSecret) return null;
+    return { baseUrl: SANDBOX_BASE, apiKey: s.dynadotSandboxApiKey, apiSecret: s.dynadotSandboxApiSecret };
+  }
+  if (!s.dynadotApiKey || !s.dynadotApiSecret) return null;
+  return { baseUrl: LIVE_BASE, apiKey: s.dynadotApiKey, apiSecret: s.dynadotApiSecret };
+}
+
+function sign(creds: Creds, pathAndQuery: string, requestId: string, body: string): string {
+  const stringToSign = [creds.apiKey, pathAndQuery, requestId, body].join("\n");
+  return createHmac("sha256", creds.apiSecret).update(stringToSign, "utf-8").digest("base64");
+}
+
+async function call(creds: Creds, method: "GET" | "POST" | "PUT", path: string, body?: Record<string, unknown>) {
+  const bodyStr = body ? JSON.stringify(body) : "";
+  const requestId = randomUUID();
+  const signature = sign(creds, path, requestId, bodyStr);
+
+  const res = await fetch(`${creds.baseUrl}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${creds.apiKey}`,
+      "X-Signature": signature,
+      "X-Request-Id": requestId,
+    },
+    body: bodyStr || undefined,
+    cache: "no-store",
+  });
   const json = await res.json().catch(() => null);
-  return { ok: res.ok, json };
+  return { ok: res.ok, status: res.status, json };
 }
 
 export interface DomainQuote {
@@ -24,49 +69,69 @@ export interface DomainQuote {
 
 export async function dynadotConfigured(): Promise<boolean> {
   const s = await getDomainSettings();
-  return !!s.dynadotApiKey;
+  return resolveCreds(s) !== null;
 }
 
-/** Check availability + wholesale price for up to 20 domains in one call. */
+/** Which mode ("sandbox" | "live") is currently active — surfaced in the admin UI. */
+export async function dynadotMode(): Promise<"sandbox" | "live"> {
+  const s = await getDomainSettings();
+  return s.dynadotUseSandbox ? "sandbox" : "live";
+}
+
+function extractQuote(domain: string, json: Record<string, unknown> | null): DomainQuote {
+  const available = Boolean(json?.available ?? json?.isAvailable ?? false);
+  const priceRaw = json?.price ?? json?.wholesalePrice ?? json?.registerPrice;
+  const price = typeof priceRaw === "object" && priceRaw !== null ? (priceRaw as Record<string, unknown>).amount : priceRaw;
+  return { domain, available, wholesaleCost: price != null ? Number(price) : null };
+}
+
+/** One GET per domain (the RESTful v2 search endpoint is single-domain) — run in parallel. */
 export async function checkAvailability(domains: string[]): Promise<DomainQuote[] | { error: string }> {
   const s = await getDomainSettings();
-  if (!s.dynadotApiKey) return { error: "Domain search isn't configured yet." };
+  const creds = resolveCreds(s);
+  if (!creds) return { error: "Domain search isn't configured yet." };
   if (domains.length === 0) return [];
 
-  const params: Record<string, string> = { show_price: "1", currency: "USD" };
-  domains.slice(0, 20).forEach((d, i) => (params[`domain${i}`] = d));
-
-  const { ok, json } = await call(s.dynadotApiKey, "search", params);
-  const results = json?.SearchResponse?.SearchResults;
-  if (!ok || !Array.isArray(results)) {
-    return { error: json?.SearchResponse?.Error ?? "Could not reach the domain search service." };
+  try {
+    const results = await Promise.all(
+      domains.slice(0, 20).map(async (domain) => {
+        const { ok, json } = await call(creds, "GET", `/restful/v2/domains/${encodeURIComponent(domain)}/search`);
+        if (!ok) return { domain, available: false, wholesaleCost: null };
+        return extractQuote(domain, json as Record<string, unknown> | null);
+      }),
+    );
+    return results;
+  } catch {
+    return { error: "Could not reach the domain search service." };
   }
-  return results.map((r: Record<string, unknown>) => ({
-    domain: String(r.DomainName ?? ""),
-    available: String(r.Available).toLowerCase() === "yes",
-    wholesaleCost: r.Price != null ? Number(r.Price) : null,
-  }));
 }
 
 export async function registerDomain(domain: string, years = 1): Promise<{ ok: true } | { error: string }> {
   const s = await getDomainSettings();
-  if (!s.dynadotApiKey) return { error: "Dynadot isn't configured." };
-  const { ok, json } = await call(s.dynadotApiKey, "register", { domain, duration: String(years), currency: "USD" });
-  const code = json?.Register?.ResponseCode;
-  if (!ok || String(code) !== "0") {
-    return { error: json?.Register?.Error ?? "Dynadot rejected the registration." };
-  }
+  const creds = resolveCreds(s);
+  if (!creds) return { error: "Dynadot isn't configured." };
+  const { ok, json } = await call(creds, "POST", "/restful/v2/domains/register", { domainName: domain, duration: years });
+  if (!ok) return { error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Dynadot rejected the registration." };
   return { ok: true };
 }
 
 export async function renewDomain(domain: string, years = 1): Promise<{ ok: true } | { error: string }> {
   const s = await getDomainSettings();
-  if (!s.dynadotApiKey) return { error: "Dynadot isn't configured." };
-  const { ok, json } = await call(s.dynadotApiKey, "renew", { domain, duration: String(years), currency: "USD" });
-  const code = json?.Renew?.ResponseCode;
-  if (!ok || String(code) !== "0") {
-    return { error: json?.Renew?.Error ?? "Dynadot rejected the renewal." };
-  }
+  const creds = resolveCreds(s);
+  if (!creds) return { error: "Dynadot isn't configured." };
+  const { ok, json } = await call(creds, "POST", `/restful/v2/domains/${encodeURIComponent(domain)}/renew`, { duration: years });
+  if (!ok) return { error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Dynadot rejected the renewal." };
+  return { ok: true };
+}
+
+export async function setNameservers(domain: string, nameservers: string[]): Promise<{ ok: true } | { error: string }> {
+  const s = await getDomainSettings();
+  const creds = resolveCreds(s);
+  if (!creds) return { error: "Dynadot isn't configured." };
+  const { ok, json } = await call(creds, "PUT", `/restful/v2/domains/${encodeURIComponent(domain)}/nameserver`, {
+    nameservers: nameservers.slice(0, 13),
+  });
+  if (!ok) return { error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Dynadot rejected the nameserver update." };
   return { ok: true };
 }
 
@@ -78,42 +143,26 @@ export async function renewDomain(domain: string, years = 1): Promise<{ ok: true
  */
 export async function transferDomain(domain: string, authCode: string, years = 1): Promise<{ ok: true } | { error: string }> {
   const s = await getDomainSettings();
-  if (!s.dynadotApiKey) return { error: "Dynadot isn't configured." };
-  const { ok, json } = await call(s.dynadotApiKey, "transfer", {
-    domain,
-    auth: authCode,
-    duration: String(years),
-    currency: "USD",
+  const creds = resolveCreds(s);
+  if (!creds) return { error: "Dynadot isn't configured." };
+  const { ok, json } = await call(creds, "POST", `/restful/v2/domains/${encodeURIComponent(domain)}/transfer_in`, {
+    authCode,
+    duration: years,
   });
-  const code = json?.TransferResponse?.ResponseCode;
-  if (!ok || String(code) !== "0") {
-    return { error: json?.TransferResponse?.Error ?? "Dynadot rejected the transfer." };
-  }
+  if (!ok) return { error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Dynadot rejected the transfer." };
   return { ok: true };
 }
 
 export async function getTransferStatus(domain: string): Promise<{ status: "pending" | "completed" | "failed"; error?: string }> {
   const s = await getDomainSettings();
-  if (!s.dynadotApiKey) return { status: "failed", error: "Dynadot isn't configured." };
-  const { ok, json } = await call(s.dynadotApiKey, "get_transfer_status", { domain, transfer_type: "in" });
-  const status = String(json?.GetTransferStatusResponse?.Status ?? "").toLowerCase();
-  if (!ok) return { status: "failed", error: json?.GetTransferStatusResponse?.Error ?? "Could not check transfer status." };
+  const creds = resolveCreds(s);
+  if (!creds) return { status: "failed", error: "Dynadot isn't configured." };
+  const { ok, json } = await call(creds, "GET", `/restful/v2/domains/${encodeURIComponent(domain)}/transfer/status`);
+  if (!ok) return { status: "failed", error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Could not check transfer status." };
+  const status = String((json as Record<string, unknown> | null)?.status ?? "").toLowerCase();
   if (status.includes("complete") || status.includes("success")) return { status: "completed" };
   if (status.includes("fail") || status.includes("reject") || status.includes("cancel")) {
-    return { status: "failed", error: json?.GetTransferStatusResponse?.Error ?? "Transfer failed or was rejected." };
+    return { status: "failed", error: (json as Record<string, unknown> | null)?.message as string | undefined ?? "Transfer failed or was rejected." };
   }
   return { status: "pending" };
-}
-
-export async function setNameservers(domain: string, nameservers: string[]): Promise<{ ok: true } | { error: string }> {
-  const s = await getDomainSettings();
-  if (!s.dynadotApiKey) return { error: "Dynadot isn't configured." };
-  const params: Record<string, string> = { domain };
-  nameservers.slice(0, 13).forEach((ns, i) => (params[`ns${i}`] = ns));
-  const { ok, json } = await call(s.dynadotApiKey, "set_ns", params);
-  const code = json?.SetNsResponse?.ResponseCode;
-  if (!ok || String(code) !== "0") {
-    return { error: json?.SetNsResponse?.Error ?? "Dynadot rejected the nameserver update." };
-  }
-  return { ok: true };
 }

@@ -30,7 +30,11 @@ export const PLATFORM_KEYS = {
   footer_trust_items: { secret: false, label: "Footer trust strip (JSON)" },
   // Domain reseller — /domains, funded from the admin's own Dynadot balance
   domain_reseller_enabled: { secret: false, label: "Publish the /domains page" },
-  dynadot_api_key: { secret: true, label: "Dynadot API key" },
+  dynadot_use_sandbox: { secret: false, label: "Use Dynadot sandbox (test mode, no real charges)" },
+  dynadot_sandbox_api_key: { secret: true, label: "Dynadot sandbox API key" },
+  dynadot_sandbox_api_secret: { secret: true, label: "Dynadot sandbox API secret" },
+  dynadot_api_key: { secret: true, label: "Dynadot live API key" },
+  dynadot_api_secret: { secret: true, label: "Dynadot live API secret" },
   cloudflare_api_token: { secret: true, label: "Cloudflare API token" },
   cloudflare_account_id: { secret: false, label: "Cloudflare account ID" },
   domain_bkash_number: { secret: false, label: "bKash number (domain sales)" },
@@ -51,7 +55,11 @@ export const PLATFORM_KEY_GROUPS = {
   branding: ["site_logo_url", "site_favicon_url", "footer_tagline", "footer_copyright"],
   domains: [
     "domain_reseller_enabled",
+    "dynadot_use_sandbox",
+    "dynadot_sandbox_api_key",
+    "dynadot_sandbox_api_secret",
     "dynadot_api_key",
+    "dynadot_api_secret",
     "cloudflare_api_token",
     "cloudflare_account_id",
     "domain_bkash_number",
@@ -103,7 +111,11 @@ export async function setPlatformSetting(key: PlatformKey, value: string, adminI
 
 export interface DomainSettings {
   enabled: boolean;
+  dynadotUseSandbox: boolean;
+  dynadotSandboxApiKey: string;
+  dynadotSandboxApiSecret: string;
   dynadotApiKey: string;
+  dynadotApiSecret: string;
   cloudflareApiToken: string;
   cloudflareAccountId: string;
   bkashNumber: string;
@@ -123,7 +135,11 @@ export const getDomainSettings = unstable_cache(
       .select("key, value")
       .in("key", [
         "domain_reseller_enabled",
+        "dynadot_use_sandbox",
+        "dynadot_sandbox_api_key",
+        "dynadot_sandbox_api_secret",
         "dynadot_api_key",
+        "dynadot_api_secret",
         "cloudflare_api_token",
         "cloudflare_account_id",
         "domain_bkash_number",
@@ -141,7 +157,11 @@ export const getDomainSettings = unstable_cache(
     };
     return {
       enabled: map.get("domain_reseller_enabled") === "true",
+      dynadotUseSandbox: map.get("dynadot_use_sandbox") === "true",
+      dynadotSandboxApiKey: decryptIf("dynadot_sandbox_api_key"),
+      dynadotSandboxApiSecret: decryptIf("dynadot_sandbox_api_secret"),
       dynadotApiKey: decryptIf("dynadot_api_key"),
+      dynadotApiSecret: decryptIf("dynadot_api_secret"),
       cloudflareApiToken: decryptIf("cloudflare_api_token"),
       cloudflareAccountId: map.get("cloudflare_account_id") ?? "",
       bkashNumber: map.get("domain_bkash_number") ?? "",
