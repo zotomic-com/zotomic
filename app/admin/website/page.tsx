@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Palette, ListTree, Search, Tags, LayoutGrid, Settings2, ArrowRight } from "lucide-react";
+import { FileText, Palette, ListTree, Search, Tags, LayoutGrid, KeyRound, Settings2, ArrowRight } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-server";
 import { PageHeader } from "@/components/app/PageHeader";
 import { getAllStructuralPages, getAllCustomPages } from "@/lib/site-content";
@@ -44,6 +44,12 @@ const SECTIONS = [
     icon: LayoutGrid,
     title: "Services catalog",
     text: "The service cards on /services — domain, hosting, web design and more. Add, edit, delete, reorder.",
+  },
+  {
+    href: "/admin/website/social-login",
+    icon: KeyRound,
+    title: "Social login",
+    text: "Google and Facebook sign-in for /login and /signup — paste credentials, publish each independently.",
   },
   {
     href: "/admin/website/settings",

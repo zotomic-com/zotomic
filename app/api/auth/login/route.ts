@@ -32,13 +32,18 @@ export async function POST(req: NextRequest) {
     const db = getAdminSupabase();
     const { data: user, error } = await db
       .from("users")
-      .select("id, name, email, password_hash, role, status, blocked, blocked_reason")
+      .select("id, name, email, password_hash, role, status, blocked, blocked_reason, auth_provider")
       .eq("email", cleanEmail)
       .maybeSingle();
 
     if (error || !user) {
       await logLoginEvent({ email: cleanEmail, ip, ua, outcome: "not_found" });
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+    if (!user.password_hash) {
+      await logLoginEvent({ userId: user.id, email: cleanEmail, ip, ua, outcome: "bad_password" });
+      const provider = user.auth_provider === "facebook" ? "Facebook" : "Google";
+      return NextResponse.json({ error: `This account uses ${provider} sign-in — use that button instead.` }, { status: 401 });
     }
     if (user.blocked) {
       await logLoginEvent({ userId: user.id, email: cleanEmail, ip, ua, outcome: "blocked" });

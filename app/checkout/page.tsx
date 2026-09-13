@@ -13,12 +13,14 @@ interface SessionUser {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  address?: string;
 }
 
 export default function CheckoutPage() {
   const [items, setItems] = useState<DomainCartItem[] | null>(null);
   const [user, setUser] = useState<SessionUser | null | undefined>(undefined); // undefined = still loading
-  const [form, setForm] = useState({ name: "", phone: "", email: "", paymentMethod: "bkash" as "bkash" | "nagad" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", paymentMethod: "bkash" as "bkash" | "nagad" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [confirmation, setConfirmation] = useState<{ orderNumber: string; invoiceAmount: number; payTo: string } | null>(null);
@@ -30,7 +32,7 @@ export default function CheckoutPage() {
       .then((d) => {
         setUser(d?.user ?? null);
         if (d?.user) {
-          setForm((f) => ({ ...f, name: d.user.name ?? "", email: d.user.email ?? "" }));
+          setForm((f) => ({ ...f, name: d.user.name ?? "", email: d.user.email ?? "", phone: d.user.phone ?? "", address: d.user.address ?? "" }));
         }
       })
       .catch(() => setUser(null));
@@ -50,6 +52,7 @@ export default function CheckoutPage() {
           customerName: form.name,
           customerPhone: form.phone,
           customerEmail: form.email || undefined,
+          customerAddress: form.address,
           paymentMethod: form.paymentMethod,
         }),
       });
@@ -146,6 +149,9 @@ export default function CheckoutPage() {
             </Field>
             <Field label="Email (optional)">
               <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+            </Field>
+            <Field label="Address">
+              <Input required value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="House, road, area, city" />
             </Field>
             <Field label="Pay with">
               <Select value={form.paymentMethod} onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value as "bkash" | "nagad" }))}>

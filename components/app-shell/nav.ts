@@ -17,6 +17,7 @@ import {
   Network,
   Plug,
   ReceiptText,
+  Server,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -27,6 +28,7 @@ import {
   Users,
   Wallet,
   Warehouse,
+  Zap,
 } from "lucide-react";
 
 export interface NavItem {
@@ -53,13 +55,22 @@ export const APP_NAV: NavItem[] = [
   { href: "/app/tasks", label: "Tasks", icon: ListChecks },
   { href: "/app/website", label: "Website", icon: Globe },
   { href: "/app/domains", label: "Domain", icon: Network },
+  { href: "/app/hosting", label: "Hosting", icon: Server },
+  { href: "/app/custom-website", label: "Custom Website", icon: LayoutTemplate },
+  { href: "/app/automation", label: "Automation", icon: Zap },
   { href: "/app/integrations", label: "Integrations", icon: Plug },
   { href: "/app/billing", label: "Billing", icon: CreditCard },
   { href: "/app/settings", label: "Settings", icon: Settings },
 ];
 
 /** Reduced sidebar for a signed-up account with no store yet — everything else stays locked until onboarding. */
-export const STORELESS_APP_NAV: NavItem[] = [{ href: "/app/domains", label: "Domain", icon: Network }];
+export const STORELESS_APP_NAV: NavItem[] = [
+  { href: "/app/domains", label: "Domain", icon: Network },
+  { href: "/app/hosting", label: "Hosting", icon: Server },
+  { href: "/app/custom-website", label: "Custom Website", icon: LayoutTemplate },
+  { href: "/app/automation", label: "Automation", icon: Zap },
+  { href: "/app/settings", label: "Settings", icon: Settings },
+];
 
 /** Admin console sidebar — order matches the approved admin mockup. */
 export const ADMIN_NAV: NavItem[] = [

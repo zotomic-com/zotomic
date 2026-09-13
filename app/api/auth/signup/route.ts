@@ -22,10 +22,10 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
 
   try {
-    const { name, email, password } = await req.json();
+    const { name, email, phone, password } = await req.json();
 
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: "Name, email and password are required" }, { status: 400 });
+    if (!name || !email || !phone || !password) {
+      return NextResponse.json({ error: "Name, email, phone and password are required" }, { status: 400 });
     }
     if (String(password).length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
       .insert({
         name: String(name).trim(),
         email: cleanEmail,
+        phone: String(phone).trim().slice(0, 32),
         password_hash,
         role: "owner",
         status: "active",

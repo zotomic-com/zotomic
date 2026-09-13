@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { enforceRateLimit } from "@/lib/ratelimit";
 import { getAuthUser } from "@/lib/auth-server";
+import { getAdminSupabase } from "@/lib/supabase";
 import { getDomainSettings } from "@/lib/platform-settings";
 import { createCartOrder, type CartCheckoutItem } from "@/lib/domains/orders";
 
@@ -9,6 +10,7 @@ interface Body {
   customerName?: string;
   customerPhone?: string;
   customerEmail?: string;
+  customerAddress?: string;
   paymentMethod?: string;
 }
 
@@ -34,8 +36,11 @@ export async function POST(req: NextRequest) {
 
   const customerName = clean(body.customerName, 120);
   const customerPhone = clean(body.customerPhone, 32);
+  const customerAddress = clean(body.customerAddress, 300);
   const paymentMethod = body.paymentMethod === "nagad" ? "nagad" : "bkash";
-  if (!customerName || !customerPhone) return NextResponse.json({ error: "Name and phone are required." }, { status: 400 });
+  if (!customerName || !customerPhone || !customerAddress) {
+    return NextResponse.json({ error: "Name, phone and address are required." }, { status: 400 });
+  }
 
   const rawItems = Array.isArray(body.items) ? body.items.slice(0, 20) : [];
   if (rawItems.length === 0) return NextResponse.json({ error: "Your cart is empty." }, { status: 400 });
@@ -62,6 +67,9 @@ export async function POST(req: NextRequest) {
     items,
   });
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
+
+  // Remember phone/address on the profile so future checkouts (domains, and later Hosting/Custom Website/Automation) prefill.
+  await getAdminSupabase().from("users").update({ phone: customerPhone, address: customerAddress }).eq("id", authUser.id);
 
   return NextResponse.json(result);
 }

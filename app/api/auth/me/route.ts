@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const { data: user } = await db
     .from("users")
-    .select("id, name, email, role, status, created_at, last_login")
+    .select("id, name, email, phone, address, role, status, created_at, last_login")
     .eq("id", authUser.id)
     .single();
 

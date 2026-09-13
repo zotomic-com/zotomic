@@ -44,6 +44,13 @@ export const PLATFORM_KEYS = {
   domain_markup_percent_renewal: { secret: false, label: "Markup over wholesale — renewal (%)" },
   domain_usd_to_bdt_rate: { secret: false, label: "Fallback USD → BDT rate (used only if the live feed is unreachable)" },
   domain_grace_days: { secret: false, label: "Grace period after expiry (days)" },
+  // Social login — /login and /signup
+  oauth_google_enabled: { secret: false, label: "Show \"Continue with Google\"" },
+  oauth_google_client_id: { secret: false, label: "Google OAuth client ID" },
+  oauth_google_client_secret: { secret: true, label: "Google OAuth client secret" },
+  oauth_facebook_enabled: { secret: false, label: "Show \"Continue with Facebook\"" },
+  oauth_facebook_client_id: { secret: false, label: "Facebook App ID" },
+  oauth_facebook_client_secret: { secret: true, label: "Facebook App secret" },
 } as const;
 
 export type PlatformKey = keyof typeof PLATFORM_KEYS;
@@ -70,6 +77,14 @@ export const PLATFORM_KEY_GROUPS = {
     "domain_markup_percent_renewal",
     "domain_usd_to_bdt_rate",
     "domain_grace_days",
+  ],
+  socialLogin: [
+    "oauth_google_enabled",
+    "oauth_google_client_id",
+    "oauth_google_client_secret",
+    "oauth_facebook_enabled",
+    "oauth_facebook_client_id",
+    "oauth_facebook_client_secret",
   ],
 } as const satisfies Record<string, readonly PlatformKey[]>;
 
@@ -178,6 +193,49 @@ export const getDomainSettings = unstable_cache(
     };
   },
   ["domain-settings"],
+  { revalidate: 300, tags: ["platform-settings"] },
+);
+
+export interface SocialLoginSettings {
+  googleEnabled: boolean;
+  googleClientId: string;
+  googleClientSecret: string;
+  facebookEnabled: boolean;
+  facebookClientId: string;
+  facebookClientSecret: string;
+}
+
+/** Social-login config for /login, /signup, and the OAuth callback routes. Cached 5 min. */
+export const getSocialLoginSettings = unstable_cache(
+  async (): Promise<SocialLoginSettings> => {
+    const db = getAdminSupabase();
+    const { data } = await db
+      .from("platform_settings")
+      .select("key, value")
+      .in("key", [
+        "oauth_google_enabled",
+        "oauth_google_client_id",
+        "oauth_google_client_secret",
+        "oauth_facebook_enabled",
+        "oauth_facebook_client_id",
+        "oauth_facebook_client_secret",
+      ]);
+    const map = new Map((data ?? []).map((r) => [r.key as string, r.value as string | null]));
+    const decryptIf = (key: PlatformKey) => {
+      const raw = map.get(key);
+      if (!raw) return "";
+      return PLATFORM_KEYS[key].secret ? decrypt(raw) || "" : raw;
+    };
+    return {
+      googleEnabled: map.get("oauth_google_enabled") === "true",
+      googleClientId: map.get("oauth_google_client_id") ?? "",
+      googleClientSecret: decryptIf("oauth_google_client_secret"),
+      facebookEnabled: map.get("oauth_facebook_enabled") === "true",
+      facebookClientId: map.get("oauth_facebook_client_id") ?? "",
+      facebookClientSecret: decryptIf("oauth_facebook_client_secret"),
+    };
+  },
+  ["social-login-settings"],
   { revalidate: 300, tags: ["platform-settings"] },
 );
 
