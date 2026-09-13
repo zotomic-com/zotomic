@@ -26,7 +26,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const onBilling = pathname === "/app/billing";
-  const onDomains = pathname === "/app/domains" || pathname.startsWith("/app/domains/");
+  // Every route in STORELESS_APP_NAV must work before a business exists — derive the
+  // redirect carve-out from that list instead of hardcoding each path (so adding a new
+  // storeless-safe page there doesn't silently need a second edit here too).
+  const storelessAllowed = STORELESS_APP_NAV.some((item) => pathname === item.href || pathname.startsWith(item.href + "/"));
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -40,12 +43,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         setBusinesses(d.businesses ?? []);
         setBilling(d.billing ?? null);
         setUnread(d.unreadNotifications ?? 0);
-        if (d.user.role === "owner" && (!d.businesses || d.businesses.length === 0) && !onDomains) {
+        if (d.user.role === "owner" && (!d.businesses || d.businesses.length === 0) && !storelessAllowed) {
           router.replace("/onboarding");
         }
       })
       .catch(() => router.replace("/login"));
-  }, [router, onDomains]);
+  }, [router, storelessAllowed]);
 
   useEffect(() => {
     if (billing?.hardLocked && !onBilling) router.replace("/app/billing");
