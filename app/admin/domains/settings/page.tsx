@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAdmin } from "@/lib/admin-server";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -107,8 +108,11 @@ export default async function AdminDomainSettingsPage() {
         </CardHeader>
         <CardBody className="space-y-3">
           <p className="text-sm text-fg-muted">
-            Retail price = wholesale (USD, from Dynadot) × the exchange rate below × (1 + markup), rounded to the
-            nearest ৳10.
+            Retail price = wholesale (USD, from Dynadot) × a live USD→BDT feed × (1 + markup), rounded to the nearest
+            ৳10. The rate below is only a fallback for when that feed is unreachable.{" "}
+            <Link href="/admin/domains?tab=pricing" className="font-medium text-primary hover:underline">
+              Set commission per TLD on the Pricing tab →
+            </Link>
           </p>
           <SettingsFieldsForm fields={fieldsFor(["domain_markup_percent", "domain_usd_to_bdt_rate", "domain_grace_days"], stored)} />
         </CardBody>

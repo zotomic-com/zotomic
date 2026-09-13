@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search, CheckCircle2, XCircle, Loader2, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ interface PricedDomain {
 }
 
 export function DomainsClient() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
@@ -54,7 +56,7 @@ export function DomainsClient() {
     }
   };
 
-  const buy = (r: PricedDomain) => {
+  const queue = (r: PricedDomain) => {
     const item: DomainCartItem = {
       id: `register:${r.domain}`,
       type: "register",
@@ -65,6 +67,11 @@ export function DomainsClient() {
     addToCart(item);
     setAdded((s) => new Set(s).add(r.domain));
     setCount(cartCount());
+  };
+
+  const buyNow = (r: PricedDomain) => {
+    queue(r);
+    router.push("/cart");
   };
 
   const addTransfer = () => {
@@ -111,9 +118,14 @@ export function DomainsClient() {
                 </span>
               </span>
               {r.available && r.priceBDT != null ? (
-                <Button size="sm" onClick={() => buy(r)} disabled={added.has(r.domain)}>
-                  {added.has(r.domain) ? "Added" : "Buy"}
-                </Button>
+                <span className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => queue(r)} disabled={added.has(r.domain)}>
+                    {added.has(r.domain) ? "Added" : "Add to cart"}
+                  </Button>
+                  <Button size="sm" onClick={() => buyNow(r)}>
+                    Buy
+                  </Button>
+                </span>
               ) : (
                 <span className="text-sm text-fg-subtle">{r.available ? "Unavailable" : "Taken"}</span>
               )}

@@ -1,8 +1,11 @@
+import { unstable_cache } from "next/cache";
 import { getAdminSupabase } from "@/lib/supabase";
 import { getDomainSettings } from "@/lib/platform-settings";
 import { checkAvailability, registerDomain, renewDomain, setNameservers, transferDomain } from "./dynadot";
 import { createZone, addDnsRecord, setupEmailRouting } from "./cloudflare";
 import { addProjectDomain, dnsRecords } from "@/lib/vercel-domains";
+import { getLiveUsdToBdtRate } from "@/lib/fx-rate";
+import { getPricingRules, resolveCommissionPercent } from "./pricing-rules";
 
 /** A curated set of alternates offered alongside whatever TLD the customer actually searched. Excludes com.bd — Dynadot's RESTful v2 search doesn't support that domain type. */
 export const SUGGESTED_TLDS = ["com", "net", "org", "shop", "store", "online", "xyz", "info", "co"];
@@ -26,8 +29,22 @@ export interface PricedDomain {
   renewalPriceBDT: number | null;
 }
 
-function retailPriceBDT(wholesaleUsd: number, settings: { usdToBdtRate: number; markupPercent: number }): number {
-  return Math.round(((wholesaleUsd * settings.usdToBdtRate * (1 + settings.markupPercent / 100)) / 10)) * 10;
+export interface PricingContext {
+  usdToBdtRate: number;
+  fxSource: "live" | "fallback";
+  markupPercent: number;
+  rules: import("./pricing-rules").PricingRule[];
+}
+
+export async function getPricingContext(): Promise<PricingContext> {
+  const [settings, fx, rules] = await Promise.all([getDomainSettings(), getLiveUsdToBdtRate(), getPricingRules()]);
+  return { usdToBdtRate: fx.rate, fxSource: fx.source, markupPercent: settings.markupPercent, rules };
+}
+
+/** Retail price for a given TLD — a per-TLD commission override if one exists, else the global markup; live FX rate. */
+export function retailPriceBDT(wholesaleUsd: number, tld: string, ctx: PricingContext): number {
+  const commission = resolveCommissionPercent(ctx.rules, "dynadot", tld, ctx.markupPercent);
+  return Math.round((wholesaleUsd * ctx.usdToBdtRate * (1 + commission / 100)) / 10) * 10;
 }
 
 /** The searched domain plus priced availability for a curated set of alternate TLDs on the same name. */
@@ -36,23 +53,42 @@ export async function searchWithSuggestions(query: string): Promise<PricedDomain
   const candidates = [`${base}.${tld}`, ...SUGGESTED_TLDS.filter((t) => t !== tld).map((t) => `${base}.${t}`)];
   const unique = [...new Set(candidates)].slice(0, 15);
 
-  const [settings, results] = await Promise.all([getDomainSettings(), checkAvailability(unique)]);
+  const [ctx, results] = await Promise.all([getPricingContext(), checkAvailability(unique)]);
   if ("error" in results) return results;
 
   const byDomain = new Map(results.map((r) => [r.domain.toLowerCase(), r]));
   return unique.map((d) => {
     const r = byDomain.get(d);
+    const domainTld = splitDomain(d).tld;
     const wholesaleUsd = r?.wholesaleCost ?? null;
     const wholesaleRenewalUsd = r?.wholesaleRenewalCost ?? null;
     return {
       domain: d,
       available: r?.available ?? false,
       wholesaleUsd,
-      priceBDT: wholesaleUsd != null ? retailPriceBDT(wholesaleUsd, settings) : null,
-      renewalPriceBDT: wholesaleRenewalUsd != null ? retailPriceBDT(wholesaleRenewalUsd, settings) : null,
+      priceBDT: wholesaleUsd != null ? retailPriceBDT(wholesaleUsd, domainTld, ctx) : null,
+      renewalPriceBDT: wholesaleRenewalUsd != null ? retailPriceBDT(wholesaleRenewalUsd, domainTld, ctx) : null,
     };
   });
 }
+
+/** Reference wholesale prices per TLD (via a probe domain) — for the admin Pricing tab's display only, cached to avoid hammering Dynadot on every page load. */
+export const getTldReferencePrices = unstable_cache(
+  async (tlds: string[]): Promise<Record<string, { wholesaleUsd: number | null; wholesaleRenewalUsd: number | null }>> => {
+    const unique = [...new Set(tlds)];
+    const probes = unique.map((t) => `zotomic-price-probe.${t}`);
+    const results = await checkAvailability(probes);
+    if ("error" in results) return {};
+    const map: Record<string, { wholesaleUsd: number | null; wholesaleRenewalUsd: number | null }> = {};
+    for (const r of results) {
+      const tld = splitDomain(r.domain).tld;
+      map[tld] = { wholesaleUsd: r.wholesaleCost, wholesaleRenewalUsd: r.wholesaleRenewalCost };
+    }
+    return map;
+  },
+  ["tld-reference-prices"],
+  { revalidate: 3600 },
+);
 
 export interface CartCheckoutItem {
   type: "register" | "transfer";
@@ -86,23 +122,27 @@ export async function createCartOrder(
   if (!payTo) return { error: "That payment method isn't set up yet — try the other one." };
 
   const registerNames = input.items.filter((i) => i.type === "register").map((i) => i.domainName);
-  const quotes = registerNames.length ? await checkAvailability(registerNames) : [];
+  const [quotes, ctx] = await Promise.all([
+    registerNames.length ? checkAvailability(registerNames) : Promise.resolve([]),
+    getPricingContext(),
+  ]);
   if ("error" in quotes) return quotes;
   const byDomain = new Map(quotes.map((q) => [q.domain.toLowerCase(), q]));
 
   const priced: { item: CartCheckoutItem; wholesaleCost: number; retailPrice: number }[] = [];
   for (const item of input.items) {
+    const tld = splitDomain(item.domainName).tld;
     if (item.type === "register") {
       const q = byDomain.get(item.domainName.toLowerCase());
       if (!q || !q.available || q.wholesaleCost == null) {
         return { error: `${item.domainName} is no longer available.` };
       }
-      priced.push({ item, wholesaleCost: q.wholesaleCost, retailPrice: retailPriceBDT(q.wholesaleCost, settings) });
+      priced.push({ item, wholesaleCost: q.wholesaleCost, retailPrice: retailPriceBDT(q.wholesaleCost, tld, ctx) });
     } else {
       if (!item.authCode?.trim()) return { error: `An auth/EPP code is required to transfer ${item.domainName}.` };
       // Dynadot doesn't price transfers via `search` — a transfer is a flat one-year-equivalent fee.
       const wholesaleCost = 12;
-      priced.push({ item, wholesaleCost, retailPrice: retailPriceBDT(wholesaleCost, settings) });
+      priced.push({ item, wholesaleCost, retailPrice: retailPriceBDT(wholesaleCost, tld, ctx) });
     }
   }
 
@@ -283,7 +323,7 @@ export async function fulfillCartOrder(cartOrderId: string): Promise<void> {
 
 export async function renewItem(itemId: string): Promise<{ ok: true } | { error: string }> {
   const db = getAdminSupabase();
-  const { data: item } = await db.from("domain_cart_items").select("domain_name, expires_at").eq("id", itemId).maybeSingle();
+  const { data: item } = await db.from("domain_cart_items").select("domain_name, expires_at, renewal_count").eq("id", itemId).maybeSingle();
   if (!item) return { error: "Domain not found." };
 
   const res = await renewDomain(item.domain_name as string);
@@ -291,6 +331,14 @@ export async function renewItem(itemId: string): Promise<{ ok: true } | { error:
 
   const next = item.expires_at ? new Date(item.expires_at as string) : new Date();
   next.setFullYear(next.getFullYear() + 1);
-  await db.from("domain_cart_items").update({ status: "active", expires_at: next.toISOString().slice(0, 10), last_error: null }).eq("id", itemId);
+  await db
+    .from("domain_cart_items")
+    .update({
+      status: "active",
+      expires_at: next.toISOString().slice(0, 10),
+      last_error: null,
+      renewal_count: ((item.renewal_count as number) ?? 0) + 1,
+    })
+    .eq("id", itemId);
   return { ok: true };
 }

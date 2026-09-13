@@ -41,7 +41,7 @@ export const PLATFORM_KEYS = {
   domain_nagad_number: { secret: false, label: "Nagad number (domain sales)" },
   domain_sms_webhook_secret: { secret: true, label: "SMS webhook secret" },
   domain_markup_percent: { secret: false, label: "Markup over wholesale (%)" },
-  domain_usd_to_bdt_rate: { secret: false, label: "USD → BDT rate (Dynadot prices in USD)" },
+  domain_usd_to_bdt_rate: { secret: false, label: "Fallback USD → BDT rate (used only if the live feed is unreachable)" },
   domain_grace_days: { secret: false, label: "Grace period after expiry (days)" },
 } as const;
 

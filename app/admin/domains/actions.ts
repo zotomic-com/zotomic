@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/admin-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { setPlatformSetting } from "@/lib/platform-settings";
 import { fulfillCartOrder, renewItem } from "@/lib/domains/orders";
+import { createPricingRule, updatePricingRule, deletePricingRule, type PricingRuleInput } from "@/lib/domains/pricing-rules";
 
 async function audit(adminId: string, action: string, summary: string, targetId?: string) {
   await getAdminSupabase()
@@ -73,4 +74,33 @@ export async function renewItemAction(itemId: string): Promise<{ ok: true } | { 
     revalidatePath("/admin/domains");
   }
   return res;
+}
+
+// ---------- per-TLD pricing rules ----------
+
+export async function createPricingRuleAction(input: PricingRuleInput): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  if (!input.tld.trim()) return { error: "TLD is required." };
+  const res = await createPricingRule(input);
+  if ("ok" in res) {
+    await audit(admin.id, "domains.pricing_rule_created", `Added pricing rule for ${input.provider}/.${input.tld}`);
+    revalidatePath("/admin/domains");
+  }
+  return res;
+}
+
+export async function updatePricingRuleAction(id: string, patch: Partial<PricingRuleInput & { enabled: boolean }>) {
+  const admin = await requireAdmin();
+  await updatePricingRule(id, patch);
+  await audit(admin.id, "domains.pricing_rule_updated", "Updated a pricing rule", id);
+  revalidatePath("/admin/domains");
+  return { ok: true };
+}
+
+export async function deletePricingRuleAction(id: string) {
+  const admin = await requireAdmin();
+  await deletePricingRule(id);
+  await audit(admin.id, "domains.pricing_rule_deleted", "Deleted a pricing rule", id);
+  revalidatePath("/admin/domains");
+  return { ok: true };
 }

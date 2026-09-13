@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   // 1. Active domains nearing/at expiry: auto-renew within 7 days, else move past-due ones to grace.
   const { data: activeItems } = await db
     .from("domain_cart_items")
-    .select("id, domain_name, expires_at, auto_renew")
+    .select("id, domain_name, expires_at, auto_renew, renewal_count")
     .eq("status", "active")
     .lte("expires_at", in30.toISOString().slice(0, 10));
 
@@ -48,7 +48,10 @@ export async function POST(req: NextRequest) {
       } else {
         const next = new Date(item.expires_at as string);
         next.setFullYear(next.getFullYear() + 1);
-        await db.from("domain_cart_items").update({ expires_at: next.toISOString().slice(0, 10) }).eq("id", item.id);
+        await db
+          .from("domain_cart_items")
+          .update({ expires_at: next.toISOString().slice(0, 10), renewal_count: ((item.renewal_count as number) ?? 0) + 1 })
+          .eq("id", item.id);
         renewed.push(item.domain_name as string);
       }
     } else if (days < 0) {
