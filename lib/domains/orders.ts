@@ -73,12 +73,14 @@ export async function searchWithSuggestions(query: string): Promise<PricedDomain
 }
 
 /** Reference wholesale prices per TLD (via a probe domain) — for the admin Pricing tab's display only, cached to avoid hammering Dynadot on every page load. */
-export const getTldReferencePrices = unstable_cache(
+const fetchTldReferencePrices = unstable_cache(
   async (tlds: string[]): Promise<Record<string, { wholesaleUsd: number | null; wholesaleRenewalUsd: number | null }>> => {
     const unique = [...new Set(tlds)];
     const probes = unique.map((t) => `zotomic-price-probe.${t}`);
     const results = await checkAvailability(probes);
-    if ("error" in results) return {};
+    // Throw rather than return {} on failure — a transient Dynadot hiccup must
+    // never get cached as "no prices available" for the full revalidate window.
+    if ("error" in results) throw new Error(results.error);
     const map: Record<string, { wholesaleUsd: number | null; wholesaleRenewalUsd: number | null }> = {};
     for (const r of results) {
       const tld = splitDomain(r.domain).tld;
@@ -89,6 +91,17 @@ export const getTldReferencePrices = unstable_cache(
   ["tld-reference-prices"],
   { revalidate: 3600 },
 );
+
+/** Wraps the cached fetch — a failure (transient or not) degrades to "no reference price" rather than breaking the admin page. */
+export async function getTldReferencePrices(
+  tlds: string[],
+): Promise<Record<string, { wholesaleUsd: number | null; wholesaleRenewalUsd: number | null }>> {
+  try {
+    return await fetchTldReferencePrices(tlds);
+  } catch {
+    return {};
+  }
+}
 
 export interface CartCheckoutItem {
   type: "register" | "transfer";
