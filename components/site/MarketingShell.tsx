@@ -23,14 +23,17 @@ export function MarketingShell({
   nav,
   footerNav,
   branding,
+  sessionUser,
 }: {
   children: React.ReactNode;
   nav: NavLink[];
   footerNav: NavLink[];
   branding?: Branding;
+  sessionUser?: { role: string } | null;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const home = sessionUser ? (sessionUser.role === "admin" ? "/admin" : "/app") : "/";
 
   // close on navigation, and always close on Escape
   useEffect(() => setOpen(false), [pathname]);
@@ -84,17 +87,25 @@ export function MarketingShell({
           >
             {open ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
           </button>
-          <Link href="/" aria-label="Zotomic home">
+          <Link href={home} aria-label="Zotomic home">
             <Logo size={24} src={branding?.logoUrl} />
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <Button href="/login" variant="ghost" size="sm" className="hidden sm:inline-flex">
-            Log in
-          </Button>
-          <Button href="/signup" size="sm">
-            Start free
-          </Button>
+          {sessionUser ? (
+            <Button href={home} size="sm">
+              Dashboard
+            </Button>
+          ) : (
+            <>
+              <Button href="/login" variant="ghost" size="sm" className="hidden sm:inline-flex">
+                Log in
+              </Button>
+              <Button href="/signup" size="sm">
+                Start free
+              </Button>
+            </>
+          )}
         </div>
       </header>
 
@@ -104,7 +115,7 @@ export function MarketingShell({
           <div onClick={() => setOpen(false)} className="absolute inset-0 bg-black/40 animate-fade-in-plain" />
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[82vw] animate-slide-in-left flex-col border-r border-border bg-surface p-4 shadow-xl">
             <div className="mb-5 flex items-center justify-between px-2">
-              <Link href="/" onClick={() => setOpen(false)} aria-label="Zotomic home">
+              <Link href={home} onClick={() => setOpen(false)} aria-label="Zotomic home">
                 <Logo src={branding?.logoUrl} />
               </Link>
               <button
@@ -119,12 +130,20 @@ export function MarketingShell({
               <NavList onNavigate={() => setOpen(false)} />
             </div>
             <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
-              <Button href="/login" variant="ghost" size="sm" className="justify-start">
-                Log in
-              </Button>
-              <Button href="/signup" size="sm">
-                Start free <ArrowRight className="h-4 w-4" />
-              </Button>
+              {sessionUser ? (
+                <Button href={home} size="sm">
+                  Dashboard <ArrowRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <>
+                  <Button href="/login" variant="ghost" size="sm" className="justify-start">
+                    Log in
+                  </Button>
+                  <Button href="/signup" size="sm">
+                    Start free <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </aside>
         </div>

@@ -6,6 +6,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import { getPublicTracking, getSiteBranding } from "@/lib/platform-settings";
 import { getNavLinks } from "@/lib/site-nav";
+import { getSessionUser } from "@/lib/tenant-server";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://zotomic.com";
 
@@ -35,11 +36,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [tracking, branding, headerNav, footerNav] = await Promise.all([
+  const [tracking, branding, headerNav, footerNav, sessionUser] = await Promise.all([
     getPublicTracking(),
     getSiteBranding(),
     getNavLinks("header"),
     getNavLinks("footer"),
+    getSessionUser(),
   ]);
 
   return (
@@ -51,7 +53,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen bg-app text-fg antialiased">
         <ThemeProvider>
           <ToastProvider>
-            <ConditionalLayout tracking={tracking} branding={branding} headerNav={headerNav} footerNav={footerNav}>
+            <ConditionalLayout
+              tracking={tracking}
+              branding={branding}
+              headerNav={headerNav}
+              footerNav={footerNav}
+              sessionUser={sessionUser ? { role: sessionUser.role } : null}
+            >
               {children}
             </ConditionalLayout>
           </ToastProvider>

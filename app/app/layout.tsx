@@ -30,10 +30,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // redirect carve-out from that list instead of hardcoding each path (so adding a new
   // storeless-safe page there doesn't silently need a second edit here too). "/app" itself
   // is exact-match only — as a startsWith prefix it would match every nested /app/* route
-  // and disable this guard entirely.
-  const storelessAllowed = STORELESS_APP_NAV.some(
-    (item) => pathname === item.href || (item.href !== "/app" && pathname.startsWith(item.href + "/")),
-  );
+  // and disable this guard entirely. Notifications is reachable via the topbar bell for
+  // every user regardless of business state, so it's carved out here directly rather than
+  // added to STORELESS_APP_NAV (which would also put it in the sidebar as a nav item).
+  const storelessAllowed =
+    pathname === "/app/notifications" ||
+    STORELESS_APP_NAV.some((item) => pathname === item.href || (item.href !== "/app" && pathname.startsWith(item.href + "/")));
 
   useEffect(() => {
     fetch("/api/auth/me")

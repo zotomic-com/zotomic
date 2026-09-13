@@ -54,12 +54,14 @@ export default function ConditionalLayout({
   branding,
   headerNav,
   footerNav,
+  sessionUser,
 }: {
   children: React.ReactNode;
   tracking?: { metaPixelId: string; ga4Id: string };
   branding?: { logoUrl: string; footerTagline: string; footerCopyright: string; footerTrust: { icon: string; title: string; text: string }[] };
   headerNav?: NavLink[];
   footerNav?: NavLink[];
+  sessionUser?: { role: string } | null;
 }) {
   const pathname = usePathname();
   const seg = pathname.split("/")[1] ?? "";
@@ -74,7 +76,7 @@ export default function ConditionalLayout({
     <>
       {tracking?.metaPixelId ? <MetaPixel id={tracking.metaPixelId} /> : null}
       {tracking?.ga4Id ? <GA4 id={tracking.ga4Id} /> : null}
-      <MarketingShell nav={headerNav ?? []} footerNav={footerNav ?? []} branding={branding}>
+      <MarketingShell nav={headerNav ?? []} footerNav={footerNav ?? []} branding={branding} sessionUser={sessionUser}>
         {children}
       </MarketingShell>
     </>

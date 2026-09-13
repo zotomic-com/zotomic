@@ -194,7 +194,16 @@ export function UserActions({ user, isSelf }: { user: U; isSelf: boolean }) {
       {/* Delete */}
       <Modal open={modal === "delete"} onClose={() => setModal(null)} title={`Delete ${user.name}`}>
         <form
-          action={(f) => run(() => deleteUser(user.id, String(f.get("confirm") ?? "")), "Deleted")}
+          action={(f) =>
+            start(async () => {
+              const res = (await deleteUser(user.id, String(f.get("confirm") ?? ""))) as { error?: string };
+              if (res?.error) return toast(res.error, "error");
+              toast("Deleted", "success");
+              // The account is gone — this detail page has nothing left to refresh, so
+              // go back to the list instead of re-fetching a now-404'ing route.
+              router.push("/admin/users");
+            })
+          }
           className="space-y-3"
         >
           <p className="text-sm text-fg-muted">
