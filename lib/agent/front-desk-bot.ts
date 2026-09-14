@@ -14,7 +14,7 @@ import { checkAvailability } from "@/lib/domains/dynadot";
 import { getPricingContext, retailPriceBDT, splitDomain, SUGGESTED_TLDS, getUserDomainOrders } from "@/lib/domains/orders";
 import { getUserServiceInquiries } from "@/lib/service-inquiries";
 import { getServiceCards } from "@/lib/service-cards";
-import { geminiGenerate, parseJsonResponse } from "@/lib/ai/gemini";
+import { geminiGenerate } from "@/lib/ai/gemini";
 import { canAttempt, recordSuccess, recordFailure, chainOpen, sleep, backoffDelay } from "@/lib/ai/circuit";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -73,25 +73,16 @@ const TOOLS: FdTool[] = [
       const niche = str(args.niche);
       if (!businessName || !category || !niche) return { error: "Need businessName, category, and niche." };
 
-      const ideaPrompt = `Business name: "${businessName}"\nCategory: "${category}"\nNiche: "${niche}"\n\nSuggest 8 short, brandable domain base names (no TLD, no spaces, lowercase, letters/numbers/hyphens only) for this business. Mix: some close to the business name, some creative/brandable alternatives tied to the category/niche. Respond as a JSON array of strings only.`;
-      const idea = await geminiGenerate(ideaPrompt, { json: true, temperature: 0.8, maxOutputTokens: 300 }, process.env.GEMINI_API_KEY_FRONTDESK);
-      const parsed = idea ? parseJsonResponse<unknown>(idea.text) : null;
-      let bases: unknown[] = [];
-      if (Array.isArray(parsed)) {
-        bases = parsed;
-      } else if (parsed && typeof parsed === "object") {
-        // The model sometimes wraps the array in an object, e.g. { "names": [...] } — take the first array value.
-        const wrapped = Object.values(parsed as Record<string, unknown>).find((v) => Array.isArray(v));
-        if (Array.isArray(wrapped)) bases = wrapped;
-      }
-      const cleanBases = bases
-        .filter((b): b is string => typeof b === "string")
-        .map((b) => b.toLowerCase().replace(/[^a-z0-9-]/g, ""))
+      const ideaPrompt = `Business name: "${businessName}"\nCategory: "${category}"\nNiche: "${niche}"\n\nSuggest 8 short, brandable domain base names (no TLD, no spaces, lowercase, letters/numbers/hyphens only) for this business. Mix: some close to the business name, some creative/brandable alternatives tied to the category/niche.\n\nRespond with ONLY the 8 names, one per line — no numbering, no bullets, no punctuation, no other text.`;
+      const idea = await geminiGenerate(ideaPrompt, { temperature: 0.8, maxOutputTokens: 300 }, process.env.GEMINI_API_KEY_FRONTDESK);
+      // The model doesn't reliably honor strict JSON mode for this kind of creative list, so
+      // parse plain lines instead — strips any numbering/bullets it adds anyway.
+      const cleanBases = (idea?.text ?? "")
+        .split(/\r?\n/)
+        .map((line) => line.replace(/^[\s\-*\d.)]+/, "").trim().toLowerCase().replace(/[^a-z0-9-]/g, ""))
         .filter(Boolean)
         .slice(0, 8);
-      if (!cleanBases.length) {
-        return { error: `DEBUG no candidate names — geminiCalled=${!!idea} rawText=${idea?.text?.slice(0, 200) ?? "null"} parsedType=${Array.isArray(parsed) ? "array" : typeof parsed}` };
-      }
+      if (!cleanBases.length) return { error: "Could not come up with name ideas right now — try again." };
 
       const candidates: string[] = [];
       for (const base of cleanBases) {
