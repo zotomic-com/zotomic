@@ -159,7 +159,7 @@ export function FrontDeskWidget() {
         }}
         aria-label={open ? "Close Front Desk" : "Chat with Front Desk"}
         style={{ transform, touchAction: "none" }}
-        className={`fixed bottom-5 right-4 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-fg shadow-lg transition-transform ${dragging ? "cursor-grabbing scale-105" : "cursor-grab hover:scale-105"}`}
+        className={`fixed bottom-5 right-4 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-fg shadow-lg ${dragging ? "cursor-grabbing shadow-xl" : "cursor-grab hover:brightness-110"}`}
       >
         {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
       </button>

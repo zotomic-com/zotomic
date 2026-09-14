@@ -59,7 +59,15 @@ export function useDraggableWidget(storageKey: string) {
     const el = elRef.current;
     if (!el) return;
     setPos((p) => {
+      // Force a non-transitioning read: if the element ever gains a CSS
+      // transition on `transform` (e.g. a future hover/press effect), a
+      // mid-animation rect would misreport its true position and, since this
+      // same value feeds back into `pos`, compound into a runaway drift.
+      const prevTransition = el.style.transitionProperty;
+      el.style.transitionProperty = "none";
+      void el.offsetWidth;
       const rect = el.getBoundingClientRect();
+      el.style.transitionProperty = prevTransition;
       const base = new DOMRect(rect.left - p.x, rect.top - p.y, rect.width, rect.height);
       const next = clamp(p.x, p.y, base);
       if (next.x !== p.x || next.y !== p.y) persist(next);

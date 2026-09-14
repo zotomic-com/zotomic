@@ -223,7 +223,7 @@ export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
         }}
         aria-label={open ? "Close assistant" : `Chat with ${boot.name}`}
         style={{ background: "var(--sf-accent)", transform, touchAction: "none" }}
-        className={`fixed bottom-[84px] right-4 z-[60] flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition-transform sm:bottom-5 ${dragging ? "cursor-grabbing scale-105" : "cursor-grab hover:scale-105"}`}
+        className={`fixed bottom-[84px] right-4 z-[60] flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg sm:bottom-5 ${dragging ? "cursor-grabbing shadow-xl" : "cursor-grab hover:brightness-110"}`}
       >
         {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
       </button>
