@@ -20,6 +20,30 @@ import { canAttempt, recordSuccess, recordFailure, chainOpen, sleep, backoffDela
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL_CHAIN = ["gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.6-flash"];
 
+function levenshtein(a: string, b: string): number {
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+/**
+ * Never suggest Zotomic's own brand name or a lookalike (zotomix, zotomik, …) —
+ * confusing at best, brand-safety risk at worst. A prompt instruction alone isn't
+ * reliable enough (models drift), so this is enforced as a hard filter regardless
+ * of what the model produces.
+ */
+function tooCloseToOwnBrand(base: string): boolean {
+  const b = base.toLowerCase();
+  if (b.includes("zotomi")) return true;
+  return levenshtein(b, "zotomic") <= 2;
+}
+
 export interface FdBotContext {
   userId: string | null;
 }
@@ -73,20 +97,22 @@ const TOOLS: FdTool[] = [
       const niche = str(args.niche);
       if (!businessName || !category || !niche) return { error: "Need businessName, category, and niche." };
 
-      const ideaPrompt = `Business: "${businessName}" — a ${niche} business in ${category}.
+      const ideaPrompt = `You're a brand naming consultant with decades of experience naming startups and consumer brands — the kind of person studios like Lexicon or Eat My Words employ.
 
-List 8 short, modern, brandable domain base names for this business, the kind of one-word name a real startup would pick — think Notion, Stripe, Figma, Canva. Not a literal description.
+Business: "${businessName}" — ${niche}, in the ${category} space.
 
-Aim for: a few close variants of the business name itself, and several invented or evocative single words tied to what the business does. Each name 4-14 characters, one word, no spaces or punctuation, lowercase letters/numbers/hyphens only.
+Give 8 domain base names, drawing on a genuine mix of professional naming strategies: one or two invented/coined words with no prior meaning (like Kodak, Spotify, Google), one or two blended or compound words that fuse two real ideas into something new (like Pinterest, Snapchat, Instagram), one or two evocative words borrowed or adapted from an existing word for the feeling they carry rather than a literal description (like Amazon, Nike), and two or three direct or lightly reworked variants of the business's own name.
 
-Output format: exactly 8 lines, one name per line, nothing else — no intro, no explanation, no numbering.`;
+A good name is short, pronounceable on first read, easy to spell after hearing it once, and distinctive — never a plain industry word by itself, never a string of keywords jammed together, and never a name resembling this platform's own brand (Zotomic). 4-14 characters, one word, lowercase letters/numbers/hyphens only.
 
-      const tryGenerate = () => geminiGenerate(ideaPrompt, { temperature: 0.7, maxOutputTokens: 200 }, process.env.GEMINI_API_KEY_FRONTDESK);
+Reply with exactly 8 lines, one name per line — nothing else, no intro, no explanation, no numbering.`;
+
+      const tryGenerate = () => geminiGenerate(ideaPrompt, { temperature: 0.75, maxOutputTokens: 220 }, process.env.GEMINI_API_KEY_FRONTDESK);
       const extractBases = (text: string) =>
         text
           .split(/\r?\n/)
           .map((line) => line.replace(/^[\s\-*\d.)]+/, "").trim().toLowerCase().replace(/[^a-z0-9-]/g, ""))
-          .filter((b) => b.length >= 3 && b.length <= 16)
+          .filter((b) => b.length >= 3 && b.length <= 16 && !tooCloseToOwnBrand(b))
           .slice(0, 8);
 
       let idea = await tryGenerate();
