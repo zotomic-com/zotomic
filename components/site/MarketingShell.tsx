@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { siteIcon } from "@/lib/site-icons";
 import type { NavLink } from "@/lib/site-nav";
 import { SiteFooter } from "./SiteFooter";
+import { FrontDeskWidget } from "./FrontDeskWidget";
 
 interface Branding {
   logoUrl: string;
@@ -151,6 +152,7 @@ export function MarketingShell({
 
       <main className="flex-1">{children}</main>
       <SiteFooter nav={footerNav} branding={branding} />
+      <FrontDeskWidget />
     </div>
   );
 }

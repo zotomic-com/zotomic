@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { usePathname } from "next/navigation";
 import { MessageCircle, X, Send, Sparkles, ArrowRight } from "lucide-react";
+import { useDraggableWidget } from "@/components/site/useDraggableWidget";
 
 interface Bootstrap {
   enabled: boolean;
@@ -121,9 +121,7 @@ function ProductCards({ products, list }: { products: ProductCard[]; list?: { la
 }
 
 export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
-  const pathname = usePathname();
-  const isImmersivePdp = /\/products\/[^/]+$/.test(pathname || "");
-
+  const { pos, dragging, onPointerDown, onPointerMove, onPointerUp } = useDraggableWidget(`zt_sf_pos_${storeSlug}`);
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -207,27 +205,31 @@ export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
   if (!boot) return null;
 
   const showGreeting = messages.length === 0;
+  const transform = `translate(${pos.x}px, ${pos.y}px)`;
 
   return (
     <>
       {/* Launcher */}
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(e) => {
+          if (!onPointerUp()) setOpen((o) => !o);
+          e.preventDefault();
+        }}
         aria-label={open ? "Close assistant" : `Chat with ${boot.name}`}
-        className={`fixed right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 ${
-          isImmersivePdp ? "bottom-4 hidden sm:flex" : "bottom-[84px] sm:bottom-5"
-        }`}
-        style={{ background: "var(--sf-accent)" }}
+        style={{ background: "var(--sf-accent)", transform, touchAction: "none" }}
+        className={`fixed bottom-[84px] right-4 z-[60] flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition-transform sm:bottom-5 ${dragging ? "cursor-grabbing scale-105" : "cursor-grab hover:scale-105"}`}
       >
-        {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+        {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
       </button>
 
       {/* Panel */}
       {open && (
         <div
-          className="fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-hidden border border-[var(--sf-line)] bg-[var(--sf-bg)] text-[var(--sf-fg)] shadow-2xl sm:inset-x-auto sm:right-4 sm:bottom-24 sm:h-[560px] sm:w-[380px] sm:rounded-[var(--sf-radius-lg)]"
-          style={{ maxHeight: "80vh", height: "70vh" }}
+          style={{ maxHeight: "75vh", height: "60vh", transform }}
+          className="fixed inset-x-3 bottom-[140px] z-[60] flex flex-col overflow-hidden rounded-[var(--sf-radius-lg)] border border-[var(--sf-line)] bg-[var(--sf-bg)] text-[var(--sf-fg)] shadow-2xl sm:inset-x-auto sm:bottom-20 sm:right-4 sm:h-[460px] sm:w-[340px]"
         >
           <div
             className="flex items-center gap-2 px-4 py-3 text-white"

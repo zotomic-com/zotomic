@@ -10,6 +10,9 @@ import {
   getStorefrontAssistantState,
 } from "@/lib/storefront/assistant";
 import { getStorefrontSignals, normalizeSignals } from "@/lib/storefront/assistant-signals";
+import { getUserDomainOrders } from "@/lib/domains/orders";
+import { getUserServiceInquiries } from "@/lib/service-inquiries";
+import { getServiceCards } from "@/lib/service-cards";
 import type { PlanId } from "@/lib/plans";
 import type { ToolContext, ToolDef } from "./types";
 
@@ -1251,6 +1254,42 @@ const update_storefront_assistant: ToolDef = {
   },
 };
 
+const my_platform_orders: ToolDef = {
+  name: "my_platform_orders",
+  description: "The signed-in owner's own domain orders bought through Zotomic (not this store's customer orders) — status, payment, and fulfillment for each.",
+  risk: "read",
+  creditCost: 0,
+  parameters: { type: "object", properties: {} },
+  async handler(ctx) {
+    const orders = await getUserDomainOrders(ctx.userId);
+    return orders.length ? { orders } : { note: "No domain orders yet." };
+  },
+};
+
+const my_service_requests: ToolDef = {
+  name: "my_service_requests",
+  description: "The signed-in owner's own Hosting / Custom Website / Automation requests to Zotomic and their status.",
+  risk: "read",
+  creditCost: 0,
+  parameters: { type: "object", properties: {} },
+  async handler(ctx) {
+    const requests = await getUserServiceInquiries(ctx.userId);
+    return requests.length ? { requests } : { note: "No service requests yet." };
+  },
+};
+
+const platform_services: ToolDef = {
+  name: "platform_services",
+  description: "What Zotomic itself sells — domains, hosting, web development, automation — and which are live vs. coming soon. Use this for 'can I buy hosting from Zotomic' style questions, not about this store's own products.",
+  risk: "read",
+  creditCost: 0,
+  parameters: { type: "object", properties: {} },
+  async handler() {
+    const cards = await getServiceCards();
+    return { services: cards.map((c) => ({ title: c.title, description: c.description, status: c.status, href: c.href })) };
+  },
+};
+
 export const TOOLS: ToolDef[] = [
   get_business_profile,
   get_business_settings,
@@ -1282,6 +1321,9 @@ export const TOOLS: ToolDef[] = [
   update_storefront_assistant,
   update_product,
   update_business_settings,
+  my_platform_orders,
+  my_service_requests,
+  platform_services,
 ];
 
 export const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));

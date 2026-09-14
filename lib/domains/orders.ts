@@ -337,6 +337,40 @@ async function fulfillItem(item: Record<string, unknown>): Promise<void> {
     .eq("id", itemId);
 }
 
+export interface UserDomainOrder {
+  orderNumber: string;
+  status: string;
+  invoiceAmountBDT: number;
+  method: string;
+  createdAt: string;
+  items: { domain: string; type: string; status: string; expiresAt: string | null; lastError: string | null }[];
+}
+
+/** A signed-in user's own domain orders (any status) — shared by the Front Desk and Hermes assistants. */
+export async function getUserDomainOrders(userId: string): Promise<UserDomainOrder[]> {
+  const db = getAdminSupabase();
+  const { data } = await db
+    .from("domain_cart_orders")
+    .select("order_number, status, invoice_amount, payment_method, created_at, domain_cart_items(domain_name, item_type, status, expires_at, last_error)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return (data ?? []).map((o) => ({
+    orderNumber: o.order_number as string,
+    status: o.status as string,
+    invoiceAmountBDT: Number(o.invoice_amount),
+    method: o.payment_method as string,
+    createdAt: o.created_at as string,
+    items: (Array.isArray(o.domain_cart_items) ? o.domain_cart_items : []).map((i) => ({
+      domain: i.domain_name as string,
+      type: i.item_type as string,
+      status: i.status as string,
+      expiresAt: (i.expires_at as string) ?? null,
+      lastError: (i.last_error as string) ?? null,
+    })),
+  }));
+}
+
 /** Fulfill every item in a paid order independently — one failed domain doesn't block the rest. */
 export async function fulfillCartOrder(cartOrderId: string): Promise<void> {
   const db = getAdminSupabase();

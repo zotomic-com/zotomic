@@ -7,6 +7,7 @@ import { Lock, LogOut, TriangleAlert } from "lucide-react";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { APP_NAV, STORELESS_APP_NAV } from "@/components/app-shell/nav";
+import { FrontDeskWidget } from "@/components/site/FrontDeskWidget";
 import { AppContext, type AppBusiness, type AppUser } from "./context";
 
 interface Billing {
@@ -131,6 +132,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <main className="mx-auto max-w-6xl p-4 sm:p-6">{children}</main>
       </div>
+
+      {/* Storeless only — once a business exists, Hermes (the sidebar's Zotomic Assistant) covers this instead. */}
+      {user && businesses.length === 0 && <FrontDeskWidget />}
     </AppContext.Provider>
   );
 }
