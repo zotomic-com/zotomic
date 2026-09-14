@@ -73,14 +73,28 @@ const TOOLS: FdTool[] = [
       const niche = str(args.niche);
       if (!businessName || !category || !niche) return { error: "Need businessName, category, and niche." };
 
-      const ideaPrompt = `Business name: "${businessName}"\nCategory: "${category}"\nNiche: "${niche}"\n\nSuggest 8 short, brandable domain base names (no TLD, no spaces, lowercase, letters/numbers/hyphens only) for this business. Mix: some close to the business name, some creative/brandable alternatives tied to the category/niche.\n\nRespond with ONLY the 8 names, one per line — no numbering, no bullets, no punctuation, no other text.`;
+      const ideaPrompt = `Business name: "${businessName}"
+Category: "${category}"
+Niche: "${niche}"
+
+Generate 8 short, modern, brandable domain base names for this business — the kind of name a real startup would pick (think Notion, Stripe, Figma, Canva): short, easy to say and spell, memorable. NOT a literal description strung together.
+
+Rules:
+- Each name: 4–14 characters, one word (or two short words joined with no space/hyphen).
+- Include 2–3 names that are direct, shortened, or lightly modified versions of the business name itself (e.g. drop a generic word, add a short suffix like "co", "hub", "bd").
+- Include 4–5 creative, brandable alternatives inspired by the category/niche — invented words, blends, or a single evocative word are great. Do NOT just concatenate multiple keywords from the category/niche into one long string.
+- Never include generic filler words ("the", "and", "for", "with", "shop", "store" unless it's a deliberate short suffix).
+- lowercase, letters/numbers/hyphens only, no spaces, no other punctuation.
+
+Respond with ONLY the 8 names, one per line — no numbering, no bullets, no other text.`;
       const idea = await geminiGenerate(ideaPrompt, { temperature: 0.8, maxOutputTokens: 300 }, process.env.GEMINI_API_KEY_FRONTDESK);
       // The model doesn't reliably honor strict JSON mode for this kind of creative list, so
-      // parse plain lines instead — strips any numbering/bullets it adds anyway.
+      // parse plain lines instead — strips any numbering/bullets it adds anyway. Length cap is
+      // a safety net against the model still running on (e.g. stringing keywords together).
       const cleanBases = (idea?.text ?? "")
         .split(/\r?\n/)
         .map((line) => line.replace(/^[\s\-*\d.)]+/, "").trim().toLowerCase().replace(/[^a-z0-9-]/g, ""))
-        .filter(Boolean)
+        .filter((b) => b.length >= 3 && b.length <= 16)
         .slice(0, 8);
       if (!cleanBases.length) return { error: "Could not come up with name ideas right now — try again." };
 

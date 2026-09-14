@@ -355,7 +355,7 @@ function Bubble({ role, children }: { role: "user" | "assistant"; children: Reac
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm ${
+        className={`max-w-[85%] min-w-0 whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm [overflow-wrap:anywhere] ${
           mine ? "text-white" : "border border-[var(--sf-line)] bg-[var(--sf-card)]"
         }`}
         style={mine ? { background: "var(--sf-accent)" } : undefined}
