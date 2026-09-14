@@ -73,32 +73,31 @@ const TOOLS: FdTool[] = [
       const niche = str(args.niche);
       if (!businessName || !category || !niche) return { error: "Need businessName, category, and niche." };
 
-      const ideaPrompt = `Business name: "${businessName}"
-Category: "${category}"
-Niche: "${niche}"
+      const ideaPrompt = `Business: "${businessName}" — a ${niche} business in ${category}.
 
-Generate 8 short, modern, brandable domain base names for this business — the kind of name a real startup would pick (think Notion, Stripe, Figma, Canva): short, easy to say and spell, memorable. NOT a literal description strung together.
+List 8 short, modern, brandable domain base names for this business, the kind of one-word name a real startup would pick — think Notion, Stripe, Figma, Canva. Not a literal description.
 
-Rules:
-- Each name: 4–14 characters, one word (or two short words joined with no space/hyphen).
-- Include 2–3 names that are direct, shortened, or lightly modified versions of the business name itself (e.g. drop a generic word, add a short suffix like "co", "hub", "bd").
-- Include 4–5 creative, brandable alternatives inspired by the category/niche — invented words, blends, or a single evocative word are great. Do NOT just concatenate multiple keywords from the category/niche into one long string.
-- Never include generic filler words ("the", "and", "for", "with", "shop", "store" unless it's a deliberate short suffix).
-- lowercase, letters/numbers/hyphens only, no spaces, no other punctuation.
+Aim for: a few close variants of the business name itself, and several invented or evocative single words tied to what the business does. Each name 4-14 characters, one word, no spaces or punctuation, lowercase letters/numbers/hyphens only.
 
-Respond with ONLY the 8 names, one per line — no numbering, no bullets, no other text.`;
-      const idea = await geminiGenerate(ideaPrompt, { temperature: 0.8, maxOutputTokens: 300 }, process.env.GEMINI_API_KEY_FRONTDESK);
-      // The model doesn't reliably honor strict JSON mode for this kind of creative list, so
-      // parse plain lines instead — strips any numbering/bullets it adds anyway. Length cap is
-      // a safety net against the model still running on (e.g. stringing keywords together).
-      const cleanBases = (idea?.text ?? "")
-        .split(/\r?\n/)
-        .map((line) => line.replace(/^[\s\-*\d.)]+/, "").trim().toLowerCase().replace(/[^a-z0-9-]/g, ""))
-        .filter((b) => b.length >= 3 && b.length <= 16)
-        .slice(0, 8);
+Output format: exactly 8 lines, one name per line, nothing else — no intro, no explanation, no numbering.`;
+
+      const tryGenerate = () => geminiGenerate(ideaPrompt, { temperature: 0.7, maxOutputTokens: 200 }, process.env.GEMINI_API_KEY_FRONTDESK);
+      const extractBases = (text: string) =>
+        text
+          .split(/\r?\n/)
+          .map((line) => line.replace(/^[\s\-*\d.)]+/, "").trim().toLowerCase().replace(/[^a-z0-9-]/g, ""))
+          .filter((b) => b.length >= 3 && b.length <= 16)
+          .slice(0, 8);
+
+      let idea = await tryGenerate();
+      let cleanBases = extractBases(idea?.text ?? "");
       if (!cleanBases.length) {
-        return { error: `DEBUG geminiCalled=${!!idea} rawText=${JSON.stringify(idea?.text?.slice(0, 400) ?? "null")}` };
+        // The model occasionally returns malformed output for this creative prompt — one retry
+        // before giving up, since a fresh sample usually succeeds.
+        idea = await tryGenerate();
+        cleanBases = extractBases(idea?.text ?? "");
       }
+      if (!cleanBases.length) return { error: "Could not come up with name ideas right now — try again." };
 
       const candidates: string[] = [];
       for (const base of cleanBases) {
