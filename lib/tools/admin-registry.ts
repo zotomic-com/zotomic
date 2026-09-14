@@ -1525,6 +1525,305 @@ const message_store_owner: AdminToolDef = {
   },
 };
 
+/* ──────────────────  orders: domains + service inquiries  ─────────────────── */
+
+async function writeSystemAudit(adminId: string, action: string, summary: string, targetType: string, targetId?: string) {
+  await getAdminSupabase().from("audit_logs").insert({
+    actor_id: adminId,
+    actor_type: "admin",
+    action,
+    target_type: targetType,
+    target_id: targetId ?? null,
+    summary: `Admin assistant: ${summary}`,
+  });
+}
+
+/** Resolve one domain_cart_items row by exact/partial domain name or its id. */
+async function resolveDomainItem(
+  ref: string,
+): Promise<{ id: string; domainName: string; itemStatus: string; cartOrderId: string; orderNumber: string; orderStatus: string } | { error: string }> {
+  const db = getAdminSupabase();
+  const r = ref.trim();
+  if (!r) return { error: "Give a domain name or item id." };
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r);
+  const q = db.from("domain_cart_items").select("id, domain_name, status, cart_order_id, domain_cart_orders(order_number, status)");
+  const { data } = uuid ? await q.eq("id", r).limit(2) : await q.ilike("domain_name", `%${r}%`).limit(5);
+  if (!data?.length) return { error: `No domain matches "${ref}".` };
+  if (data.length > 1) return { error: `Several domains match "${ref}": ${data.map((d) => d.domain_name).join(", ")}. Be more specific.` };
+  const row = data[0];
+  const order = (Array.isArray(row.domain_cart_orders) ? row.domain_cart_orders[0] : row.domain_cart_orders) as { order_number?: string; status?: string } | null;
+  return {
+    id: row.id as string,
+    domainName: row.domain_name as string,
+    itemStatus: row.status as string,
+    cartOrderId: row.cart_order_id as string,
+    orderNumber: order?.order_number ?? "",
+    orderStatus: order?.status ?? "",
+  };
+}
+
+/** Resolve one domain_cart_orders row by order number or id. */
+async function resolveDomainOrder(
+  ref: string,
+): Promise<{ id: string; orderNumber: string; status: string } | { error: string }> {
+  const db = getAdminSupabase();
+  const r = ref.trim();
+  if (!r) return { error: "Give an order number or id." };
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r);
+  const q = db.from("domain_cart_orders").select("id, order_number, status");
+  const { data } = uuid ? await q.eq("id", r).maybeSingle() : await q.ilike("order_number", r).maybeSingle();
+  if (!data) return { error: `No domain order matches "${ref}".` };
+  return { id: data.id as string, orderNumber: data.order_number as string, status: data.status as string };
+}
+
+const domain_orders: AdminToolDef = {
+  name: "domain_orders",
+  description:
+    "Recent domain orders from /domains checkout. Optional orderStatus (pending_payment/paid/cancelled), itemStatus (pending/registering/transferring/active/grace/dropped/failed/cancelled) to find orders with a domain in that state, and limit (default 20, max 50).",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: {
+      orderStatus: { type: "string" },
+      itemStatus: { type: "string" },
+      limit: { type: "integer" },
+    },
+  },
+  async handler(_a, args) {
+    const db = getAdminSupabase();
+    const limit = Math.min(Math.max(nz(args.limit) ?? 20, 1), 50);
+    let q = db
+      .from("domain_cart_orders")
+      .select("id, order_number, customer_name, customer_phone, invoice_amount, payment_method, status, created_at, domain_cart_items(domain_name, item_type, status, last_error)")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    const orderStatus = s(args.orderStatus);
+    if (orderStatus) q = q.eq("status", orderStatus);
+    const { data } = await q;
+    const itemStatus = s(args.itemStatus);
+    let orders = (data ?? []).map((o) => ({
+      orderNumber: o.order_number as string,
+      customer: o.customer_name as string,
+      phone: o.customer_phone as string,
+      amountBDT: Number(o.invoice_amount),
+      method: o.payment_method as string,
+      orderStatus: o.status as string,
+      at: o.created_at as string,
+      items: (Array.isArray(o.domain_cart_items) ? o.domain_cart_items : []).map((i) => ({
+        domain: i.domain_name as string,
+        type: i.item_type as string,
+        status: i.status as string,
+        lastError: (i.last_error as string) ?? null,
+      })),
+    }));
+    if (itemStatus) orders = orders.filter((o) => o.items.some((i) => i.status === itemStatus));
+    return { orders };
+  },
+};
+
+const domain_order_detail: AdminToolDef = {
+  name: "domain_order_detail",
+  description: "Full detail for ONE domain order (by order number or id): customer, payment, and every domain item with its fulfillment status and any error.",
+  risk: "read",
+  parameters: { type: "object", properties: { order: { type: "string" } }, required: ["order"] },
+  async handler(_a, args) {
+    const ord = await resolveDomainOrder(s(args.order));
+    if ("error" in ord) return ord;
+    const db = getAdminSupabase();
+    const [{ data: order }, { data: items }] = await Promise.all([
+      db.from("domain_cart_orders").select("*").eq("id", ord.id).single(),
+      db.from("domain_cart_items").select("*").eq("cart_order_id", ord.id),
+    ]);
+    return {
+      orderNumber: order?.order_number,
+      customer: order?.customer_name,
+      phone: order?.customer_phone,
+      email: order?.customer_email,
+      subtotalBDT: Number(order?.subtotal ?? 0),
+      invoiceAmountBDT: Number(order?.invoice_amount ?? 0),
+      method: order?.payment_method,
+      status: order?.status,
+      paidAt: order?.paid_at,
+      createdAt: order?.created_at,
+      items: (items ?? []).map((i) => ({
+        id: i.id,
+        domain: i.domain_name,
+        type: i.item_type,
+        pointTo: i.point_to,
+        status: i.status,
+        wholesaleCostUSD: Number(i.wholesale_cost),
+        retailPriceBDT: Number(i.retail_price),
+        registeredAt: i.registered_at,
+        expiresAt: i.expires_at,
+        autoRenew: i.auto_renew,
+        lastError: i.last_error,
+      })),
+    };
+  },
+};
+
+const retry_domain_fulfillment: AdminToolDef = {
+  name: "retry_domain_fulfillment",
+  description: "Retry fulfillment for one domain that failed (e.g. after a Dynadot/Cloudflare hiccup, or credentials were just fixed). Identify by domain name or item id.",
+  risk: "consequential",
+  parameters: { type: "object", properties: { domain: { type: "string" } }, required: ["domain"] },
+  async handler(adminId, args) {
+    const item = await resolveDomainItem(s(args.domain));
+    if ("error" in item) return item;
+    if (item.itemStatus !== "failed") return { error: `${item.domainName} isn't in a failed state (it's ${item.itemStatus}).` };
+    const db = getAdminSupabase();
+    await db.from("domain_cart_items").update({ status: "pending", last_error: null }).eq("id", item.id);
+    const { fulfillCartOrder } = await import("@/lib/domains/orders");
+    await fulfillCartOrder(item.cartOrderId);
+    await writeSystemAudit(adminId, "domains.fulfillment_retried", `Retried fulfillment for ${item.domainName}`, "domain_cart_item", item.id);
+    return { domain: item.domainName, retried: true };
+  },
+};
+
+const mark_domain_order_paid: AdminToolDef = {
+  name: "mark_domain_order_paid",
+  description: "Manually mark a domain order as paid when the automated bKash/Nagad SMS match missed it, then trigger fulfillment. Identify by order number or id.",
+  risk: "consequential",
+  parameters: { type: "object", properties: { order: { type: "string" } }, required: ["order"] },
+  async handler(adminId, args) {
+    const ord = await resolveDomainOrder(s(args.order));
+    if ("error" in ord) return ord;
+    if (ord.status !== "pending_payment") return { error: `${ord.orderNumber} isn't awaiting payment (it's ${ord.status}).` };
+    const db = getAdminSupabase();
+    await db.from("domain_cart_orders").update({ status: "paid", paid_at: new Date().toISOString() }).eq("id", ord.id);
+    const { fulfillCartOrder } = await import("@/lib/domains/orders");
+    await fulfillCartOrder(ord.id);
+    await writeSystemAudit(adminId, "domains.marked_paid", `Manually marked ${ord.orderNumber} paid`, "domain_cart_order", ord.id);
+    return { order: ord.orderNumber, status: "paid" };
+  },
+};
+
+const renew_domain: AdminToolDef = {
+  name: "renew_domain",
+  description: "Renew one domain now (extends its expiry a year from Dynadot). Identify by domain name or item id.",
+  risk: "consequential",
+  parameters: { type: "object", properties: { domain: { type: "string" } }, required: ["domain"] },
+  async handler(adminId, args) {
+    const item = await resolveDomainItem(s(args.domain));
+    if ("error" in item) return item;
+    const { renewItem } = await import("@/lib/domains/orders");
+    const res = await renewItem(item.id);
+    if ("error" in res) return res;
+    await writeSystemAudit(adminId, "domains.renewed", `Renewed ${item.domainName}`, "domain_cart_item", item.id);
+    return { domain: item.domainName, renewed: true };
+  },
+};
+
+const domain_settings_status: AdminToolDef = {
+  name: "domain_settings_status",
+  description: "Whether domain sales are published, sandbox vs live mode, and which integrations (Dynadot, Cloudflare, bKash/Nagad numbers) are configured. Never returns the actual key values.",
+  risk: "read",
+  parameters: { type: "object", properties: {} },
+  async handler() {
+    const { getDomainSettings } = await import("@/lib/platform-settings");
+    const s2 = await getDomainSettings();
+    return {
+      published: s2.enabled,
+      dynadotMode: s2.dynadotUseSandbox ? "sandbox" : "live",
+      dynadotSandboxConfigured: !!(s2.dynadotSandboxApiKey && s2.dynadotSandboxApiSecret),
+      dynadotLiveConfigured: !!(s2.dynadotApiKey && s2.dynadotApiSecret),
+      cloudflareConfigured: !!(s2.cloudflareApiToken && s2.cloudflareAccountId),
+      bkashConfigured: !!s2.bkashNumber,
+      nagadConfigured: !!s2.nagadNumber,
+      markupPercentFirstYear: s2.markupPercent,
+      markupPercentRenewal: s2.markupPercentRenewal,
+    };
+  },
+};
+
+const set_domain_reseller_published: AdminToolDef = {
+  name: "set_domain_reseller_published",
+  description: "Publish or unpublish /domains (the public domain-sales page). While unpublished it shows a normal 404 and the search/checkout APIs are disabled.",
+  risk: "consequential",
+  parameters: { type: "object", properties: { published: { type: "boolean" } }, required: ["published"] },
+  async handler(adminId, args) {
+    const published = !!args.published;
+    const { setPlatformSetting } = await import("@/lib/platform-settings");
+    await setPlatformSetting("domain_reseller_enabled", published ? "true" : "false", adminId);
+    const { revalidateTag } = await import("next/cache");
+    revalidateTag("platform-settings");
+    await writeSystemAudit(adminId, "domains.published_toggled", `/domains ${published ? "published" : "unpublished"}`, "platform_settings");
+    return { published };
+  },
+};
+
+const service_inquiries: AdminToolDef = {
+  name: "service_inquiries",
+  description: "Hosting / Custom Website / Automation requests from tenants. Optional service (hosting/custom_website/automation) and status (new/contacted/closed) filters, limit (default 20, max 50).",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: {
+      service: { type: "string", enum: ["hosting", "custom_website", "automation"] },
+      status: { type: "string", enum: ["new", "contacted", "closed"] },
+      limit: { type: "integer" },
+    },
+  },
+  async handler(_a, args) {
+    const db = getAdminSupabase();
+    const limit = Math.min(Math.max(nz(args.limit) ?? 20, 1), 50);
+    let q = db
+      .from("service_inquiries")
+      .select("id, service, message, contact_phone, contact_email, status, created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    const service = s(args.service);
+    if (service) q = q.eq("service", service);
+    const status = s(args.status);
+    if (status) q = q.eq("status", status);
+    const { data } = await q;
+    return {
+      inquiries: (data ?? []).map((r) => ({
+        id: r.id,
+        service: r.service,
+        message: r.message,
+        contactPhone: r.contact_phone,
+        contactEmail: r.contact_email,
+        status: r.status,
+        at: r.created_at,
+      })),
+    };
+  },
+};
+
+const set_service_inquiry_status: AdminToolDef = {
+  name: "set_service_inquiry_status",
+  description: "Mark a service inquiry (from service_inquiries) as contacted or closed. Identify by its id.",
+  risk: "consequential",
+  parameters: {
+    type: "object",
+    properties: { inquiryId: { type: "string" }, status: { type: "string", enum: ["new", "contacted", "closed"] } },
+    required: ["inquiryId", "status"],
+  },
+  async handler(adminId, args) {
+    const db = getAdminSupabase();
+    const id = s(args.inquiryId);
+    const status = s(args.status);
+    const { data: row } = await db.from("service_inquiries").select("id, service").eq("id", id).maybeSingle();
+    if (!row) return { error: "No inquiry with that id." };
+    await db.from("service_inquiries").update({ status }).eq("id", id);
+    await writeSystemAudit(adminId, "service_inquiry.status_changed", `${row.service} inquiry → ${status}`, "service_inquiry", id);
+    return { inquiryId: id, status };
+  },
+};
+
+const orders_overview: AdminToolDef = {
+  name: "orders_overview",
+  description:
+    "One combined view of everything needing attention across domain orders, service inquiries, subscription payments, and assistant-credit top-ups — counts plus the most recent ~30 items. Use this first for 'what needs my attention' before reaching for a narrower tool.",
+  risk: "read",
+  parameters: { type: "object", properties: {} },
+  async handler() {
+    const { getOrdersOverview } = await import("@/lib/admin-orders");
+    return getOrdersOverview();
+  },
+};
+
 /* ────────────────────────  user management  ──────────────────────── */
 
 const list_users: AdminToolDef = {
@@ -2272,6 +2571,16 @@ export const ADMIN_TOOLS: AdminToolDef[] = [
   resolve_payment,
   set_store_plan,
   message_store_owner,
+  domain_orders,
+  domain_order_detail,
+  retry_domain_fulfillment,
+  mark_domain_order_paid,
+  renew_domain,
+  domain_settings_status,
+  set_domain_reseller_published,
+  service_inquiries,
+  set_service_inquiry_status,
+  orders_overview,
 ];
 
 export const ADMIN_TOOL_MAP = new Map(ADMIN_TOOLS.map((t) => [t.name, t]));
