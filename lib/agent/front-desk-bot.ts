@@ -89,7 +89,9 @@ const TOOLS: FdTool[] = [
         .map((b) => b.toLowerCase().replace(/[^a-z0-9-]/g, ""))
         .filter(Boolean)
         .slice(0, 8);
-      if (!cleanBases.length) return { error: "Could not come up with name ideas right now — try again." };
+      if (!cleanBases.length) {
+        return { error: `DEBUG no candidate names — geminiCalled=${!!idea} rawText=${idea?.text?.slice(0, 200) ?? "null"} parsedType=${Array.isArray(parsed) ? "array" : typeof parsed}` };
+      }
 
       const candidates: string[] = [];
       for (const base of cleanBases) {
