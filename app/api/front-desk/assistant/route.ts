@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getAdminSupabase } from "@/lib/supabase";
-import { getSessionUser } from "@/lib/tenant-server";
+import { getLiveSessionUser } from "@/lib/tenant-server";
 import { enforceRateLimit } from "@/lib/ratelimit";
 import { runFrontDeskBot, frontDeskBotConfigured, type FdBotMessage } from "@/lib/agent/front-desk-bot";
 
@@ -19,7 +19,7 @@ function visitorCookie(req: NextRequest): string | null {
 
 /** Widget bootstrap — what to render before the first message. */
 export async function GET() {
-  const user = await getSessionUser();
+  const user = await getLiveSessionUser();
   return NextResponse.json(
     {
       enabled: frontDeskBotConfigured(),
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "The assistant is not available right now." }, { status: 503 });
   }
 
-  const user = await getSessionUser();
+  const user = await getLiveSessionUser();
 
   let visitorId = visitorCookie(req);
   let setCookie = false;
