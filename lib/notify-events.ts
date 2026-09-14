@@ -34,6 +34,7 @@ export const ADMIN_EVENTS: EventDef[] = [
   { key: "report_failed", label: "Weekly report failed", hint: "A report generation errors out", channels: ["in_app", "telegram"], default: { in_app: true, telegram: true } },
   { key: "store_at_cap", label: "Storefront assistant at cap", hint: "A store's chatbot hits its monthly limit", channels: ["in_app"], default: { in_app: true } },
   { key: "service_inquiry", label: "Service inquiry", hint: "A customer asks about Hosting, Custom Website, or Automation", channels: ["in_app", "email"], default: { in_app: true, email: true } },
+  { key: "domain_order_placed", label: "New domain order", hint: "A customer places a domain order", channels: ["in_app", "email"], default: { in_app: true, email: true } },
 ];
 
 export const CUSTOMER_EVENTS: EventDef[] = [

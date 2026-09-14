@@ -5,6 +5,7 @@ import {
   Bot,
   Boxes,
   Building2,
+  ClipboardList,
   Coins,
   CreditCard,
   Globe,
@@ -82,6 +83,7 @@ export const STORELESS_APP_NAV: NavItem[] = [
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/tenants", label: "Tenants / Businesses", icon: Building2 },
+  { href: "/admin/orders", label: "Orders", icon: ClipboardList },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/admin/credits", label: "Credits", icon: Coins },
   { href: "/admin/invoices", label: "Invoices", icon: ReceiptText },

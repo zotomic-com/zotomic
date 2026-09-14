@@ -31,7 +31,7 @@ export async function submitServiceInquiryAction(
   await notifyAdmins("service_inquiry", {
     title: `${SERVICE_LABELS[service]} inquiry — ${user.name}`,
     body: input.message.trim().slice(0, 300),
-    href: "/admin/users",
+    href: "/admin/service-inquiries",
     businessId: businessId ?? undefined,
   });
 

@@ -62,7 +62,7 @@ export async function submitPayment(
   const db = getAdminSupabase();
   const { data: invoice } = await db
     .from("invoices")
-    .select("id")
+    .select("id, invoice_number, currency, businesses(name)")
     .eq("business_id", businessId)
     .eq("status", "open")
     .order("created_at", { ascending: false })
@@ -76,6 +76,16 @@ export async function submitPayment(
     .update({ txn_id: txnId.trim().slice(0, 64), txn_amount: amount, txn_submitted_at: new Date().toISOString() })
     .eq("id", invoice.id);
   if (error) return { error: "Could not submit payment." };
+
+  const business = (Array.isArray(invoice.businesses) ? invoice.businesses[0] : invoice.businesses) as { name?: string } | null;
+  const { notifyAdmins } = await import("@/lib/notify");
+  await notifyAdmins("payment_pending", {
+    title: `Subscription payment to confirm — ${business?.name ?? "a store"}`,
+    body: `Invoice ${invoice.invoice_number} · ${(invoice.currency as string) ?? "BDT"} ${amount} · txn ${txnId.trim().slice(0, 64)}`,
+    href: "/admin/subscriptions",
+    businessId,
+  });
+
   return { ok: true };
 }
 

@@ -219,6 +219,13 @@ export async function createCartOrder(
     return { error: "Could not create the order. Please try again." };
   }
 
+  const { notifyAdmins } = await import("@/lib/notify");
+  await notifyAdmins("domain_order_placed", {
+    title: `New domain order — ${orderNumber}`,
+    body: `${input.customerName} · ৳${invoiceAmount} · ${input.paymentMethod} · ${priced.map((p) => p.item.domainName).join(", ")}`,
+    href: "/admin/domains",
+  });
+
   return { ok: true, orderNumber, invoiceAmount, payTo };
 }
 
