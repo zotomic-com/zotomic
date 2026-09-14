@@ -65,7 +65,11 @@ export function FrontDeskWidget() {
   const { pos, dragging, onPointerDown, onPointerMove, onPointerUp } = useDraggableWidget("zt_fd_pos");
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Lazy initializer reads localStorage synchronously on first render, before any
+  // effect runs — loading it inside a useEffect instead races with the save-on-change
+  // effect below (which fires on mount too, with messages still []) and wipes the
+  // just-restored history right after loading it.
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadLog());
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,8 +89,6 @@ export function FrontDeskWidget() {
     } catch {
       /* private mode */
     }
-    const cached = loadLog();
-    if (cached.length) setMessages(cached);
     return () => {
       alive = false;
     };
