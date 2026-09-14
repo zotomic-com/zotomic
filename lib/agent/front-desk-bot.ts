@@ -96,7 +96,9 @@ Respond with ONLY the 8 names, one per line — no numbering, no bullets, no oth
         .map((line) => line.replace(/^[\s\-*\d.)]+/, "").trim().toLowerCase().replace(/[^a-z0-9-]/g, ""))
         .filter((b) => b.length >= 3 && b.length <= 16)
         .slice(0, 8);
-      if (!cleanBases.length) return { error: "Could not come up with name ideas right now — try again." };
+      if (!cleanBases.length) {
+        return { error: `DEBUG geminiCalled=${!!idea} rawText=${JSON.stringify(idea?.text?.slice(0, 400) ?? "null")}` };
+      }
 
       const candidates: string[] = [];
       for (const base of cleanBases) {
