@@ -14,10 +14,16 @@ const EDGE_MARGIN = 8;
 /**
  * Clamp a translate offset so the element (whose un-translated rect is
  * `base`) stays fully inside the current viewport, with a small edge margin.
+ * Uses `document.documentElement.clientWidth/Height` rather than
+ * `window.innerWidth/innerHeight` — a `position: fixed` element's containing
+ * block excludes the scrollbar, but `innerWidth` includes it, which would
+ * otherwise let the clamp allow a few pixels past the true visible edge.
  */
 function clamp(x: number, y: number, base: DOMRect): Position {
-  const maxX = Math.max(EDGE_MARGIN, window.innerWidth - base.width - EDGE_MARGIN) - base.left;
-  const maxY = Math.max(EDGE_MARGIN, window.innerHeight - base.height - EDGE_MARGIN) - base.top;
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  const maxX = Math.max(EDGE_MARGIN, vw - base.width - EDGE_MARGIN) - base.left;
+  const maxY = Math.max(EDGE_MARGIN, vh - base.height - EDGE_MARGIN) - base.top;
   const minX = EDGE_MARGIN - base.left;
   const minY = EDGE_MARGIN - base.top;
   return {
