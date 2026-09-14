@@ -121,7 +121,7 @@ function ProductCards({ products, list }: { products: ProductCard[]; list?: { la
 }
 
 export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
-  const { pos, dragging, onPointerDown, onPointerMove, onPointerUp } = useDraggableWidget(`zt_sf_pos_${storeSlug}`);
+  const { pos, dragging, ref: dragRef, onPointerDown, onPointerMove, onPointerUp } = useDraggableWidget(`zt_sf_pos_${storeSlug}`);
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [open, setOpen] = useState(false);
   // Lazy initializer reads localStorage synchronously on first render, before any
@@ -214,6 +214,7 @@ export function AssistantWidget({ storeSlug }: { storeSlug: string }) {
       {/* Launcher */}
       <button
         type="button"
+        ref={dragRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={(e) => {

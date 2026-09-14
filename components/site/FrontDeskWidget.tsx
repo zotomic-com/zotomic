@@ -62,7 +62,7 @@ function renderContent(text: string) {
 }
 
 export function FrontDeskWidget() {
-  const { pos, dragging, onPointerDown, onPointerMove, onPointerUp } = useDraggableWidget("zt_fd_pos");
+  const { pos, dragging, ref: dragRef, onPointerDown, onPointerMove, onPointerUp } = useDraggableWidget("zt_fd_pos");
   const [boot, setBoot] = useState<Bootstrap | null>(null);
   const [open, setOpen] = useState(false);
   // Lazy initializer reads localStorage synchronously on first render, before any
@@ -150,6 +150,7 @@ export function FrontDeskWidget() {
     <>
       <button
         type="button"
+        ref={dragRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={(e) => {
