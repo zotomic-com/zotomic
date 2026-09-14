@@ -28,9 +28,25 @@ export default async function AdminSystemHealthPage() {
       const { error } = await db.from("businesses").select("id", { head: true, count: "exact" });
       return !error;
     }),
-    check("AI narrative (Gemini)", async () => {
+    check("Hermes — weekly reports + owner assistant (Gemini)", async () => {
       if (!geminiConfigured()) return false;
       const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + process.env.GEMINI_API_KEY, {
+        signal: AbortSignal.timeout(8000),
+      });
+      return r.ok;
+    }),
+    check("Zotomic admin assistant (Gemini)", async () => {
+      const key = process.env.GEMINI_API_KEY_ADMIN;
+      if (!key) return false;
+      const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + key, {
+        signal: AbortSignal.timeout(8000),
+      });
+      return r.ok;
+    }),
+    check("Storefront assistant (Gemini)", async () => {
+      const key = process.env.GEMINI_API_KEY_STOREFRONT;
+      if (!key) return false;
+      const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + key, {
         signal: AbortSignal.timeout(8000),
       });
       return r.ok;

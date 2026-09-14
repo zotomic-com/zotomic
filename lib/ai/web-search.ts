@@ -294,6 +294,7 @@ export async function runWebSearch(rawQuery: string): Promise<WebSearchOutcome |
       `Cite sources inline as [1], [2] matching the numbers above. ` +
       `If the results don't actually answer it, say so briefly.`,
     { temperature: 0.2, maxOutputTokens: 700 },
+    process.env.GEMINI_API_KEY_ADMIN,
   );
 
   const answer =

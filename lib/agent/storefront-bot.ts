@@ -404,7 +404,7 @@ async function callGemini(
   system: string,
   contents: GeminiContent[],
 ): Promise<{ parts: GeminiPart[]; model: string } | null> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY_STOREFRONT;
   if (!key) return null;
   if (chainOpen(MODEL_CHAIN)) return null;
   const body = {
@@ -578,5 +578,5 @@ export async function runStorefrontBot(
 }
 
 export function storefrontBotConfigured(): boolean {
-  return !!process.env.GEMINI_API_KEY;
+  return !!process.env.GEMINI_API_KEY_STOREFRONT;
 }

@@ -46,7 +46,7 @@ export interface MediaPart {
 }
 
 export function mediaConfigured(): boolean {
-  return !!process.env.GEMINI_API_KEY;
+  return !!process.env.GEMINI_API_KEY_ADMIN;
 }
 
 /**
@@ -57,7 +57,7 @@ export async function analyzeMedia(
   parts: MediaPart[],
   prompt: string,
 ): Promise<{ text: string; model: string } | { error: string }> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY_ADMIN;
   if (!key) return { error: "Media understanding isn't configured." };
   if (!parts.length) return { error: "No media to analyse." };
   if (chainOpen(MODEL_CHAIN)) return { error: "The model is busy right now — try again shortly." };

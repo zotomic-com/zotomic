@@ -25,15 +25,17 @@ interface GenOptions {
   temperature?: number;
 }
 
-export function geminiConfigured(): boolean {
-  return !!process.env.GEMINI_API_KEY;
+/** Pass `apiKey` to check/use a specific assistant's key; omitted = the default (Hermes) key. */
+export function geminiConfigured(apiKey?: string): boolean {
+  return !!(apiKey ?? process.env.GEMINI_API_KEY);
 }
 
 export async function geminiGenerate(
   prompt: string,
   opts: GenOptions = {},
+  apiKey?: string,
 ): Promise<GeminiResult | null> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = apiKey ?? process.env.GEMINI_API_KEY;
   if (!key) return null;
 
   const body = {

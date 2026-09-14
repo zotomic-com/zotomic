@@ -118,7 +118,7 @@ async function callGemini(
   systemText: string,
   tools: AdminToolDef[],
 ): Promise<{ parts: GeminiPart[]; model: string } | null> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY_ADMIN;
   if (!key) return null;
   if (chainOpen(MODEL_CHAIN)) return null;
   const body = {
@@ -308,5 +308,5 @@ export async function runAdminAgent(
 }
 
 export function adminAgentConfigured(): boolean {
-  return !!process.env.GEMINI_API_KEY;
+  return !!process.env.GEMINI_API_KEY_ADMIN;
 }
