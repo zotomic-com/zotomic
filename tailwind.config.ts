@@ -66,12 +66,17 @@ const config: Config = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        marquee: {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-50%)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.2s ease-out",
         "fade-in-plain": "fade-in-plain 0.2s ease-out",
         "slide-in-left": "slide-in-left 0.22s ease-out",
         shimmer: "shimmer 1.5s infinite",
+        marquee: "marquee var(--marquee-duration, 40s) linear infinite",
       },
     },
   },

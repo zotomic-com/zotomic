@@ -3,6 +3,7 @@ import Script from "next/script";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FlowDiagram } from "@/components/site/FlowDiagram";
+import { StorefrontCarousel } from "@/components/site/StorefrontCarousel";
 import { getStructuralPage } from "@/lib/site-content";
 import { siteIcon } from "@/lib/site-icons";
 
@@ -99,6 +100,8 @@ export default async function HomePage() {
           <p className="text-xs text-fg-subtle">No credit card required · Start in minutes</p>
         </div>
       </div>
+
+      <StorefrontCarousel />
     </>
   );
 }
