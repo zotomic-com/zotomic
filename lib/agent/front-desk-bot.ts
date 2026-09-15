@@ -205,8 +205,14 @@ Reply with exactly 8 lines, one name per line — nothing else, no intro, no exp
           type: "string",
           description: "A clean, well-written brief of what they want built, synthesized from the whole conversation — goals, key pages/features, anything specific they mentioned. Write this yourself; don't just repeat their last message.",
         },
-        budgetSignal: { type: "string", description: "Whatever budget context came up, or 'Not discussed' if none." },
-        timeline: { type: "string", description: "Whatever timeline came up, or 'Not discussed' if none." },
+        budgetSignal: {
+          type: "string",
+          description: "REQUIRED whenever a number, range, or 'flexible' came up anywhere in the conversation — extract it here even if you also mention it in projectSummary. Use 'Not discussed' only if truly never mentioned.",
+        },
+        timeline: {
+          type: "string",
+          description: "REQUIRED whenever a deadline or timeframe came up anywhere in the conversation — extract it here even if you also mention it in projectSummary. Use 'Not discussed' only if truly never mentioned.",
+        },
       },
       required: ["name", "contactEmail", "projectSummary"],
     },
