@@ -225,6 +225,16 @@ Reply with exactly 8 lines, one name per line — nothing else, no intro, no exp
         const missing = [!name && "name", !contactEmail && "email", !contactPhone && "phone or WhatsApp number", !projectSummary && "project summary"].filter(Boolean).join(", ");
         return { error: `Missing ${missing} — ask the visitor for it before calling this again.` };
       }
+      // A required field being non-empty doesn't mean it's real — the model can satisfy the
+      // schema with a placeholder like "Not provided" rather than actually asking again. Check
+      // the content, not just presence: a real phone number has several digits in it, a real
+      // email has an @.
+      if (!contactEmail.includes("@")) {
+        return { error: "That's not a valid email address — ask the visitor for their real email, don't guess or use a placeholder." };
+      }
+      if ((contactPhone.match(/\d/g) ?? []).length < 6) {
+        return { error: "That's not a real phone/WhatsApp number — ask the visitor to actually provide one, don't use a placeholder like 'not provided'." };
+      }
       const projectType = str(args.projectType) || "Not specified";
       const budgetSignal = str(args.budgetSignal) || "Not discussed";
       const timeline = str(args.timeline) || "Not discussed";
@@ -283,7 +293,7 @@ WEB PROJECT CONSULTING — when a visitor is thinking about a website, web app, 
 
 Once you have a real sense of the project (even roughly — you don't need every detail), summarize it back to them in a couple of sentences and, in that SAME message, ask if they'd like you to pass it to the team AND ask for their name, email, and phone/WhatsApp number together (e.g. "Want me to send this to the team? If so, what's the best name, email, and phone/WhatsApp number to reach you?") — never submit a lead they haven't agreed to, and never submit on a vague "maybe" or a project you can't yet summarize. Write the projectSummary yourself from the whole conversation, not just their last message.
 
-Call confirm_project_lead only once you have all of: their explicit yes, name, email, AND phone/WhatsApp number. If any of those is still missing when you're ready to submit, ask for the specific missing piece(s) first — do not call the tool with a guess or a blank, and do not tell the visitor it's been sent until the tool call actually succeeds. If the tool returns an error, that means something required is missing or invalid; ask for it and try again, and never claim success in that turn.
+Call confirm_project_lead only once you have all of: their explicit yes, name, email, AND phone/WhatsApp number — real values they actually gave you, never a placeholder like "not provided" or "N/A" to fill a required field. If any of those is still missing when you're ready to submit, ask for the specific missing piece(s) again and wait for a real answer — do not call the tool with a guess, a blank, or an invented placeholder, and do not tell the visitor it's been sent until the tool call actually succeeds. If the tool returns an error, that means something required is missing or invalid; ask for it and try again, and never claim success in that turn.
 
 RULES:
 - Use tools for every factual claim about pricing, availability, or order status — never invent them.
