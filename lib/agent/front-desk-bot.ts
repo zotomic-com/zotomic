@@ -1,9 +1,17 @@
 /**
- * Front Desk — a small, read-only Gemini function-calling agent for zotomic.com
- * itself. Serves prospective and existing Zotomic customers about Zotomic's OWN
- * products: domain names, hosting, web development, and automation services,
- * plus how to create a store. Never touches a tenant's own product catalogue —
- * that stays lib/agent/storefront-bot.ts's job.
+ * Front Desk — a Gemini function-calling agent for zotomic.com itself. Serves
+ * prospective and existing Zotomic customers about Zotomic's OWN products:
+ * domain names, hosting, web development, and automation services, plus how
+ * to create a store. Never touches a tenant's own product catalogue — that
+ * stays lib/agent/storefront-bot.ts's job.
+ *
+ * Also acts as a senior design/dev/architecture consultant for a visitor
+ * describing a potential web project — not just a service directory — and
+ * can confirm a qualified lead (confirm_project_lead) once the visitor has
+ * agreed to send it. That writes into the same service_inquiries table the
+ * /web-development page's lead form uses and notifies admins through the
+ * existing lib/notify.ts pipeline, which reaches the admin Telegram bot(s)
+ * configured in Admin → Assistants — no separate inter-agent messaging.
  *
  * Anonymous visitors get suggestions/info only; a logged-in Zotomic user
  * (resolved server-side by the route, never trusted from the client) also
@@ -12,10 +20,11 @@
 import "server-only";
 import { checkAvailability } from "@/lib/domains/dynadot";
 import { getPricingContext, retailPriceBDT, splitDomain, SUGGESTED_TLDS, getUserDomainOrders } from "@/lib/domains/orders";
-import { getUserServiceInquiries } from "@/lib/service-inquiries";
+import { getUserServiceInquiries, createServiceInquiry } from "@/lib/service-inquiries";
 import { getServiceCards } from "@/lib/service-cards";
 import { geminiGenerate } from "@/lib/ai/gemini";
 import { canAttempt, recordSuccess, recordFailure, chainOpen, sleep, backoffDelay } from "@/lib/ai/circuit";
+import { notifyAdmins } from "@/lib/notify";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL_CHAIN = ["gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.6-flash"];
@@ -181,6 +190,65 @@ Reply with exactly 8 lines, one name per line — nothing else, no intro, no exp
       return { services: cards.map((c) => ({ title: c.title, description: c.description, status: c.status, href: c.href })) };
     },
   },
+  {
+    name: "confirm_project_lead",
+    description:
+      "Submit a qualified web design/development project lead to the Zotomic team, who get notified immediately (including on Telegram) and follow up directly. Only call this AFTER you've summarized the project back to the visitor in your own words and they've explicitly said yes to sending it — never call it mid-conversation or as a guess. Requires their name, contact email, and a clear project summary you've written yourself from the conversation.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "The visitor's name." },
+        contactEmail: { type: "string" },
+        contactPhone: { type: "string", description: "Optional." },
+        projectType: { type: "string", description: "e.g. 'E-commerce store', 'Portfolio site', 'Booking web app', 'Redesign of an existing site'." },
+        projectSummary: {
+          type: "string",
+          description: "A clean, well-written brief of what they want built, synthesized from the whole conversation — goals, key pages/features, anything specific they mentioned. Write this yourself; don't just repeat their last message.",
+        },
+        budgetSignal: { type: "string", description: "Whatever budget context came up, or 'Not discussed' if none." },
+        timeline: { type: "string", description: "Whatever timeline came up, or 'Not discussed' if none." },
+      },
+      required: ["name", "contactEmail", "projectSummary"],
+    },
+    run: async (ctx, args) => {
+      const name = str(args.name);
+      const contactEmail = str(args.contactEmail);
+      const projectSummary = str(args.projectSummary);
+      if (!name || !contactEmail || !projectSummary) {
+        return { error: "Need at least their name, contact email, and a project summary before confirming." };
+      }
+      const projectType = str(args.projectType) || "Not specified";
+      const budgetSignal = str(args.budgetSignal) || "Not discussed";
+      const timeline = str(args.timeline) || "Not discussed";
+      const contactPhone = str(args.contactPhone) || null;
+
+      const fullMessage = `From: ${name} (via Front Desk assistant)
+
+Project type: ${projectType}
+Budget: ${budgetSignal}
+Timeline: ${timeline}
+
+${projectSummary}`;
+
+      const result = await createServiceInquiry({
+        service: "custom_website",
+        message: fullMessage,
+        contactEmail,
+        contactPhone,
+        userId: ctx.userId,
+        businessId: null,
+      });
+      if ("error" in result) return result;
+
+      await notifyAdmins("service_inquiry", {
+        title: `New project lead (Front Desk) — ${name}`,
+        body: `${projectType} · Budget: ${budgetSignal} · Timeline: ${timeline}\n\n${projectSummary}\n\nContact: ${contactEmail}${contactPhone ? " · " + contactPhone : ""}`,
+        href: "/admin/service-inquiries",
+      });
+
+      return { ok: true, note: "Lead submitted and the team has been notified." };
+    },
+  },
 ];
 
 const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
@@ -200,8 +268,13 @@ SCOPE — you help visitors with Zotomic's OWN products and services only:
 - Explaining what Hosting, Web Development, and Automation services offer, and their current status (always via platform_services).
 - Guiding someone through creating a store: sign up at /signup, then a short 2-step onboarding (business name + type, optional data import) — after that they land on their dashboard.
 - For a signed-in visitor: their own domain order status and service request status (my_domain_orders, my_service_requests).
+- Consulting on a custom web design/development project — see WEB PROJECT CONSULTING below.
 
 You do NOT know about, and must never discuss, any individual tenant's own store or products (e.g. a specific shop's t-shirts) — that's a different assistant's job. If asked, say you can only help with Zotomic's own domain/hosting/service offerings.
+
+WEB PROJECT CONSULTING — when a visitor is thinking about a website, web app, or redesign, act like a senior designer, developer, and technical architect who's scoped dozens of these: ask what the site actually needs to do before jumping to features (who's it for, what should a visitor be able to do, is it content-led or transactional), suggest a sensible page/information structure and key features for that kind of project, flag real trade-offs when relevant (e.g. a simple storefront vs. a full custom web app is a different timeline and cost), and orient them on how the work actually happens: a short discovery conversation, a design pass they see before anything is built, development with check-ins, then launch — the same process real Zotomic projects follow. Give real, specific opinions, not vague reassurance — this is a genuine consultation, not a brochure.
+
+Once you have a real sense of the project (even roughly — you don't need every detail), summarize it back to them in a couple of sentences and ask if they'd like you to pass it to the team so someone can follow up with a plan and quote. Only call confirm_project_lead after they clearly say yes — never submit a lead they haven't agreed to, and never submit on a vague "maybe" or a project you can't yet summarize. Write the projectSummary yourself from the whole conversation, not just their last message. After it's submitted, tell them the team has it and will be in touch.
 
 RULES:
 - Use tools for every factual claim about pricing, availability, or order status — never invent them.

@@ -24,8 +24,8 @@ export async function GET() {
     {
       enabled: frontDeskBotConfigured(),
       name: "Front Desk",
-      greeting: "Hi! I can help you find a domain name, explain our hosting/web-dev/automation services, or check your orders.",
-      prompts: ["Suggest a domain name", "What services do you offer?", "Check my orders"],
+      greeting: "Hi! I can help you find a domain name, plan a web design/development project, explain our services, or check your orders.",
+      prompts: ["I need a website built", "Suggest a domain name", "What services do you offer?", "Check my orders"],
       loggedIn: !!user,
     },
     { headers: { "cache-control": "no-store" } },

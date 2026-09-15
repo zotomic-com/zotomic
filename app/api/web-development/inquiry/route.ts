@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminSupabase } from "@/lib/supabase";
 import { enforceRateLimit } from "@/lib/ratelimit";
 import { notifyAdmins } from "@/lib/notify";
+import { createServiceInquiry } from "@/lib/service-inquiries";
 
 interface InquiryBody {
   name?: string;
@@ -28,16 +28,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Name, email and a short brief are required." }, { status: 400 });
     }
 
-    const db = getAdminSupabase();
-    const { error } = await db.from("service_inquiries").insert({
-      user_id: null,
-      business_id: null,
+    const result = await createServiceInquiry({
       service: "custom_website",
       message: `From: ${body.name.trim()}\n\n${body.message.trim().slice(0, 1900)}`,
-      contact_phone: body.phone?.trim().slice(0, 32) || null,
-      contact_email: body.email.trim().slice(0, 200),
+      contactEmail: body.email.trim(),
+      contactPhone: body.phone?.trim() || null,
+      userId: null,
+      businessId: null,
     });
-    if (error) return NextResponse.json({ ok: false, error: "Could not submit your request. Please try again." }, { status: 500 });
+    if ("error" in result) return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
 
     await notifyAdmins("service_inquiry", {
       title: `Web development inquiry — ${body.name.trim()}`,
