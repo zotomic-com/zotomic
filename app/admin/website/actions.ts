@@ -21,6 +21,14 @@ import { saveSystemPlanCard, createCustomPlanCard, updateCustomPlanCard, deleteC
 import type { PlanId } from "@/lib/plans";
 import { createContactTopic, updateContactTopic, deleteContactTopic, reorderContactTopic } from "@/lib/contact-topics";
 import { createServiceCard, updateServiceCard, deleteServiceCard, reorderServiceCard, type ServiceCardInput } from "@/lib/service-cards";
+import { createPortfolioItem, updatePortfolioItem, deletePortfolioItem, reorderPortfolioItem, type PortfolioItemInput } from "@/lib/portfolio";
+import {
+  createWebDevPricingPackage,
+  updateWebDevPricingPackage,
+  deleteWebDevPricingPackage,
+  reorderWebDevPricingPackage,
+  type WebDevPricingPackageInput,
+} from "@/lib/webdev-pricing";
 import { createSocialLink, updateSocialLink, deleteSocialLink, reorderSocialLink, type SocialLinkInput } from "@/lib/social-links";
 import {
   createContactNumber,
@@ -440,6 +448,81 @@ export async function reorderContactNumberAction(id: string, direction: "up" | "
   await requireAdmin();
   await reorderContactNumber(id, direction);
   revalidatePath("/admin/website/branding");
+  return { ok: true };
+}
+
+// ---------- web-development page: client portfolio ----------
+
+export async function createPortfolioItemAction(input: PortfolioItemInput): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  if (!input.title.trim()) return { error: "Title is required." };
+  await createPortfolioItem(input);
+  await audit(admin.id, "website.portfolio_item_created", `Added portfolio project "${input.title}"`);
+  revalidatePath("/admin/website/pages/web-development");
+  revalidatePath("/web-development");
+  return { ok: true };
+}
+
+export async function updatePortfolioItemAction(id: string, patch: Partial<PortfolioItemInput>) {
+  const admin = await requireAdmin();
+  await updatePortfolioItem(id, patch);
+  await audit(admin.id, "website.portfolio_item_updated", "Updated a portfolio project");
+  revalidatePath("/admin/website/pages/web-development");
+  revalidatePath("/web-development");
+  return { ok: true };
+}
+
+export async function deletePortfolioItemAction(id: string) {
+  const admin = await requireAdmin();
+  await deletePortfolioItem(id);
+  await audit(admin.id, "website.portfolio_item_deleted", "Deleted a portfolio project");
+  revalidatePath("/admin/website/pages/web-development");
+  revalidatePath("/web-development");
+  return { ok: true };
+}
+
+export async function reorderPortfolioItemAction(id: string, direction: "up" | "down") {
+  await requireAdmin();
+  await reorderPortfolioItem(id, direction);
+  revalidatePath("/admin/website/pages/web-development");
+  revalidatePath("/web-development");
+  return { ok: true };
+}
+
+// ---------- web-development page: pricing packages ----------
+
+export async function createWebDevPricingPackageAction(input: WebDevPricingPackageInput) {
+  const admin = await requireAdmin();
+  await createWebDevPricingPackage(input);
+  await audit(admin.id, "website.webdev_pricing_created", `Added pricing package "${input.name}"`);
+  revalidatePath("/admin/website/pages/web-development");
+  revalidatePath("/web-development");
+  return { ok: true };
+}
+
+export async function updateWebDevPricingPackageAction(id: string, patch: Partial<WebDevPricingPackageInput & { enabled: boolean }>) {
+  const admin = await requireAdmin();
+  await updateWebDevPricingPackage(id, patch);
+  await audit(admin.id, "website.webdev_pricing_updated", "Updated a pricing package");
+  revalidatePath("/admin/website/pages/web-development");
+  revalidatePath("/web-development");
+  return { ok: true };
+}
+
+export async function deleteWebDevPricingPackageAction(id: string) {
+  const admin = await requireAdmin();
+  await deleteWebDevPricingPackage(id);
+  await audit(admin.id, "website.webdev_pricing_deleted", "Deleted a pricing package");
+  revalidatePath("/admin/website/pages/web-development");
+  revalidatePath("/web-development");
+  return { ok: true };
+}
+
+export async function reorderWebDevPricingPackageAction(id: string, direction: "up" | "down") {
+  await requireAdmin();
+  await reorderWebDevPricingPackage(id, direction);
+  revalidatePath("/admin/website/pages/web-development");
+  revalidatePath("/web-development");
   return { ok: true };
 }
 
