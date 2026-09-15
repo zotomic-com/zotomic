@@ -9,6 +9,8 @@ import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { siteIcon } from "@/lib/site-icons";
 import type { NavLink } from "@/lib/site-nav";
+import type { SocialLink } from "@/lib/social-links";
+import type { ContactNumber } from "@/lib/contact-numbers";
 import { SiteFooter } from "./SiteFooter";
 import { FrontDeskWidget } from "./FrontDeskWidget";
 
@@ -25,12 +27,16 @@ export function MarketingShell({
   footerNav,
   branding,
   sessionUser,
+  socialLinks,
+  contactNumbers,
 }: {
   children: React.ReactNode;
   nav: NavLink[];
   footerNav: NavLink[];
   branding?: Branding;
   sessionUser?: { role: string } | null;
+  socialLinks?: SocialLink[];
+  contactNumbers?: ContactNumber[];
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -151,7 +157,7 @@ export function MarketingShell({
       )}
 
       <main className="flex-1">{children}</main>
-      <SiteFooter nav={footerNav} branding={branding} />
+      <SiteFooter nav={footerNav} branding={branding} socialLinks={socialLinks} contactNumbers={contactNumbers} />
       <FrontDeskWidget />
     </div>
   );

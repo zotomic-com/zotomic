@@ -11,12 +11,20 @@ import { useToast } from "@/components/ui/toast";
 import { ImageUploader } from "@/components/app/ImageUploader";
 import { SITE_ICON_NAMES, siteIcon } from "@/lib/site-icons";
 import type { FooterTrustItem } from "@/lib/platform-settings";
+import type { SocialLink } from "@/lib/social-links";
+import type { ContactNumber } from "@/lib/contact-numbers";
 import { saveWebsiteSettings, saveFooterTrustItems } from "../actions";
+import { SocialLinksEditor } from "./SocialLinksEditor";
+import { ContactNumbersEditor } from "./ContactNumbersEditor";
 
 export function BrandingForm({
   branding,
+  socialLinks,
+  contactNumbers,
 }: {
   branding: { logoUrl: string; faviconUrl: string; footerTagline: string; footerCopyright: string; footerTrust: FooterTrustItem[] };
+  socialLinks: SocialLink[];
+  contactNumbers: ContactNumber[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -102,8 +110,8 @@ export function BrandingForm({
           <CardTitle>Footer</CardTitle>
         </CardHeader>
         <CardBody className="space-y-3">
-          <Field label="Tagline (under the logo)">
-            <Textarea value={tagline} onChange={(e) => setTagline(e.target.value)} rows={2} />
+          <Field label="Tagline (under the logo)" hint="Line breaks are preserved exactly as typed — safe to add your office address on its own line.">
+            <Textarea value={tagline} onChange={(e) => setTagline(e.target.value)} rows={4} />
           </Field>
           <Field label="Copyright line">
             <Input value={copyright} onChange={(e) => setCopyright(e.target.value)} placeholder="Zotomic. All rights reserved." />
@@ -148,6 +156,26 @@ export function BrandingForm({
           <Button disabled={pending} onClick={saveTrust} variant="secondary">
             {pending ? "Saving…" : "Save trust strip"}
           </Button>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Social links</CardTitle>
+        </CardHeader>
+        <CardBody className="space-y-3">
+          <p className="text-xs text-fg-subtle">Shown as a centered icon row in the footer, above the copyright line.</p>
+          <SocialLinksEditor links={socialLinks} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Contact numbers</CardTitle>
+        </CardHeader>
+        <CardBody className="space-y-3">
+          <p className="text-xs text-fg-subtle">Phone and WhatsApp numbers shown in the footer, under the logo.</p>
+          <ContactNumbersEditor contacts={contactNumbers} />
         </CardBody>
       </Card>
     </div>

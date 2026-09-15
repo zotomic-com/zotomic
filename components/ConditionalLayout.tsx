@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import { MarketingShell } from "./site/MarketingShell";
 import { GA4, MetaPixel } from "./tracking/Pixel";
 import type { NavLink } from "@/lib/site-nav";
+import type { SocialLink } from "@/lib/social-links";
+import type { ContactNumber } from "@/lib/contact-numbers";
 
 /** Routes that render their own chrome (no marketing shell). */
 const BARE_PREFIXES = [
@@ -55,6 +57,8 @@ export default function ConditionalLayout({
   headerNav,
   footerNav,
   sessionUser,
+  socialLinks,
+  contactNumbers,
 }: {
   children: React.ReactNode;
   tracking?: { metaPixelId: string; ga4Id: string };
@@ -62,6 +66,8 @@ export default function ConditionalLayout({
   headerNav?: NavLink[];
   footerNav?: NavLink[];
   sessionUser?: { role: string } | null;
+  socialLinks?: SocialLink[];
+  contactNumbers?: ContactNumber[];
 }) {
   const pathname = usePathname();
   const seg = pathname.split("/")[1] ?? "";
@@ -76,7 +82,14 @@ export default function ConditionalLayout({
     <>
       {tracking?.metaPixelId ? <MetaPixel id={tracking.metaPixelId} /> : null}
       {tracking?.ga4Id ? <GA4 id={tracking.ga4Id} /> : null}
-      <MarketingShell nav={headerNav ?? []} footerNav={footerNav ?? []} branding={branding} sessionUser={sessionUser}>
+      <MarketingShell
+        nav={headerNav ?? []}
+        footerNav={footerNav ?? []}
+        branding={branding}
+        sessionUser={sessionUser}
+        socialLinks={socialLinks}
+        contactNumbers={contactNumbers}
+      >
         {children}
       </MarketingShell>
     </>

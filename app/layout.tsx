@@ -7,6 +7,8 @@ import ConditionalLayout from "@/components/ConditionalLayout";
 import { getPublicTracking, getSiteBranding } from "@/lib/platform-settings";
 import { getNavLinks } from "@/lib/site-nav";
 import { getSessionUser } from "@/lib/tenant-server";
+import { getSocialLinks } from "@/lib/social-links";
+import { getContactNumbers } from "@/lib/contact-numbers";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://zotomic.com";
 
@@ -36,12 +38,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [tracking, branding, headerNav, footerNav, sessionUser] = await Promise.all([
+  const [tracking, branding, headerNav, footerNav, sessionUser, socialLinks, contactNumbers] = await Promise.all([
     getPublicTracking(),
     getSiteBranding(),
     getNavLinks("header"),
     getNavLinks("footer"),
     getSessionUser(),
+    getSocialLinks(),
+    getContactNumbers(),
   ]);
 
   return (
@@ -59,6 +63,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               headerNav={headerNav}
               footerNav={footerNav}
               sessionUser={sessionUser ? { role: sessionUser.role } : null}
+              socialLinks={socialLinks}
+              contactNumbers={contactNumbers}
             >
               {children}
             </ConditionalLayout>

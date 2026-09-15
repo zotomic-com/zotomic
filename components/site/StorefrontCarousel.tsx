@@ -1,21 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { getPublishedStorefronts } from "@/lib/storefront/directory";
-
-const CARD_GRADIENTS = [
-  "from-emerald-500 to-teal-600",
-  "from-blue-500 to-indigo-600",
-  "from-amber-500 to-orange-600",
-  "from-pink-500 to-rose-600",
-  "from-violet-500 to-purple-600",
-  "from-cyan-500 to-sky-600",
-];
-
-function gradientFor(seed: string) {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  return CARD_GRADIENTS[hash % CARD_GRADIENTS.length];
-}
+import { Crown, Flame, Sparkles } from "lucide-react";
+import { getPublishedStorefronts, storeAvatarGradient } from "@/lib/storefront/directory";
 
 /** Marquee needs at least this many cards in one lap to feel like a real strip, not a stutter. */
 const MIN_CARDS = 12;
@@ -48,14 +34,33 @@ export async function StorefrontCarousel() {
             <Link
               key={`${s.slug}-${i}`}
               href={`/${s.slug}`}
-              className="flex w-40 shrink-0 flex-col items-center gap-2 rounded-lg border border-border bg-app p-4 transition-colors hover:border-primary"
+              className="relative flex w-40 shrink-0 flex-col items-center gap-2 rounded-lg border border-border bg-app p-4 transition-colors hover:border-primary"
             >
+              {(s.isFeatured || s.isHot || s.isNew) && (
+                <span className="absolute left-2 top-2 flex flex-col gap-1">
+                  {s.isFeatured && (
+                    <span className="flex items-center gap-1 rounded-full bg-warning-soft px-1.5 py-0.5 text-[10px] font-bold text-warning">
+                      <Crown className="h-2.5 w-2.5" /> Featured
+                    </span>
+                  )}
+                  {s.isHot && (
+                    <span className="flex items-center gap-1 rounded-full bg-danger-soft px-1.5 py-0.5 text-[10px] font-bold text-danger">
+                      <Flame className="h-2.5 w-2.5" /> Hot
+                    </span>
+                  )}
+                  {s.isNew && (
+                    <span className="flex items-center gap-1 rounded-full bg-success-soft px-1.5 py-0.5 text-[10px] font-bold text-success">
+                      <Sparkles className="h-2.5 w-2.5" /> New
+                    </span>
+                  )}
+                </span>
+              )}
               {s.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={s.logoUrl} alt={s.name} className="h-14 w-14 rounded-full object-cover" />
               ) : (
                 <span
-                  className={`flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br text-lg font-bold text-white ${gradientFor(s.slug)}`}
+                  className={`flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br text-lg font-bold text-white ${storeAvatarGradient(s.slug)}`}
                 >
                   {s.name.charAt(0).toUpperCase()}
                 </span>

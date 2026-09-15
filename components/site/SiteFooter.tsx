@@ -1,7 +1,11 @@
 import Link from "next/link";
+import { MessageCircle, Phone } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { siteIcon } from "@/lib/site-icons";
+import { socialIcon } from "@/lib/social-icons";
 import type { NavLink } from "@/lib/site-nav";
+import type { SocialLink } from "@/lib/social-links";
+import type { ContactNumber } from "@/lib/contact-numbers";
 
 const SECTION_TITLES: Record<string, string> = {
   product: "Product",
@@ -27,7 +31,22 @@ interface Branding {
   footerTrust: { icon: string; title: string; text: string }[];
 }
 
-export function SiteFooter({ nav, branding }: { nav: NavLink[]; branding?: Branding }) {
+function contactHref(contact: ContactNumber) {
+  if (contact.type === "whatsapp") return `https://wa.me/${contact.number.replace(/\D/g, "")}`;
+  return `tel:${contact.number.replace(/[^\d+]/g, "")}`;
+}
+
+export function SiteFooter({
+  nav,
+  branding,
+  socialLinks,
+  contactNumbers,
+}: {
+  nav: NavLink[];
+  branding?: Branding;
+  socialLinks?: SocialLink[];
+  contactNumbers?: ContactNumber[];
+}) {
   const trust = branding?.footerTrust?.length ? branding.footerTrust : DEFAULT_TRUST;
   const tagline = branding?.footerTagline || DEFAULT_TAGLINE;
   const copyright = branding?.footerCopyright || DEFAULT_COPYRIGHT;
@@ -62,7 +81,25 @@ export function SiteFooter({ nav, branding }: { nav: NavLink[]; branding?: Brand
         <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-4 sm:px-6">
           <div>
             <Logo src={branding?.logoUrl} />
-            <p className="mt-3 max-w-xs text-xs leading-relaxed text-fg-muted">{tagline}</p>
+            <p className="mt-3 max-w-sm whitespace-pre-line text-xs leading-relaxed text-fg-muted">{tagline}</p>
+            {contactNumbers && contactNumbers.length > 0 && (
+              <ul className="mt-4 space-y-1.5">
+                {contactNumbers.map((c) => {
+                  const Icon = c.type === "whatsapp" ? MessageCircle : Phone;
+                  return (
+                    <li key={c.id}>
+                      <a
+                        href={contactHref(c)}
+                        className="flex items-center gap-2 text-xs text-fg-muted transition-colors hover:text-fg"
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        <span className="font-medium">{c.label}:</span> {c.number}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
           {columns.map((c) => (
             <div key={c.section}>
@@ -79,6 +116,29 @@ export function SiteFooter({ nav, branding }: { nav: NavLink[]; branding?: Brand
             </div>
           ))}
         </div>
+
+        {socialLinks && socialLinks.length > 0 && (
+          <div className="border-t border-border px-4 py-6 sm:px-6">
+            <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-3">
+              {socialLinks.map((s) => {
+                const Icon = socialIcon(s.platform);
+                return (
+                  <a
+                    key={s.id}
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={s.platform}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-fg-muted transition-colors hover:border-primary hover:text-primary"
+                  >
+                    <Icon className="h-4 w-4" />
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 border-t border-border px-4 py-6 text-xs text-fg-subtle sm:flex-row sm:px-6">
           <p>
             &copy; {new Date().getFullYear()} {copyright}

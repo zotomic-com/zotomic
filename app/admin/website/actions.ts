@@ -21,6 +21,14 @@ import { saveSystemPlanCard, createCustomPlanCard, updateCustomPlanCard, deleteC
 import type { PlanId } from "@/lib/plans";
 import { createContactTopic, updateContactTopic, deleteContactTopic, reorderContactTopic } from "@/lib/contact-topics";
 import { createServiceCard, updateServiceCard, deleteServiceCard, reorderServiceCard, type ServiceCardInput } from "@/lib/service-cards";
+import { createSocialLink, updateSocialLink, deleteSocialLink, reorderSocialLink, type SocialLinkInput } from "@/lib/social-links";
+import {
+  createContactNumber,
+  updateContactNumber,
+  deleteContactNumber,
+  reorderContactNumber,
+  type ContactNumberInput,
+} from "@/lib/contact-numbers";
 
 async function audit(adminId: string, action: string, summary: string, targetId?: string) {
   await getAdminSupabase()
@@ -352,6 +360,86 @@ export async function reorderServiceCardAction(id: string, direction: "up" | "do
   await reorderServiceCard(id, direction);
   revalidatePath("/admin/website/services");
   revalidatePath("/services");
+  return { ok: true };
+}
+
+// ---------- storefront carousel tags ----------
+
+export async function setBusinessFeaturedAction(businessId: string, featured: boolean) {
+  const admin = await requireAdmin();
+  await getAdminSupabase().from("businesses").update({ is_featured: featured }).eq("id", businessId);
+  await audit(admin.id, "website.storefront_featured_toggled", `${featured ? "Featured" : "Un-featured"} a storefront`, businessId);
+  revalidateTag("published-storefronts");
+  revalidatePath("/admin/website/storefronts");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+// ---------- footer social links ----------
+
+export async function createSocialLinkAction(input: SocialLinkInput): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  if (!input.url.trim()) return { error: "URL is required." };
+  await createSocialLink(input);
+  await audit(admin.id, "website.social_link_created", `Added a ${input.platform} link`);
+  revalidatePath("/admin/website/branding");
+  return { ok: true };
+}
+
+export async function updateSocialLinkAction(id: string, patch: Partial<SocialLinkInput>) {
+  const admin = await requireAdmin();
+  await updateSocialLink(id, patch);
+  await audit(admin.id, "website.social_link_updated", "Updated a social link");
+  revalidatePath("/admin/website/branding");
+  return { ok: true };
+}
+
+export async function deleteSocialLinkAction(id: string) {
+  const admin = await requireAdmin();
+  await deleteSocialLink(id);
+  await audit(admin.id, "website.social_link_deleted", "Deleted a social link");
+  revalidatePath("/admin/website/branding");
+  return { ok: true };
+}
+
+export async function reorderSocialLinkAction(id: string, direction: "up" | "down") {
+  await requireAdmin();
+  await reorderSocialLink(id, direction);
+  revalidatePath("/admin/website/branding");
+  return { ok: true };
+}
+
+// ---------- footer contact numbers ----------
+
+export async function createContactNumberAction(input: ContactNumberInput): Promise<{ ok: true } | { error: string }> {
+  const admin = await requireAdmin();
+  if (!input.label.trim() || !input.number.trim()) return { error: "Label and number are required." };
+  await createContactNumber(input);
+  await audit(admin.id, "website.contact_number_created", `Added a ${input.type} number`);
+  revalidatePath("/admin/website/branding");
+  return { ok: true };
+}
+
+export async function updateContactNumberAction(id: string, patch: Partial<ContactNumberInput>) {
+  const admin = await requireAdmin();
+  await updateContactNumber(id, patch);
+  await audit(admin.id, "website.contact_number_updated", "Updated a contact number");
+  revalidatePath("/admin/website/branding");
+  return { ok: true };
+}
+
+export async function deleteContactNumberAction(id: string) {
+  const admin = await requireAdmin();
+  await deleteContactNumber(id);
+  await audit(admin.id, "website.contact_number_deleted", "Deleted a contact number");
+  revalidatePath("/admin/website/branding");
+  return { ok: true };
+}
+
+export async function reorderContactNumberAction(id: string, direction: "up" | "down") {
+  await requireAdmin();
+  await reorderContactNumber(id, direction);
+  revalidatePath("/admin/website/branding");
   return { ok: true };
 }
 
