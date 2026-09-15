@@ -14,11 +14,13 @@ export function Logo({
   src?: string;
 }) {
   if (src) {
-    // A custom upload is treated as a complete logo lockup (mark + name already in the image).
     return (
-      <span className={cn("inline-flex items-center", className)}>
+      <span className={cn("inline-flex items-center gap-2", className)}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={src} alt="Zotomic" style={{ height: size }} className="w-auto shrink-0 object-contain" />
+        {showText && (
+          <span className="text-lg font-extrabold tracking-tight text-navy">ZOTOMIC</span>
+        )}
       </span>
     );
   }

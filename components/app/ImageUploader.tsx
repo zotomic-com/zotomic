@@ -4,9 +4,16 @@ import { useRef, useState } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
-/** Downscale + re-encode in the browser before upload (max 1600px, JPEG q0.82). */
+/**
+ * Downscale + re-encode in the browser before upload (max 1600px).
+ * Formats that can carry transparency (PNG/WEBP/GIF) stay PNG so a logo or
+ * icon's transparent background survives — JPEG has no alpha channel, and
+ * canvas fills the missing alpha with black when it re-encodes to JPEG.
+ * Everything else (photos) still goes to JPEG q0.82 for the smaller file size.
+ */
 async function compress(file: File): Promise<Blob> {
   if (!file.type.startsWith("image/")) return file;
+  const hasAlpha = file.type === "image/png" || file.type === "image/webp" || file.type === "image/gif";
   const bitmap = await createImageBitmap(file);
   const max = 1600;
   const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
@@ -17,7 +24,9 @@ async function compress(file: File): Promise<Blob> {
   canvas.height = h;
   canvas.getContext("2d")!.drawImage(bitmap, 0, 0, w, h);
   return new Promise((resolve) =>
-    canvas.toBlob((b) => resolve(b ?? file), "image/jpeg", 0.82),
+    hasAlpha
+      ? canvas.toBlob((b) => resolve(b ?? file), "image/png")
+      : canvas.toBlob((b) => resolve(b ?? file), "image/jpeg", 0.82),
   );
 }
 
