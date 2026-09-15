@@ -193,13 +193,13 @@ Reply with exactly 8 lines, one name per line — nothing else, no intro, no exp
   {
     name: "confirm_project_lead",
     description:
-      "Submit a qualified web design/development project lead to the Zotomic team, who get notified immediately (including on Telegram) and follow up directly. Only call this AFTER you've summarized the project back to the visitor in your own words and they've explicitly said yes to sending it — never call it mid-conversation or as a guess. Requires their name, contact email, and a clear project summary you've written yourself from the conversation.",
+      "Submit a qualified web design/development project lead to the Zotomic team, who get notified immediately (including on Telegram) and follow up directly. Only call this AFTER you've summarized the project back to the visitor, they've explicitly said yes to sending it, AND you've collected their name, email, and phone/WhatsApp number in that same exchange — never call it mid-conversation, as a guess, or before you have all three contact details. Never tell the visitor the lead has been sent until this tool actually returns ok — if it returns an error, ask for exactly what's missing and call it again.",
     parameters: {
       type: "object",
       properties: {
         name: { type: "string", description: "The visitor's name." },
         contactEmail: { type: "string" },
-        contactPhone: { type: "string", description: "Optional." },
+        contactPhone: { type: "string", description: "Phone or WhatsApp number — required, so the team can reach them directly. Ask for it explicitly if not already given." },
         projectType: { type: "string", description: "e.g. 'E-commerce store', 'Portfolio site', 'Booking web app', 'Redesign of an existing site'." },
         projectSummary: {
           type: "string",
@@ -214,19 +214,20 @@ Reply with exactly 8 lines, one name per line — nothing else, no intro, no exp
           description: "REQUIRED whenever a deadline or timeframe came up anywhere in the conversation — extract it here even if you also mention it in projectSummary. Use 'Not discussed' only if truly never mentioned.",
         },
       },
-      required: ["name", "contactEmail", "projectSummary"],
+      required: ["name", "contactEmail", "contactPhone", "projectSummary"],
     },
     run: async (ctx, args) => {
       const name = str(args.name);
       const contactEmail = str(args.contactEmail);
+      const contactPhone = str(args.contactPhone);
       const projectSummary = str(args.projectSummary);
-      if (!name || !contactEmail || !projectSummary) {
-        return { error: "Need at least their name, contact email, and a project summary before confirming." };
+      if (!name || !contactEmail || !contactPhone || !projectSummary) {
+        const missing = [!name && "name", !contactEmail && "email", !contactPhone && "phone or WhatsApp number", !projectSummary && "project summary"].filter(Boolean).join(", ");
+        return { error: `Missing ${missing} — ask the visitor for it before calling this again.` };
       }
       const projectType = str(args.projectType) || "Not specified";
       const budgetSignal = str(args.budgetSignal) || "Not discussed";
       const timeline = str(args.timeline) || "Not discussed";
-      const contactPhone = str(args.contactPhone) || null;
 
       const fullMessage = `From: ${name} (via Front Desk assistant)
 
@@ -280,7 +281,9 @@ You do NOT know about, and must never discuss, any individual tenant's own store
 
 WEB PROJECT CONSULTING — when a visitor is thinking about a website, web app, or redesign, act like a senior designer, developer, and technical architect who's scoped dozens of these: ask what the site actually needs to do before jumping to features (who's it for, what should a visitor be able to do, is it content-led or transactional), suggest a sensible page/information structure and key features for that kind of project, flag real trade-offs when relevant (e.g. a simple storefront vs. a full custom web app is a different timeline and cost), and orient them on how the work actually happens: a short discovery conversation, a design pass they see before anything is built, development with check-ins, then launch — the same process real Zotomic projects follow. Give real, specific opinions, not vague reassurance — this is a genuine consultation, not a brochure.
 
-Once you have a real sense of the project (even roughly — you don't need every detail), summarize it back to them in a couple of sentences and ask if they'd like you to pass it to the team so someone can follow up with a plan and quote. Only call confirm_project_lead after they clearly say yes — never submit a lead they haven't agreed to, and never submit on a vague "maybe" or a project you can't yet summarize. Write the projectSummary yourself from the whole conversation, not just their last message. After it's submitted, tell them the team has it and will be in touch.
+Once you have a real sense of the project (even roughly — you don't need every detail), summarize it back to them in a couple of sentences and, in that SAME message, ask if they'd like you to pass it to the team AND ask for their name, email, and phone/WhatsApp number together (e.g. "Want me to send this to the team? If so, what's the best name, email, and phone/WhatsApp number to reach you?") — never submit a lead they haven't agreed to, and never submit on a vague "maybe" or a project you can't yet summarize. Write the projectSummary yourself from the whole conversation, not just their last message.
+
+Call confirm_project_lead only once you have all of: their explicit yes, name, email, AND phone/WhatsApp number. If any of those is still missing when you're ready to submit, ask for the specific missing piece(s) first — do not call the tool with a guess or a blank, and do not tell the visitor it's been sent until the tool call actually succeeds. If the tool returns an error, that means something required is missing or invalid; ask for it and try again, and never claim success in that turn.
 
 RULES:
 - Use tools for every factual claim about pricing, availability, or order status — never invent them.
