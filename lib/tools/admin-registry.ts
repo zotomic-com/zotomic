@@ -2005,6 +2005,106 @@ const web_search: AdminToolDef = {
   },
 };
 
+/* ──────────────────────────  creative & marketing  ────────────────────────── */
+
+const CREATIVE_PERSONA = `You are a creative director and AI prompt engineer with 35 years of experience. You've led creative for teams that built and scaled several globally recognized consumer brands, directed campaigns that won real industry awards, and have personally written thousands of production-ready prompts for AI image and video generation tools — you know exactly what separates a prompt that reliably produces a specific, on-brand result from a vague one that produces generic slop. You write with total confidence and specificity, never hedging or padding with filler.`;
+
+const creative_content_studio: AdminToolDef = {
+  name: "creative_content_studio",
+  description:
+    "Generate a creative marketing asset — an AI image-generation prompt, a video script, title/headline options, or brand story copy — written by a veteran creative director and prompt engineer persona. Always call this instead of writing creative copy yourself inline; it produces meaningfully better, more specific output than an inline reply would.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: {
+      contentType: {
+        type: "string",
+        enum: ["image_prompt", "video_script", "titles", "story"],
+        description:
+          "image_prompt = a ready-to-paste prompt for an AI image generator (Midjourney/DALL-E/Stable Diffusion style). video_script = a scene-by-scene shot list with voiceover/on-screen text and timing. titles = a batch of headline/title options with a recommended pick. story = short narrative/brand-story copy (About Us, campaign story, product story).",
+      },
+      brief: {
+        type: "string",
+        description: "What it's for — the product, brand, campaign, or platform context, plus tone/mood if known. The richer this is, the better the output.",
+      },
+      platform: {
+        type: "string",
+        description: "Optional — e.g. 'Instagram Reel', 'Midjourney', 'YouTube pre-roll', 'Facebook ad', 'TikTok', 'website hero'. Shapes format, length, and aspect ratio guidance.",
+      },
+      quantity: { type: "number", description: "Optional — how many variations/options to produce. Sensible default if omitted." },
+      additionalNotes: { type: "string", description: "Optional — extra constraints: must include/avoid something, color palette, duration limit, language, existing brand voice to match." },
+    },
+    required: ["contentType", "brief"],
+  },
+  async handler(_a, args) {
+    const contentType = s(args.contentType);
+    const brief = s(args.brief);
+    if (!brief) return { error: "Give a brief — what this is for." };
+    const platform = s(args.platform);
+    const notes = s(args.additionalNotes);
+    const qty = nz(args.quantity);
+
+    const instructions: Record<string, string> = {
+      image_prompt: `Write ${qty ?? 3} distinct, ready-to-paste AI image-generation prompts for this brief. Each prompt must be a single dense paragraph covering: subject and composition, lighting, color palette/mood, art style or photographic style, camera/lens detail if photographic, and a suggested aspect ratio. Make each variation genuinely different in creative direction (e.g. different angle, mood, or style), not just reworded. After the prompts, add one line noting which tools they'd work best with (Midjourney / DALL-E / Stable Diffusion) if it matters for the style chosen.`,
+      video_script: `Write a complete video script as a scene-by-scene shot list. For each scene include: scene number, shot description (framing/action), voiceover or on-screen dialogue, on-screen text/captions if any, and a duration estimate in seconds. End with the total runtime. Match pacing and length to the platform if one was given (e.g. Reels/TikTok = fast, under 30-45s; YouTube pre-roll = 15-30s; a longer explainer = 60-120s).`,
+      titles: `Write ${qty ?? 8} distinct title/headline options for this brief — a real range: some punchy and short, some benefit-led, some curiosity-driven. Number them. After the list, pick your single best recommendation and give one sentence on why it wins for this specific brief.`,
+      story: `Write a short piece of brand/narrative story copy for this brief — the kind of copy that goes on an About page, a campaign landing page, or a product story section. Give it a clear arc (not just a features list), a distinct voice, and a natural close. Length should suit the platform if one was given; default to 150-250 words.`,
+    };
+    const task = instructions[contentType];
+    if (!task) return { error: "contentType must be one of: image_prompt, video_script, titles, story." };
+
+    const prompt = `BRIEF: ${brief}${platform ? `\nPLATFORM: ${platform}` : ""}${notes ? `\nADDITIONAL NOTES: ${notes}` : ""}\n\nTASK: ${task}`;
+    const { geminiGenerate } = await import("@/lib/ai/gemini");
+    const res = await geminiGenerate(prompt, { system: CREATIVE_PERSONA, temperature: 0.85, maxOutputTokens: 1536 }, process.env.GEMINI_API_KEY_ADMIN);
+    if (!res) return { error: "Couldn't generate that right now — try again shortly." };
+    return { contentType, output: res.text };
+  },
+};
+
+const MARKETING_PERSONA = `You are a senior marketing executive with over three decades of experience — you've served as CMO or VP of Marketing for several category-leading consumer and B2B brands, built go-to-market strategy from zero to scale, and managed multi-channel budgets across every major platform. You give concrete, prioritized, sequenced plans, never vague platitudes like "increase brand awareness" without saying exactly how and in what order. You think in terms of what actually moves a specific number, for a specific budget, in a specific timeframe.`;
+
+const marketing_plan_builder: AdminToolDef = {
+  name: "marketing_plan_builder",
+  description:
+    "Build a structured marketing plan — positioning, target audience, channel strategy, a phased content/campaign outline, and KPIs — written by a senior marketing executive persona. Always call this instead of drafting a marketing plan yourself inline.",
+  risk: "read",
+  parameters: {
+    type: "object",
+    properties: {
+      goal: { type: "string", description: "What the plan needs to achieve — e.g. 'launch our new hosting plan', 'grow storefront signups this quarter'." },
+      audience: { type: "string", description: "Optional — the target audience, if already known." },
+      timeframeWeeks: { type: "number", description: "Optional — the planning horizon in weeks." },
+      budgetNote: { type: "string", description: "Optional — budget context or constraints (a figure, or 'lean/bootstrapped', 'flexible', etc.)." },
+      channels: { type: "string", description: "Optional — channels already in play or available (social platforms, email list, paid ads, partnerships, etc.)." },
+    },
+    required: ["goal"],
+  },
+  async handler(_a, args) {
+    const goal = s(args.goal);
+    if (!goal) return { error: "Give the goal this plan needs to achieve." };
+    const audience = s(args.audience);
+    const budgetNote = s(args.budgetNote);
+    const channels = s(args.channels);
+    const weeks = nz(args.timeframeWeeks);
+
+    const prompt = `GOAL: ${goal}${audience ? `\nAUDIENCE: ${audience}` : ""}${weeks ? `\nTIMEFRAME: ${weeks} weeks` : ""}${budgetNote ? `\nBUDGET: ${budgetNote}` : ""}${channels ? `\nCHANNELS AVAILABLE: ${channels}` : ""}
+
+Build a marketing plan with these sections, in this order:
+1. POSITIONING — one tight paragraph: what makes this worth acting on now, for this specific audience.
+2. TARGET AUDIENCE — who exactly (if not given, define a sensible primary segment and say so).
+3. CHANNEL STRATEGY — which channels to prioritize and why, ranked, not just listed.
+4. PLAN — a phased, week-by-week or phase-by-phase breakdown of what actually happens and when (content, campaigns, sends, posts) — concrete enough to execute against, not just themes.
+5. KPIs — 3-5 specific metrics to track, with what "working" looks like for each.
+
+Be direct and specific throughout — real channel names, real content formats, real numbers where you can reasonably estimate them.`;
+
+    const { geminiGenerate } = await import("@/lib/ai/gemini");
+    const res = await geminiGenerate(prompt, { system: MARKETING_PERSONA, temperature: 0.6, maxOutputTokens: 2048 }, process.env.GEMINI_API_KEY_ADMIN);
+    if (!res) return { error: "Couldn't generate that right now — try again shortly." };
+    return { plan: res.text };
+  },
+};
+
 /* ──────────────────────────  workspace + media  ────────────────────────── */
 
 const analyze_media: AdminToolDef = {
@@ -2507,6 +2607,8 @@ const run_skill: AdminToolDef = {
 
 export const ADMIN_TOOLS: AdminToolDef[] = [
   web_search,
+  creative_content_studio,
+  marketing_plan_builder,
   analyze_media,
   slack_channels,
   slack_read,
