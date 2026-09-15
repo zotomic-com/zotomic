@@ -40,6 +40,7 @@ const RESERVED_PATHS = new Set([
   "p",
   "domains",
   "services",
+  "web-development",
   "cart",
   "checkout",
   "robots.txt",

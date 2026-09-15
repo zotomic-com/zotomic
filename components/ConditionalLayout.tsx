@@ -46,6 +46,7 @@ const MARKETING_SEGMENTS = new Set([
   "p",
   "domains",
   "services",
+  "web-development",
   "cart",
   "checkout",
 ]);
