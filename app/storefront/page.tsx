@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CtaBand, FeatureGrid, PageHero, Section } from "@/components/site/marketing";
 import { getStructuralPage } from "@/lib/site-content";
 import { siteIcon } from "@/lib/site-icons";
+import { StorefrontCarousel } from "@/components/site/StorefrontCarousel";
 
 export async function generateMetadata(): Promise<Metadata> {
   const c = await getStructuralPage("storefront");
@@ -18,6 +19,7 @@ export default async function StorefrontPage() {
       <Section>
         <FeatureGrid items={items} />
       </Section>
+      <StorefrontCarousel />
       {c.ctaEnabled && <CtaBand title={c.ctaTitle || undefined} subtitle={c.ctaSubtitle || undefined} />}
     </>
   );

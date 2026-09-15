@@ -11,7 +11,7 @@ import { Select } from "@/components/ui/select";
 const CURRENCIES = ["BDT", "USD", "INR", "PKR", "EUR", "GBP"];
 const TIMEZONES = ["Asia/Dhaka", "Asia/Kolkata", "Asia/Karachi", "UTC", "Europe/London", "America/New_York"];
 
-export function OnboardingForm({ categories }: { categories: string[] }) {
+export function OnboardingForm({ categories, logoUrl }: { categories: string[]; logoUrl?: string }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -56,7 +56,7 @@ export function OnboardingForm({ categories }: { categories: string[] }) {
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-app px-4 py-10">
-      <Logo />
+      <Logo src={logoUrl} />
       <div className="mt-8 w-full max-w-lg">
         <div className="mb-6 flex items-center gap-2">
           {[1, 2, 3].map((n) => (

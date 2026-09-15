@@ -1,19 +1,19 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
-import { getSocialLoginSettings } from "@/lib/platform-settings";
+import { getSocialLoginSettings, getSiteBranding } from "@/lib/platform-settings";
 import { LoginForm } from "./LoginForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const social = await getSocialLoginSettings();
+  const [social, branding] = await Promise.all([getSocialLoginSettings(), getSiteBranding()]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-app px-4">
       <div className="w-full max-w-sm">
         <Link href="/" className="mb-8 flex justify-center">
-          <Logo />
+          <Logo src={branding.logoUrl} />
         </Link>
         <div className="card p-6">
           <h1 className="text-lg font-extrabold text-fg">Welcome back</h1>

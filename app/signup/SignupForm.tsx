@@ -11,7 +11,15 @@ function withNext(href: string, next: string | null) {
   return next ? `${href}?next=${encodeURIComponent(next)}` : href;
 }
 
-export function SignupForm({ googleEnabled, facebookEnabled }: { googleEnabled: boolean; facebookEnabled: boolean }) {
+export function SignupForm({
+  googleEnabled,
+  facebookEnabled,
+  logoUrl,
+}: {
+  googleEnabled: boolean;
+  facebookEnabled: boolean;
+  logoUrl?: string;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next");
@@ -50,7 +58,7 @@ export function SignupForm({ googleEnabled, facebookEnabled }: { googleEnabled: 
   return (
     <div className="w-full max-w-sm">
       <Link href="/" className="mb-8 flex justify-center">
-        <Logo />
+        <Logo src={logoUrl} />
       </Link>
       <div className="card p-6">
         <h1 className="text-lg font-extrabold text-fg">Create your account</h1>
