@@ -5,6 +5,7 @@ import { requireAdmin, adminDb } from "@/lib/admin-server";
 import { getAllServiceCards } from "@/lib/service-cards";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import CookiesUploader from "./CookiesUploader";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +104,8 @@ export default async function AdminServicesPage() {
           </p>
         </CardBody>
       </Card>
+
+      <CookiesUploader />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Link

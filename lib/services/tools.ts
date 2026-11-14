@@ -52,10 +52,12 @@ export interface ToolLimits {
 }
 
 export interface ToolCaller {
-  email: string;
+  /** null for guests (quota is then counted per IP). */
+  email: string | null;
+  ip: string | null;
   userId: string | null;
   isAdmin: boolean;
-  source: "session" | "token";
+  source: "session" | "token" | "guest";
   tokenId: string | null;
   plan: PlanName;
   limits: ToolLimits;
@@ -171,10 +173,11 @@ interface AccessRow {
 export async function resolveToolCaller(req: NextRequest, service: ToolService): Promise<ToolResolution> {
   const db = getAdminSupabase();
   const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  let email: string;
+  const ip = clientIp(req);
+  let email: string | null;
   let userId: string | null = null;
   let isAdmin = false;
-  let source: "session" | "token" = "session";
+  let source: ToolCaller["source"] = "session";
   let tokenRow: AccessTokenRow | null = null;
 
   if (bearer.startsWith("zt_")) {
@@ -190,7 +193,25 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
     source = "token";
   } else {
     const user = await getAuthUser(req);
-    if (!user) return { error: "Sign in to use this service.", status: 401 };
+    if (!user) {
+      /* Guests: no signup needed — free-plan limits, counted per IP. */
+      return {
+        caller: {
+          email: null,
+          ip,
+          userId: null,
+          isAdmin: false,
+          source: "guest",
+          tokenId: null,
+          plan: "free",
+          limits: {
+            downloaderPerDay: SERVICE_PLAN_LIMITS.free.downloaderPerDay,
+            ttsPerDay: SERVICE_PLAN_LIMITS.free.ttsPerDay,
+            downloaderMaxQuality: SERVICE_PLAN_LIMITS.free.downloaderMaxQuality,
+          },
+        },
+      };
+    }
     const { data: live } = await db.from("users").select("role, status, blocked").eq("id", user.id).maybeSingle();
     if (!live || live.status === "suspended" || live.blocked) return { error: "Your account cannot use this service.", status: 403 };
     email = user.email;
@@ -231,6 +252,7 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
   return {
     caller: {
       email,
+      ip,
       userId,
       isAdmin,
       source,
@@ -285,30 +307,40 @@ export async function logUsage(entry: {
   }
 }
 
-/** Successful paid actions today (UTC) for this user or token. */
+/** Successful paid actions today (UTC) for this user, token — or, for
+ * guests, this IP (rows where user_email is null and the ip matches). */
 export async function countTodayUsage(opts: {
   service: ToolService;
   action: "download_start" | "tts";
-  email: string;
+  email: string | null;
   tokenId: string | null;
+  ip?: string | null;
 }): Promise<number> {
   const db = getAdminSupabase();
-  const or = opts.tokenId ? `user_email.eq.${opts.email},token_id.eq.${opts.tokenId}` : `user_email.eq.${opts.email}`;
-  const { count } = await db
+  let query = db
     .from("service_usage")
     .select("id", { count: "exact", head: true })
     .eq("service", opts.service)
     .eq("action", opts.action)
     .eq("ok", true)
-    .gte("created_at", todayStartIso())
-    .or(or);
+    .gte("created_at", todayStartIso());
+  if (opts.tokenId) query = query.or(`user_email.eq.${opts.email},token_id.eq.${opts.tokenId}`);
+  else if (opts.email) query = query.eq("user_email", opts.email);
+  else if (opts.ip) query = query.eq("ip", opts.ip).is("user_email", null);
+  const { count } = await query;
   return count ?? 0;
 }
 
 /** Remaining quota info for the UI. */
 export async function quotaStatus(caller: ToolCaller, service: ToolService) {
   const action = service === "downloader" ? "download_start" : "tts";
-  const used = await countTodayUsage({ service, action, email: caller.email, tokenId: caller.tokenId });
+  const used = await countTodayUsage({
+    service,
+    action,
+    email: caller.email,
+    tokenId: caller.tokenId,
+    ip: caller.ip,
+  });
   const limit = caller.limits[service === "downloader" ? "downloaderPerDay" : "ttsPerDay"];
   return {
     service,

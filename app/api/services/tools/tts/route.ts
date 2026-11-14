@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
   // Quota (admins unlimited).
   if (!caller.isAdmin) {
-    const used = await countTodayUsage({ service: "text_to_audio", action: "tts", email: caller.email, tokenId: caller.tokenId });
+    const used = await countTodayUsage({ service: "text_to_audio", action: "tts", email: caller.email, tokenId: caller.tokenId, ip: caller.ip });
     if (used >= caller.limits.ttsPerDay) {
       await logUsage({ service: "text_to_audio", action: "tts", user_email: caller.email, token_id: caller.tokenId, ip, ok: false, reason: "daily_limit", meta: { used } });
       return NextResponse.json(
