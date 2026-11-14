@@ -191,7 +191,7 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
   } else {
     const user = await getAuthUser(req);
     if (!user) return { error: "Sign in to use this service.", status: 401 };
-    const { data: live } = await db.from("users").select("role, status, blocked, blocked_until").eq("id", user.id).maybeSingle();
+    const { data: live } = await db.from("users").select("role, status, blocked").eq("id", user.id).maybeSingle();
     if (!live || live.status === "suspended" || live.blocked) return { error: "Your account cannot use this service.", status: 403 };
     email = user.email;
     userId = user.id;
