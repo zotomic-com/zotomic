@@ -3,6 +3,7 @@ import { resolveToolCaller, engineFetch, logUsage, toolRateLimit } from "@/lib/s
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * POST { url } — resolve platform/title/thumbnail/qualities for a video link.
@@ -25,7 +26,16 @@ export async function POST(req: NextRequest) {
   const url = (body.url ?? "").trim();
   if (!url) return NextResponse.json({ error: "Please paste a video link." }, { status: 400 });
 
-  const engine = await engineFetch("/api/info", { method: "POST", body: { url } });
+  let engine: Response;
+  try {
+    // YouTube info now includes JS challenge solving — allow up to ~50s
+    engine = await engineFetch("/api/info", { method: "POST", body: { url }, timeoutMs: 50_000 });
+  } catch {
+    return NextResponse.json(
+      { error: "The video service took too long to respond. Please try again in a moment." },
+      { status: 502 },
+    );
+  }
   const payload = await engine.json().catch(() => ({ error: "Could not resolve this link." }));
   if (!engine.ok) {
     await logUsage({

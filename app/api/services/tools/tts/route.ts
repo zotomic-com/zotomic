@@ -9,6 +9,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /** GET — voice catalogue from the engine (session or service token). */
 export async function GET(req: NextRequest) {
@@ -71,7 +72,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const engine = await engineFetch("/api/tts", { method: "POST", body: { text, voice }, timeoutMs: 120_000 });
+  let engine: Response;
+  try {
+    engine = await engineFetch("/api/tts", { method: "POST", body: { text, voice }, timeoutMs: 50_000 });
+  } catch {
+    return NextResponse.json(
+      { error: "Audio generation took too long. Please try again — shorter text is faster." },
+      { status: 502 },
+    );
+  }
   if (!engine.ok || !engine.body) {
     const detail = await engine.text().catch(() => "");
     let message = "Audio generation failed. Please try again.";

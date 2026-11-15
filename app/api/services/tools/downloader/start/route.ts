@@ -12,6 +12,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * POST { url, mode: "video"|"audio", qualityId } — start a download job.
@@ -52,7 +53,15 @@ export async function POST(req: NextRequest) {
   }
 
   const qualityId = clampQuality(body.qualityId, mode === "video" ? caller.limits.downloaderMaxQuality : null);
-  const engine = await engineFetch("/api/download", { method: "POST", body: { url, mode, qualityId } });
+  let engine: Response;
+  try {
+    engine = await engineFetch("/api/download", { method: "POST", body: { url, mode, qualityId }, timeoutMs: 50_000 });
+  } catch {
+    return NextResponse.json(
+      { error: "The download service took too long to respond. Please try again in a moment." },
+      { status: 502 },
+    );
+  }
   const payload = (await engine.json().catch(() => null)) as { jobId?: string; error?: string } | null;
 
   if (!engine.ok || !payload?.jobId) {

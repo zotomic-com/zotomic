@@ -22,7 +22,12 @@ export async function GET(
   const res = await resolveToolCaller(req, "downloader");
   if (!res.caller) return NextResponse.json({ error: res.error }, { status: res.status });
 
-  const engine = await engineFetch(`/api/progress/${encodeURIComponent(jobId)}`);
+  let engine: Response;
+  try {
+    engine = await engineFetch(`/api/progress/${encodeURIComponent(jobId)}`, { timeoutMs: 15_000 });
+  } catch {
+    return NextResponse.json({ error: "Progress service is unavailable right now." }, { status: 502 });
+  }
   if (!engine.ok) {
     return NextResponse.json({ error: "Job not found." }, { status: engine.status === 404 ? 404 : 502 });
   }
