@@ -223,7 +223,7 @@ export default function VideoGeneratorClient() {
               <Download className="h-4 w-4" /> Download MP4
             </Button>
           )}
-          <Badge tone="neutral">720 × 1280 · MP4</Badge>
+          <Badge tone="neutral">540 × 960 · MP4</Badge>
         </div>
 
         {busy && (
