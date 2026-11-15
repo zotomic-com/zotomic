@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     meta: { chars: text.length, voice, style, jobId: payload.jobId },
   });
 
-  const ticket = signTicket(payload.jobId);
+  const ticket = signTicket(payload.jobId, 24 * 60 * 60 * 1000); // file stays downloadable for 24h
   return NextResponse.json({
     jobId: payload.jobId,
     progressUrl: `/api/services/tools/video/progress/${payload.jobId}?t=${encodeURIComponent(ticket)}`,

@@ -28,7 +28,11 @@ export async function GET(
     return NextResponse.json({ error: "Progress service is unavailable right now." }, { status: 502 });
   }
   if (!engine.ok) {
-    return NextResponse.json({ error: "Job not found." }, { status: engine.status === 404 ? 404 : 502 });
+    const message =
+      engine.status === 404
+        ? "This job is no longer available — please generate the video again."
+        : "Progress service is unavailable right now.";
+    return NextResponse.json({ error: message }, { status: engine.status === 404 ? 404 : 502 });
   }
   return NextResponse.json(await engine.json());
 }

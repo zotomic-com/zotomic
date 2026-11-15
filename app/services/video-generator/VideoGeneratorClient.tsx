@@ -71,24 +71,32 @@ export default function VideoGeneratorClient() {
   const poll = (progressUrl: string, fileUrl: string) => {
     if (pollRef.current) window.clearInterval(pollRef.current);
     pollRef.current = window.setInterval(async () => {
+      let r: Response;
+      let p: { status?: string; percent?: number; note?: string; error?: string };
       try {
-        const r = await fetch(progressUrl);
-        const p = await r.json();
-        if (typeof p.percent === "number") setPercent(Math.round(p.percent));
-        if (p.note) setPhase(p.note);
-        if (p.status === "done") {
-          window.clearInterval(pollRef.current!);
-          setPhase("Done!");
-          setPercent(100);
-          setVideoUrl(fileUrl);
-          setBusy(false);
-        } else if (p.status === "error") {
-          window.clearInterval(pollRef.current!);
-          setError(p.error || "Video generation failed. Please try again.");
-          setBusy(false);
-        }
+        r = await fetch(progressUrl);
+        p = await r.json();
       } catch {
-        /* keep polling — transient errors happen */
+        return; // transient network hiccup — keep polling
+      }
+      if (r.status === 404 && p.error) {
+        window.clearInterval(pollRef.current!);
+        setError(p.error);
+        setBusy(false);
+        return;
+      }
+      if (typeof p.percent === "number") setPercent(Math.round(p.percent));
+      if (p.note) setPhase(p.note);
+      if (p.status === "done") {
+        window.clearInterval(pollRef.current!);
+        setPhase("Done!");
+        setPercent(100);
+        setVideoUrl(fileUrl);
+        setBusy(false);
+      } else if (p.status === "error") {
+        window.clearInterval(pollRef.current!);
+        setError(p.error || "Video generation failed. Please try again.");
+        setBusy(false);
       }
     }, 3000);
   };
