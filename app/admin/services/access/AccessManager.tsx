@@ -23,7 +23,7 @@ function CreateForm() {
   const { toast } = useToast();
   const [pending, start] = useTransition();
   const [userEmail, setUserEmail] = useState("");
-  const [service, setService] = useState<"both" | "downloader" | "text_to_audio">("both");
+  const [service, setService] = useState<"all" | "both" | "downloader" | "text_to_audio" | "video_generator">("all");
   const [mode, setMode] = useState<"plan" | "allow" | "block">("allow");
   const [dailyLimit, setDailyLimit] = useState("");
   const [maxQuality, setMaxQuality] = useState("");
@@ -67,9 +67,11 @@ function CreateForm() {
           </Field>
           <Field label="Service">
             <Select value={service} onChange={(e) => setService(e.target.value as typeof service)}>
-              <option value="both">Both tools</option>
+              <option value="all">All tools</option>
+              <option value="both">Downloader + Text to Audio</option>
               <option value="downloader">Online Downloader</option>
               <option value="text_to_audio">Text to Audio</option>
+              <option value="video_generator">Video Generator</option>
             </Select>
           </Field>
           <Field label="Access mode" hint="allow = explicit grant · plan = follow subscription · block = deny">

@@ -8,7 +8,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 export interface ServiceAccessRow {
   id: string;
   userEmail: string;
-  service: "downloader" | "text_to_audio";
+  service: "downloader" | "text_to_audio" | "video_generator";
   mode: "plan" | "allow" | "block";
   dailyLimit: number | null;
   maxQuality: string | null;
@@ -39,7 +39,7 @@ export async function listServiceAccess(): Promise<ServiceAccessRow[]> {
 
 export interface AccessInput {
   userEmail: string;
-  service: "downloader" | "text_to_audio" | "both";
+  service: "downloader" | "text_to_audio" | "video_generator" | "both" | "all";
   mode: "plan" | "allow" | "block";
   dailyLimit?: number | null;
   maxQuality?: string | null;
@@ -55,8 +55,12 @@ export async function upsertServiceAccess(
     .split(/[,\s]+/)
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  const services: Array<"downloader" | "text_to_audio"> =
-    input.service === "both" ? ["downloader", "text_to_audio"] : [input.service];
+  const services: Array<"downloader" | "text_to_audio" | "video_generator"> =
+    input.service === "both"
+      ? ["downloader", "text_to_audio"]
+      : input.service === "all"
+        ? ["downloader", "text_to_audio", "video_generator"]
+        : [input.service];
 
   for (const email of emails) {
     for (const service of services) {

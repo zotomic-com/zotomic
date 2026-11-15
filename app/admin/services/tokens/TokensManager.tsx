@@ -28,7 +28,7 @@ function CreateForm() {
   const [pending, start] = useTransition();
   const [userEmail, setUserEmail] = useState("");
   const [label, setLabel] = useState("");
-  const [services, setServices] = useState<"both" | "downloader" | "text_to_audio">("both");
+  const [services, setServices] = useState<"all" | "both" | "downloader" | "text_to_audio" | "video_generator">("all");
   const [dailyLimit, setDailyLimit] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [issued, setIssued] = useState<{ token: string; email: string } | null>(null);
@@ -74,9 +74,11 @@ function CreateForm() {
           </Field>
           <Field label="Services">
             <Select value={services} onChange={(e) => setServices(e.target.value as typeof services)}>
-              <option value="both">Both tools</option>
+              <option value="all">All tools</option>
+              <option value="both">Downloader + Text to Audio</option>
               <option value="downloader">Online Downloader only</option>
               <option value="text_to_audio">Text to Audio only</option>
+              <option value="video_generator">Video Generator only</option>
             </Select>
           </Field>
           <Field label="Daily limit (optional)" hint="Leave empty to follow the user's plan">
@@ -176,7 +178,7 @@ function TokenRow({ token }: { token: ServiceToken }) {
             {token.prefix}••••••••••••••••
             <Badge tone={token.status === "active" ? "success" : "danger"}>{token.status}</Badge>
             <Badge tone={token.services === "both" ? "info" : "neutral"}>
-              {token.services === "both" ? "both tools" : token.services.replace("_", " ")}
+              {token.services === "both" ? "both tools" : token.services === "all" ? "all tools" : token.services.replace("_", " ")}
             </Badge>
           </p>
           <p className="mt-1 text-xs text-fg-muted">
@@ -272,9 +274,11 @@ function TokenRow({ token }: { token: ServiceToken }) {
               value={draft.services}
               onChange={(e) => setDraft({ ...draft, services: e.target.value as typeof draft.services })}
             >
-              <option value="both">Both tools</option>
+              <option value="all">All tools</option>
+              <option value="both">Downloader + Text to Audio</option>
               <option value="downloader">Online Downloader only</option>
               <option value="text_to_audio">Text to Audio only</option>
+              <option value="video_generator">Video Generator only</option>
             </Select>
           </Field>
           <Field label="Daily limit" hint="Empty = follow the user's plan">

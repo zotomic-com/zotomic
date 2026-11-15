@@ -13,11 +13,15 @@ export async function GET(req: NextRequest) {
   if (!res.caller) return NextResponse.json({ error: res.error }, { status: res.status });
 
   const downloader = await quotaStatus(res.caller, "downloader");
-  // Second resolution against the other service so per-service access rows apply.
+  // Second resolution against the other services so per-service access rows apply.
   const res2 = await resolveToolCaller(req, "text_to_audio");
+  const res3 = await resolveToolCaller(req, "video_generator");
   const tts = res2.caller
     ? await quotaStatus(res2.caller, "text_to_audio")
     : { service: "text_to_audio", error: res2.error ?? "No access" };
+  const video = res3.caller
+    ? await quotaStatus(res3.caller, "video_generator")
+    : { service: "video_generator", error: res3.error ?? "No access" };
 
-  return NextResponse.json({ email: res.caller.email, downloader, tts });
+  return NextResponse.json({ email: res.caller.email, downloader, tts, video });
 }

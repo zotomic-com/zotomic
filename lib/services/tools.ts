@@ -24,7 +24,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { getAuthUser } from "@/lib/auth-server";
 import { clientIp, enforceRateLimit } from "@/lib/ratelimit";
 
-export type ToolService = "downloader" | "text_to_audio";
+export type ToolService = "downloader" | "text_to_audio" | "video_generator";
 export type PlanName = "free" | "business" | "pro";
 
 export const RENDER_API_URL = process.env.RENDER_API_URL || "https://freedownloder-api.onrender.com";
@@ -33,22 +33,35 @@ const TICKET_SECRET = process.env.DOWNLOADER_TICKET_SECRET || "";
 
 export const TTS_MAX_CHARS = 3000;
 
-/** Plan entitlements for the two tools ("follow the price system" defaults). */
+/** Plan entitlements for the tools ("follow the price system" defaults). */
 export const SERVICE_PLAN_LIMITS: Record<
   PlanName,
-  { downloaderPerDay: number; downloaderMaxQuality: number | null; ttsPerDay: number }
+  { downloaderPerDay: number; downloaderMaxQuality: number | null; ttsPerDay: number; videoPerDay: number }
 > = {
-  free: { downloaderPerDay: 5, downloaderMaxQuality: 720, ttsPerDay: 3 },
-  business: { downloaderPerDay: 30, downloaderMaxQuality: null, ttsPerDay: 20 },
-  pro: { downloaderPerDay: 100, downloaderMaxQuality: null, ttsPerDay: 100 },
+  free: { downloaderPerDay: 5, downloaderMaxQuality: 720, ttsPerDay: 3, videoPerDay: 3 },
+  business: { downloaderPerDay: 30, downloaderMaxQuality: null, ttsPerDay: 20, videoPerDay: 20 },
+  pro: { downloaderPerDay: 100, downloaderMaxQuality: null, ttsPerDay: 100, videoPerDay: 50 },
 };
 
 export const PLAN_RANK: Record<PlanName, number> = { free: 0, business: 1, pro: 2 };
+
+/** service → (quota limit key, usage-log action). */
+export const SERVICE_LIMIT_KEY: Record<ToolService, "downloaderPerDay" | "ttsPerDay" | "videoPerDay"> = {
+  downloader: "downloaderPerDay",
+  text_to_audio: "ttsPerDay",
+  video_generator: "videoPerDay",
+};
+export const SERVICE_ACTION: Record<ToolService, "download_start" | "tts" | "video"> = {
+  downloader: "download_start",
+  text_to_audio: "tts",
+  video_generator: "video",
+};
 
 export interface ToolLimits {
   downloaderPerDay: number;
   downloaderMaxQuality: number | null;
   ttsPerDay: number;
+  videoPerDay: number;
 }
 
 export interface ToolCaller {
@@ -165,6 +178,14 @@ interface AccessRow {
   max_quality: string | null;
 }
 
+/** Does a token's `services` value grant this service? ("both" = legacy
+ * downloader+text_to_audio pair; "all" = every tool including video.) */
+export function tokenCoversService(services: string, service: ToolService): boolean {
+  if (services === "all") return true;
+  if (services === "both") return service === "downloader" || service === "text_to_audio";
+  return services === service;
+}
+
 /**
  * Resolve who is calling (session user or `zt_` service token), verify access
  * for `service`, and compute effective limits. Never throws — returns an
@@ -187,9 +208,8 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
     if (tokenRow.status !== "active") return { error: "This token has been revoked.", status: 403 };
     if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now())
       return { error: "This token has expired.", status: 403 };
-    if (tokenRow.services !== "both" && tokenRow.services !== service)
-      return { error: "This token is not authorized for this service.", status: 403 };
-    email = tokenRow.user_email;
+    if (!tokenCoversService(tokenRow.services, service))
+      return { error: "This token is not authorized for this service.", status: 403 };    email = tokenRow.user_email;
     source = "token";
   } else {
     const user = await getAuthUser(req);
@@ -207,6 +227,7 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
           limits: {
             downloaderPerDay: SERVICE_PLAN_LIMITS.free.downloaderPerDay,
             ttsPerDay: SERVICE_PLAN_LIMITS.free.ttsPerDay,
+            videoPerDay: SERVICE_PLAN_LIMITS.free.videoPerDay,
             downloaderMaxQuality: SERVICE_PLAN_LIMITS.free.downloaderMaxQuality,
           },
         },
@@ -237,7 +258,8 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
   const planLimits = SERVICE_PLAN_LIMITS[plan];
 
   // Effective limits: most restrictive of plan / access override / token limit.
-  const candidates: Array<number | null> = [isAdmin ? null : planLimits[service === "downloader" ? "downloaderPerDay" : "ttsPerDay"]];
+  const limitKey = SERVICE_LIMIT_KEY[service];
+  const candidates: Array<number | null> = [isAdmin ? null : planLimits[limitKey]];
   if (access?.mode === "allow" && access.daily_limit != null) candidates.push(access.daily_limit);
   if (tokenRow?.daily_limit != null) candidates.push(tokenRow.daily_limit);
   const effective = candidates.filter((n): n is number => n != null);
@@ -259,9 +281,14 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
       tokenId: tokenRow?.id ?? null,
       plan,
       limits: {
-        downloaderPerDay: service === "downloader" ? dailyLimit : SERVICE_PLAN_LIMITS[plan].downloaderPerDay,
-        ttsPerDay: service === "text_to_audio" ? dailyLimit : SERVICE_PLAN_LIMITS[plan].ttsPerDay,
+        downloaderPerDay: SERVICE_PLAN_LIMITS[plan].downloaderPerDay,
+        ttsPerDay: SERVICE_PLAN_LIMITS[plan].ttsPerDay,
+        videoPerDay: SERVICE_PLAN_LIMITS[plan].videoPerDay,
         downloaderMaxQuality: maxQuality,
+        // the calling service gets the effective (most restrictive) limit
+        ...(service === "downloader" ? { downloaderPerDay: dailyLimit } : {}),
+        ...(service === "text_to_audio" ? { ttsPerDay: dailyLimit } : {}),
+        ...(service === "video_generator" ? { videoPerDay: dailyLimit } : {}),
       },
     },
   };
@@ -271,7 +298,7 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
 
 export async function logUsage(entry: {
   service: ToolService;
-  action: "info" | "download_start" | "file" | "tts" | "voices";
+  action: "info" | "download_start" | "file" | "tts" | "voices" | "video";
   user_email?: string | null;
   token_id?: string | null;
   ip?: string | null;
@@ -311,7 +338,7 @@ export async function logUsage(entry: {
  * guests, this IP (rows where user_email is null and the ip matches). */
 export async function countTodayUsage(opts: {
   service: ToolService;
-  action: "download_start" | "tts";
+  action: "download_start" | "tts" | "video";
   email: string | null;
   tokenId: string | null;
   ip?: string | null;
@@ -333,7 +360,8 @@ export async function countTodayUsage(opts: {
 
 /** Remaining quota info for the UI. */
 export async function quotaStatus(caller: ToolCaller, service: ToolService) {
-  const action = service === "downloader" ? "download_start" : "tts";
+  const action = SERVICE_ACTION[service];
+  const limitKey = SERVICE_LIMIT_KEY[service];
   const used = await countTodayUsage({
     service,
     action,
@@ -341,7 +369,7 @@ export async function quotaStatus(caller: ToolCaller, service: ToolService) {
     tokenId: caller.tokenId,
     ip: caller.ip,
   });
-  const limit = caller.limits[service === "downloader" ? "downloaderPerDay" : "ttsPerDay"];
+  const limit = caller.limits[limitKey];
   return {
     service,
     used,

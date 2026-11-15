@@ -14,6 +14,7 @@ export const metadata: Metadata = { title: "Service Tools — Admin" };
 const TOOL_HREFS: Record<string, string> = {
   "Text to Audio": "/services/text-to-audio",
   "Online Downloader": "/services/online-downloader",
+  "Video Generator": "/services/video-generator",
 };
 
 function Stat({ icon: Icon, label, value, tone }: { icon: typeof Activity; label: string; value: string | number; tone?: string }) {
