@@ -74,6 +74,10 @@ const CHARACTERS = [
   { id: "bella", name: "Bella", color: "#db2777", accessory: "glasses" },
   { id: "rocky", name: "Rocky", color: "#ea580c", accessory: "beanie" },
   { id: "zara", name: "Zara", color: "#0d9488", accessory: "bun" },
+  { id: "nova", name: "Nova", color: "#f97316", accessory: "messy" },
+  { id: "kai", name: "Kai", color: "#4f46e5", accessory: "curly" },
+  { id: "mia", name: "Mia", color: "#ec4899", accessory: "bangs" },
+  { id: "otto", name: "Otto", color: "#0ea5e9", accessory: "flat" },
 ] as const;
 
 /** Tiny inline SVG preview of each character (matching the accessory). */
@@ -88,6 +92,10 @@ function FigureIcon({ color, accessory, className }: { color: string; accessory:
       {accessory === "glasses" && <circle cx="18.5" cy="10" r={2.6} strokeWidth={1.6} />}
       {accessory === "beanie" && <path d="M9 9 q7 -6 14 0 l0 3" strokeWidth={2.8} />}
       {accessory === "bun" && <circle cx="22" cy="6" r={2.4} />}
+      {accessory === "messy" && <path d="M12 5 l-2 -3 M16 4 v-3 M20 5 l2 -3" strokeWidth={1.8} />}
+      {accessory === "curly" && <path d="M10 8 q1.5 -2.5 3 0 q1.5 -2.5 3 0 q1.5 -2.5 3 0 q1.5 -2.5 3 0" strokeWidth={1.8} />}
+      {accessory === "bangs" && <path d="M10 8 h12 v2 h-12 z" strokeWidth={1.6} fill={color} />}
+      {accessory === "flat" && <path d="M11 7 h10 v-3 h-10 z" strokeWidth={1.8} />}
       {/* head */}
       <circle cx="16" cy="10" r={6} fill="none" />
       {/* body + arms + legs */}
@@ -330,7 +338,7 @@ export default function VideoGeneratorClient() {
             <p className="text-xs font-semibold text-fg">Character</p>
             <span className="text-xs text-fg-muted">{character ? "acts out your script" : "plain background"}</span>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
             <button
               key="none"
               type="button"
