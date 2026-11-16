@@ -13,13 +13,47 @@ interface Voice {
   locale: string;
 }
 
-const MAX_CHARS = 1200;
+const MAX_CHARS = 5000;
 
 const STYLES = [
   { id: "ocean", label: "Ocean", hint: "navy → green" },
   { id: "sunset", label: "Sunset", hint: "purple → orange" },
   { id: "night", label: "Night", hint: "charcoal" },
 ];
+
+/** Stick-figure cast — ids/colors mirror the engine's stickman.js. */
+const CHARACTERS = [
+  { id: "spike", name: "Spike", color: "#1f2937", accessory: "none" },
+  { id: "ruby", name: "Ruby", color: "#e11d48", accessory: "bow" },
+  { id: "max", name: "Max", color: "#2563eb", accessory: "cap" },
+  { id: "luna", name: "Luna", color: "#7c3aed", accessory: "ponytail" },
+  { id: "ace", name: "Ace", color: "#059669", accessory: "headphones" },
+  { id: "bella", name: "Bella", color: "#db2777", accessory: "glasses" },
+  { id: "rocky", name: "Rocky", color: "#ea580c", accessory: "beanie" },
+  { id: "zara", name: "Zara", color: "#0d9488", accessory: "bun" },
+] as const;
+
+/** Tiny inline SVG preview of each character (matching the accessory). */
+function FigureIcon({ color, accessory, className }: { color: string; accessory: string; className?: string }) {
+  return (
+    <svg viewBox="0 0 32 44" fill="none" stroke={color} strokeWidth={2.4} strokeLinecap="round" className={className}>
+      {/* accessory */}
+      {accessory === "cap" && <path d="M10 10 h12" strokeWidth={3} />}
+      {accessory === "bow" && <path d="M22 7 l4 -3 M22 7 l4 3" strokeWidth={2} />}
+      {accessory === "ponytail" && <path d="M23 8 q5 3 4 9" />}
+      {accessory === "headphones" && <path d="M9 9 q7 -7 14 0" />}
+      {accessory === "glasses" && <circle cx="18.5" cy="10" r={2.6} strokeWidth={1.6} />}
+      {accessory === "beanie" && <path d="M9 9 q7 -6 14 0 l0 3" strokeWidth={2.8} />}
+      {accessory === "bun" && <circle cx="22" cy="6" r={2.4} />}
+      {/* head */}
+      <circle cx="16" cy="10" r={6} fill="none" />
+      {/* body + arms + legs */}
+      <path d="M16 16 v11" />
+      <path d="M16 19 l-6 6 M16 19 l6 4" />
+      <path d="M16 27 l-5 12 M16 27 l5 12" />
+    </svg>
+  );
+}
 
 const QUICK_VOICES = [
   "en-US-GuyNeural",
@@ -34,6 +68,7 @@ export default function VideoGeneratorClient() {
   const [query, setQuery] = useState("");
   const [voice, setVoice] = useState("en-US-GuyNeural");
   const [style, setStyle] = useState("ocean");
+  const [character, setCharacter] = useState<string>("spike");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState("");
@@ -116,7 +151,7 @@ export default function VideoGeneratorClient() {
       const res = await fetch("/api/services/tools/video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: t, voice, style }),
+        body: JSON.stringify({ text: t, voice, style, character }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.progressUrl) {
@@ -152,7 +187,11 @@ export default function VideoGeneratorClient() {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
-            placeholder="Paste your script here — every sentence becomes a narrated scene with word-synced captions. About 1200 characters = ~60 seconds."
+            placeholder={
+              character
+                ? "Paste a script or a timestamped storyboard (e.g. `0:00 - 0:08 | The Setup` + Visual/Audio/Voiceover lines) — the character acts out each scene. Plain scripts are narrated scene by scene."
+                : "Paste your script here — every sentence becomes a narrated scene with word-synced captions."
+            }
             rows={7}
             className="w-full rounded-lg border border-border bg-surface p-3 text-sm text-fg outline-none focus:border-primary"
           />
@@ -216,6 +255,41 @@ export default function VideoGeneratorClient() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-xs font-semibold text-fg">Character</p>
+            <span className="text-xs text-fg-muted">{character ? "acts out your script" : "plain background"}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+            <button
+              key="none"
+              type="button"
+              onClick={() => setCharacter("")}
+              className={`flex flex-col items-center gap-0.5 rounded-lg border px-1 py-2 transition-colors ${
+                character === "" ? "border-primary bg-primary-soft text-fg" : "border-border bg-surface text-fg-muted hover:border-primary"
+              }`}
+            >
+              <svg viewBox="0 0 32 44" className="h-9 w-9" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" opacity={0.35}>
+                <rect x="5" y="5" width="22" height="34" rx="4" />
+              </svg>
+              <span className="text-[11px] font-semibold">None</span>
+            </button>
+            {CHARACTERS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCharacter(c.id)}
+                className={`flex flex-col items-center gap-0.5 rounded-lg border px-1 py-2 transition-colors ${
+                  character === c.id ? "border-primary bg-primary-soft text-fg" : "border-border bg-surface text-fg-muted hover:border-primary"
+                }`}
+              >
+                <FigureIcon color={c.color} accessory={c.accessory} className="h-9 w-9" />
+                <span className="text-[11px] font-semibold">{c.name}</span>
+              </button>
+            ))}
           </div>
         </div>
 

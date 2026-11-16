@@ -21,7 +21,7 @@ export default async function VideoGeneratorPage() {
       <ToolPageHero
         eyebrow="Service"
         title="Video Generator"
-        subtitle="Paste a script — get a finished vertical video with neural narration, word-synced captions and an animated background. No editing, no signup needed."
+        subtitle="Paste a script or a timestamped storyboard (Gemini/ChatGPT style) — pick a stick-figure character to act it out, with neural narration and word-synced captions. No editing, no signup needed."
       />
       <div className="mx-auto max-w-3xl space-y-4 px-4 pb-16 sm:px-6">
         <VideoGeneratorClient />
