@@ -19,6 +19,16 @@ const STYLES = [
   { id: "ocean", label: "Ocean", hint: "navy → green" },
   { id: "sunset", label: "Sunset", hint: "purple → orange" },
   { id: "night", label: "Night", hint: "charcoal" },
+  { id: "blank", label: "Blank", hint: "plain white screen" },
+];
+
+const AUDIO_STYLES = [
+  { id: "story", label: "Storyteller" },
+  { id: "podcast", label: "Podcast" },
+  { id: "dialogue", label: "Dialogue" },
+  { id: "narrator", label: "Movie Narrator" },
+  { id: "news", label: "Newsreader" },
+  { id: "hype", label: "Hype / Excited" },
 ];
 
 /** Stick-figure cast — ids/colors mirror the engine's stickman.js. */
@@ -69,6 +79,7 @@ export default function VideoGeneratorClient() {
   const [voice, setVoice] = useState("en-US-GuyNeural");
   const [style, setStyle] = useState("ocean");
   const [character, setCharacter] = useState<string>("spike");
+  const [audioStyle, setAudioStyle] = useState("story");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState("");
@@ -151,7 +162,7 @@ export default function VideoGeneratorClient() {
       const res = await fetch("/api/services/tools/video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: t, voice, style, character }),
+        body: JSON.stringify({ text: t, voice, style, character, audioStyle }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.progressUrl) {
@@ -196,7 +207,7 @@ export default function VideoGeneratorClient() {
             className="w-full rounded-lg border border-border bg-surface p-3 text-sm text-fg outline-none focus:border-primary"
           />
           <div className="mt-1 flex items-center justify-between text-xs text-fg-muted">
-            <span>~{Math.max(1, Math.round(text.length / 20))}s of video</span>
+            <span>~{Math.min(90, Math.max(1, Math.round(text.length / 20)))}s of video</span>
             <span>{text.length}/{MAX_CHARS}</span>
           </div>
         </div>
@@ -236,6 +247,18 @@ export default function VideoGeneratorClient() {
                 ))}
               </select>
             )}
+            <div className="mt-2">
+              <p className="mb-1 text-xs font-semibold text-fg">Audio style</p>
+              <select
+                value={audioStyle}
+                onChange={(e) => setAudioStyle(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+              >
+                {AUDIO_STYLES.map((a) => (
+                  <option key={a.id} value={a.id}>{a.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const caller = res.caller;
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
 
-  let body: { text?: string; voice?: string; style?: string; character?: string };
+  let body: { text?: string; voice?: string; style?: string; character?: string; audioStyle?: string };
   try {
     body = await req.json();
   } catch {
@@ -38,9 +38,11 @@ export async function POST(req: NextRequest) {
   const voice = (body.voice ?? "en-US-GuyNeural").slice(0, 50);
   const style = (body.style ?? "ocean").slice(0, 20);
   const character = (body.character ?? "").trim().slice(0, 24);
+  const audioStyle = (body.audioStyle ?? "").trim().slice(0, 12);
   if (text.length < 10) return NextResponse.json({ error: "Please write at least a sentence (10+ characters)." }, { status: 400 });
   if (text.length > 5000) return NextResponse.json({ error: "Script is too long (5000 characters max — about 60–90 seconds of video)." }, { status: 400 });
   if (character && !/^[a-z0-9_-]+$/.test(character)) return NextResponse.json({ error: "Unknown character." }, { status: 400 });
+  if (audioStyle && !/^[a-z]{1,12}$/.test(audioStyle)) return NextResponse.json({ error: "Unknown audio style." }, { status: 400 });
 
   // Daily quota (admins unlimited).
   if (!caller.isAdmin) {
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   let engine: Response;
   try {
-    engine = await engineFetch("/api/video", { method: "POST", body: { text, voice, style, character }, timeoutMs: 30_000 });
+    engine = await engineFetch("/api/video", { method: "POST", body: { text, voice, style, character, audioStyle }, timeoutMs: 30_000 });
   } catch {
     return NextResponse.json({ error: "The video studio is warming up. Please try again in a moment." }, { status: 502 });
   }
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest) {
     token_id: caller.tokenId,
     ip,
     ok: true,
-    meta: { chars: text.length, voice, style, character: character || undefined, jobId: payload.jobId },
+    meta: { chars: text.length, voice, style, character: character || undefined, audioStyle: audioStyle || undefined, jobId: payload.jobId },
   });
 
   const ticket = signTicket(payload.jobId, 24 * 60 * 60 * 1000); // file stays downloadable for 24h
