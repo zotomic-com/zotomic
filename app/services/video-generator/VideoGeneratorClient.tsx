@@ -16,6 +16,7 @@ interface Voice {
 const MAX_CHARS = 5000;
 
 const STYLES = [
+  { id: "auto", label: "Auto", hint: "adapts colors per scene" },
   { id: "ocean", label: "Ocean", hint: "navy → green" },
   { id: "sunset", label: "Sunset", hint: "purple → orange" },
   { id: "night", label: "Night", hint: "charcoal" },
@@ -23,6 +24,7 @@ const STYLES = [
 ];
 
 const AUDIO_STYLES = [
+  { id: "auto", label: "Auto (matches story)" },
   { id: "story", label: "Storyteller" },
   { id: "podcast", label: "Podcast" },
   { id: "dialogue", label: "Dialogue" },
@@ -32,7 +34,8 @@ const AUDIO_STYLES = [
 ];
 
 /** Copy-paste prompt that makes Gemini / ChatGPT / Claude write a story in
- * the exact storyboard format this tool renders (≤50s, ≤120 spoken words). */
+ * the exact storyboard format this tool renders (≤50s, ≤120 spoken words,
+ * per-scene Colors line for the Auto style). */
 const MASTER_PROMPT = `You are a storyboard writer for Zotomic's AI video generator. Write a short vertical video story (maximum 50 seconds) that I will paste into Zotomic to render as an animated stick-figure video with voiceover.
 
 TOPIC: <write your topic here>
@@ -43,9 +46,10 @@ STRICT FORMAT RULES — follow exactly:
 1. Write 5 to 7 scenes. Total story time must NOT exceed 50 seconds (for example: 0:00 - 0:08, 0:08 - 0:16 ... ending at 0:50).
 2. Start every scene with this exact header line:
 0:00 - 0:08 | Scene Title
-3. Under each header add exactly these three lines:
+3. Under each header add exactly these four lines:
 Visual: ONE simple action the main character does (walk, run, jump, wave, point, fall, celebrate, think, write at a desk, cook, dance). No camera directions, no close-ups, no zooms, no scene changes.
 Audio: sound effects or music mood (one short line).
+Colors: the scene's background and element color mood (one short line), for example "sunny yellow morning with warm orange light", "purple night with glowing cyan elements", "cool blue tech lab with chrome details". Each scene can have a different color mood that fits the story.
 Voiceover: the narration for that scene inside quotes, maximum 25 words, simple English words.
 4. The story has ONE main stick-figure character who appears in EVERY scene. Give the character a short name and use it in the Visual lines.
 5. Total Voiceover words across all scenes: maximum 120 words.
@@ -55,6 +59,7 @@ Example of the exact format:
 0:00 - 0:08 | The Dream
 Visual: Max wakes up, stretches and celebrates with both arms in the air.
 Audio: Soft morning music.
+Colors: sunny yellow morning with warm orange light.
 Voiceover: "Every morning, Max dreams of building something big."
 
 Now write the story on my TOPIC in my STORY STYLE.`;
@@ -105,9 +110,9 @@ export default function VideoGeneratorClient() {
   const [voices, setVoices] = useState<Voice[] | null>(null);
   const [query, setQuery] = useState("");
   const [voice, setVoice] = useState("en-US-GuyNeural");
-  const [style, setStyle] = useState("ocean");
+  const [style, setStyle] = useState("auto");
   const [character, setCharacter] = useState<string>("spike");
-  const [audioStyle, setAudioStyle] = useState("story");
+  const [audioStyle, setAudioStyle] = useState("auto");
   const [promptCopied, setPromptCopied] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
