@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Clapperboard, Download, Loader2, Search } from "lucide-react";
+import { Clapperboard, Check, ClipboardList, Copy, Download, Loader2, Search } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,34 @@ const AUDIO_STYLES = [
   { id: "news", label: "Newsreader" },
   { id: "hype", label: "Hype / Excited" },
 ];
+
+/** Copy-paste prompt that makes Gemini / ChatGPT / Claude write a story in
+ * the exact storyboard format this tool renders (≤50s, ≤120 spoken words). */
+const MASTER_PROMPT = `You are a storyboard writer for Zotomic's AI video generator. Write a short vertical video story (maximum 50 seconds) that I will paste into Zotomic to render as an animated stick-figure video with voiceover.
+
+TOPIC: <write your topic here>
+
+STORY STYLE: <pick one and edit it before sending: funny comedy, storyteller, movie narration, business, motivational, horror, sci-fi, kids story>
+
+STRICT FORMAT RULES — follow exactly:
+1. Write 5 to 7 scenes. Total story time must NOT exceed 50 seconds (for example: 0:00 - 0:08, 0:08 - 0:16 ... ending at 0:50).
+2. Start every scene with this exact header line:
+0:00 - 0:08 | Scene Title
+3. Under each header add exactly these three lines:
+Visual: ONE simple action the main character does (walk, run, jump, wave, point, fall, celebrate, think, write at a desk, cook, dance). No camera directions, no close-ups, no zooms, no scene changes.
+Audio: sound effects or music mood (one short line).
+Voiceover: the narration for that scene inside quotes, maximum 25 words, simple English words.
+4. The story has ONE main stick-figure character who appears in EVERY scene. Give the character a short name and use it in the Visual lines.
+5. Total Voiceover words across all scenes: maximum 120 words.
+6. Output ONLY the finished story in the format above — no explanations, no markdown, no code block.
+
+Example of the exact format:
+0:00 - 0:08 | The Dream
+Visual: Max wakes up, stretches and celebrates with both arms in the air.
+Audio: Soft morning music.
+Voiceover: "Every morning, Max dreams of building something big."
+
+Now write the story on my TOPIC in my STORY STYLE.`;
 
 /** Stick-figure cast — ids/colors mirror the engine's stickman.js. */
 const CHARACTERS = [
@@ -80,6 +108,7 @@ export default function VideoGeneratorClient() {
   const [style, setStyle] = useState("ocean");
   const [character, setCharacter] = useState<string>("spike");
   const [audioStyle, setAudioStyle] = useState("story");
+  const [promptCopied, setPromptCopied] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState("");
@@ -187,6 +216,16 @@ export default function VideoGeneratorClient() {
     a.remove();
   };
 
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(MASTER_PROMPT);
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 2000);
+    } catch {
+      // clipboard blocked (non-HTTPS / permissions) — user can still select the text
+    }
+  };
+
   return (
     <Card>
       <CardBody className="space-y-4">
@@ -207,7 +246,7 @@ export default function VideoGeneratorClient() {
             className="w-full rounded-lg border border-border bg-surface p-3 text-sm text-fg outline-none focus:border-primary"
           />
           <div className="mt-1 flex items-center justify-between text-xs text-fg-muted">
-            <span>~{Math.min(90, Math.max(1, Math.round(text.length / 20)))}s of video</span>
+            <span>~{Math.min(60, Math.max(1, Math.round(text.length / 20)))}s of video</span>
             <span>{text.length}/{MAX_CHARS}</span>
           </div>
         </div>
@@ -317,6 +356,29 @@ export default function VideoGeneratorClient() {
         </div>
 
         <QuotaPanel quota={quota} unit="videos" />
+
+        <details className="rounded-lg border border-border bg-surface">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-semibold text-fg">
+            <ClipboardList className="h-4 w-4 text-primary" /> AI Story Master Prompt
+            <span className="ml-auto text-xs font-normal text-fg-muted">for Gemini / ChatGPT / Claude</span>
+          </summary>
+          <div className="space-y-2 border-t border-border px-3 py-3">
+            <ol className="list-inside list-decimal space-y-0.5 text-xs text-fg-muted">
+              <li>
+                Before sending, <b className="text-fg">edit the STORY STYLE line</b> inside the prompt — storyteller, movie narration, funny, business, etc.
+              </li>
+              <li>Copy the prompt and paste it into Gemini, ChatGPT or Claude to get a story.</li>
+              <li>Copy the generated story and paste it into the script box above, then Generate video.</li>
+            </ol>
+            <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface-2 p-2 text-xs leading-relaxed text-fg">
+              {MASTER_PROMPT}
+            </pre>
+            <Button variant="secondary" onClick={copyPrompt} className="w-full sm:w-auto">
+              {promptCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {promptCopied ? "Copied!" : "Copy master prompt"}
+            </Button>
+          </div>
+        </details>
 
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={generate} disabled={busy || text.trim().length < 10}>

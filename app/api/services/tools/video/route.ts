@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   const character = (body.character ?? "").trim().slice(0, 24);
   const audioStyle = (body.audioStyle ?? "").trim().slice(0, 12);
   if (text.length < 10) return NextResponse.json({ error: "Please write at least a sentence (10+ characters)." }, { status: 400 });
-  if (text.length > 5000) return NextResponse.json({ error: "Script is too long (5000 characters max — about 60–90 seconds of video)." }, { status: 400 });
+  if (text.length > 5000) return NextResponse.json({ error: "Script is too long (5000 characters max — about 60 seconds of video)." }, { status: 400 });
   if (character && !/^[a-z0-9_-]+$/.test(character)) return NextResponse.json({ error: "Unknown character." }, { status: 400 });
   if (audioStyle && !/^[a-z]{1,12}$/.test(audioStyle)) return NextResponse.json({ error: "Unknown audio style." }, { status: 400 });
 
