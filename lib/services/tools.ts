@@ -314,7 +314,7 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
 
 export async function logUsage(entry: {
   service: ToolService;
-  action: "info" | "download_start" | "file" | "tts" | "voices" | "video" | "screenshot_analyze" | "screenshot_recover";
+  action: "info" | "download_start" | "file" | "tts" | "voices" | "video" | "video_storyboard" | "screenshot_analyze" | "screenshot_recover";
   user_email?: string | null;
   token_id?: string | null;
   ip?: string | null;

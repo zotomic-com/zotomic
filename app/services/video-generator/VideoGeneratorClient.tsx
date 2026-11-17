@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Clapperboard, Check, ClipboardList, Copy, Download, Loader2, Search } from "lucide-react";
+import { Clapperboard, Check, ClipboardList, Copy, Download, Loader2, Search, Sparkles } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { QuotaPanel, type QuotaInfo } from "@/components/site/service-tools";
+import { CHARACTERS, type CastMember } from "@/lib/videos/characters";
 
 interface Voice {
   id: string;
@@ -64,22 +65,6 @@ Voiceover: "Every morning, Max dreams of building something big."
 
 Now write the story on my TOPIC in my STORY STYLE.`;
 
-/** Stick-figure cast — ids/colors mirror the engine's stickman.js. */
-const CHARACTERS = [
-  { id: "spike", name: "Spike", color: "#1f2937", accessory: "none" },
-  { id: "ruby", name: "Ruby", color: "#e11d48", accessory: "bow" },
-  { id: "max", name: "Max", color: "#2563eb", accessory: "cap" },
-  { id: "luna", name: "Luna", color: "#7c3aed", accessory: "ponytail" },
-  { id: "ace", name: "Ace", color: "#059669", accessory: "headphones" },
-  { id: "bella", name: "Bella", color: "#db2777", accessory: "glasses" },
-  { id: "rocky", name: "Rocky", color: "#ea580c", accessory: "beanie" },
-  { id: "zara", name: "Zara", color: "#0d9488", accessory: "bun" },
-  { id: "nova", name: "Nova", color: "#f97316", accessory: "messy" },
-  { id: "kai", name: "Kai", color: "#4f46e5", accessory: "curly" },
-  { id: "mia", name: "Mia", color: "#ec4899", accessory: "bangs" },
-  { id: "otto", name: "Otto", color: "#0ea5e9", accessory: "flat" },
-] as const;
-
 /** Tiny inline SVG preview of each character (matching the accessory). */
 function FigureIcon({ color, accessory, className }: { color: string; accessory: string; className?: string }) {
   return (
@@ -122,6 +107,8 @@ export default function VideoGeneratorClient() {
   const [character, setCharacter] = useState<string>("spike");
   const [audioStyle, setAudioStyle] = useState("auto");
   const [promptCopied, setPromptCopied] = useState(false);
+  const [idea, setIdea] = useState("");
+  const [writing, setWriting] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState("");
@@ -229,6 +216,32 @@ export default function VideoGeneratorClient() {
     a.remove();
   };
 
+  /** Zotomic AI turns the rough idea into a render-ready storyboard. */
+  const writeWithAI = async () => {
+    const i = idea.trim();
+    setError("");
+    if (i.length < 10) {
+      setError("Describe your idea in at least a sentence (10+ characters).");
+      return;
+    }
+    setWriting(true);
+    try {
+      const res = await fetch("/api/services/tools/video/storyboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idea: i, character }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.storyboard) throw new Error(data.error || `Server error (${res.status})`);
+      setText(String(data.storyboard).slice(0, MAX_CHARS));
+      setIdea("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setWriting(false);
+    }
+  };
+
   const copyPrompt = async () => {
     try {
       await navigator.clipboard.writeText(MASTER_PROMPT);
@@ -263,6 +276,35 @@ export default function VideoGeneratorClient() {
             <span>{text.length}/{MAX_CHARS}</span>
           </div>
         </div>
+
+        {/* AI storyboard writer — paste any idea, Zotomic AI writes the storyboard */}
+        <details className="rounded-lg border border-primary/40 bg-primary-soft/40">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-semibold text-fg">
+            <Sparkles className="h-4 w-4 text-primary" /> Let Zotomic AI write the storyboard for you
+            <span className="ml-auto text-xs font-normal text-fg-muted">paste any idea — no format needed</span>
+          </summary>
+          <div className="space-y-2 border-t border-primary/30 px-3 py-3">
+            <textarea
+              value={idea}
+              onChange={(e) => setIdea(e.target.value.slice(0, 2000))}
+              rows={3}
+              placeholder={`e.g. "a funny story about Max opening a mystery gift box that turns out to be full of socks" — or paste a rough script, bullet points, anything.`}
+              className="w-full rounded-lg border border-border bg-surface p-3 text-sm text-fg outline-none focus:border-primary"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={writeWithAI} disabled={writing || idea.trim().length < 10}>
+                {writing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {writing ? "Writing your storyboard…" : `Write storyboard (${CHARACTERS.find((c) => c.id === character)?.name ?? "character"} acts it out)`}
+              </Button>
+              <span className="text-xs text-fg-muted">
+                {writing ? "Usually 10–20 seconds" : "The storyboard lands in the script box above — edit it freely, then Generate video."}
+              </span>
+            </div>
+            <p className="text-xs text-fg-muted">
+              Counts as part of a video: 1 video = 1 AI-written storyboard + 1 render against your daily plan.
+            </p>
+          </div>
+        </details>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -378,9 +420,11 @@ export default function VideoGeneratorClient() {
           <div className="space-y-2 border-t border-border px-3 py-3">
             <ol className="list-inside list-decimal space-y-0.5 text-xs text-fg-muted">
               <li>
-                Before sending, <b className="text-fg">edit the STORY STYLE line</b> inside the prompt — storyteller, movie narration, funny, business, etc.
+                <b className="text-fg">Easier:</b> use the “Let Zotomic AI write the storyboard” panel above — no copy-pasting needed.
               </li>
-              <li>Copy the prompt and paste it into Gemini, ChatGPT or Claude to get a story.</li>
+              <li>
+                Manual way: copy this prompt, <b className="text-fg">edit the STORY STYLE line</b>, and paste it into Gemini, ChatGPT or Claude to get a story.
+              </li>
               <li>Copy the generated story and paste it into the script box above, then Generate video.</li>
             </ol>
             <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface-2 p-2 text-xs leading-relaxed text-fg">
