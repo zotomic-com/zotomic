@@ -150,6 +150,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       sessionId: session.id,
       items,
+      // order-aligned with the request's items: successes carry `item`,
+      // failures carry `error` — the client uses this to keep the original
+      // image Blob (still on the device) linked to the created item id.
+      created: results,
       failed: results.filter((r) => "error" in r),
     });
   } catch (e) {

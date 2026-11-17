@@ -10,7 +10,7 @@
  * Intake: upload (single/multi), device folder connect (File System Access
  * API), and an in-app screenshot taker (full screen / active tab full page /
  * selection). After capture a details modal asks for name / group / details /
- * link — user answers are passed to Hermes as hints.
+ * link — user answers are passed to Zotomic AI as hints.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Check, Copy, Download, FolderOpen, Link2, Loader2, Pencil, RefreshCw, ShieldCheck, Trash2, Upload, X, AlertTriangle } from "lucide-react";
@@ -112,6 +112,9 @@ export default function ScreenshotOrganizerClient({ signedIn }: { signedIn: bool
   const [hasDirHandle, setHasDirHandle] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
+  // itemId → the original image Blob, kept in memory on this device only so
+  // the screenshot can be downloaded (the server never stores full images).
+  const blobsRef = useRef(new Map<string, Blob>());
 
   useEffect(() => {
     fetch("/api/services/tools/screenshots/me")
@@ -133,6 +136,9 @@ export default function ScreenshotOrganizerClient({ signedIn }: { signedIn: bool
       return;
     }
     setSession(d);
+    // drop in-memory images for items that no longer exist (deleted / expired)
+    const ids = new Set(((d.items ?? []) as Array<{ id: string }>).map((i) => i.id));
+    for (const id of [...blobsRef.current.keys()]) if (!ids.has(id)) blobsRef.current.delete(id);
     dirInputRef.current?.setAttribute("data-loaded", "1");
   }, []);
 
@@ -344,21 +350,24 @@ export default function ScreenshotOrganizerClient({ signedIn }: { signedIn: bool
 
   const submitDetails = useCallback(async () => {
     if (!modal) return;
-    setBusy("Analyzing with Hermes…");
+    setBusy("Analyzing with Zotomic AI…");
     setError("");
     try {
       const staged = (window as unknown as { __zoFiles?: File[] }).__zoFiles;
       const batch = staged ?? [];
       // Build the request items: first = the modal's image; rest = staged files
       const items: Array<{ name: string; dataUrl: string; thumb: string; group?: string; details?: string; link?: string }> = [];
+      const blobs: Array<Blob | undefined> = []; // parallel to items — the original images
       if (modal.preview) {
         const thumb = modal.full ? await downscale(modal.full, 256, 0.6) : "";
         items.push({ name: modal.name, dataUrl: modal.preview, thumb, group: modal.group || undefined, details: modal.details || undefined, link: modal.link || undefined });
+        blobs.push(modal.full);
       }
       for (const f of batch.slice(1)) {
         const dataUrl = await downscale(f, 1024, 0.72);
         const thumb = await downscale(f, 256, 0.6);
         items.push({ name: f.name.replace(IMAGE_RE, ""), dataUrl, thumb, group: modal.group || undefined, details: modal.details || undefined, link: modal.link || undefined });
+        blobs.push(f);
       }
       (window as unknown as { __zoFiles?: File[] }).__zoFiles = undefined;
 
@@ -366,6 +375,7 @@ export default function ScreenshotOrganizerClient({ signedIn }: { signedIn: bool
       let last: { sessionId?: string } = {};
       for (let i = 0; i < items.length; i += 2) {
         const chunk = items.slice(i, i + 2);
+        const chunkBlobs = blobs.slice(i, i + 2);
         const r = await fetch("/api/services/tools/screenshots/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -374,11 +384,17 @@ export default function ScreenshotOrganizerClient({ signedIn }: { signedIn: bool
         const d = await r.json();
         if (!r.ok) throw new Error(d.error ?? "Analysis failed.");
         last = d;
+        // link each created item to its original image (order-aligned)
+        if (Array.isArray(d.created)) {
+          d.created.forEach((c: { item?: { id: string } }, j: number) => {
+            if (c?.item && chunkBlobs[j]) blobsRef.current.set(c.item.id, chunkBlobs[j]);
+          });
+        }
       }
       setModal(null);
       await loadSession(last.sessionId!);
       await fetch("/api/services/tools/screenshots/me").then((r) => (r.ok ? r.json() : null)).then((q) => q && setQuota(q));
-      flash(`Hermes analyzed ${items.length} screenshot${items.length === 1 ? "" : "s"}.`);
+      flash(`Zotomic AI analyzed ${items.length} screenshot${items.length === 1 ? "" : "s"}.`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -486,6 +502,18 @@ export default function ScreenshotOrganizerClient({ signedIn }: { signedIn: bool
     a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  /** Download the screenshot image itself (the original still lives on this device). */
+  const downloadImage = (it: Item) => {
+    const blob = blobsRef.current.get(it.id);
+    if (!blob) return;
+    const ext = blob.type === "image/png" ? ".png" : blob.type === "image/webp" ? ".webp" : ".jpg";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${it.name.replace(/[\\/:*?"<>|]+/g, "_")}${ext}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   };
 
   /** Write links.txt + notes.txt back into the connected device folder. */
@@ -629,6 +657,9 @@ export default function ScreenshotOrganizerClient({ signedIn }: { signedIn: bool
                       <p className="flex items-start justify-between gap-2 text-sm font-semibold text-fg">
                         <span className="break-words">{it.name}</span>
                         <span className="flex shrink-0 gap-1">
+                          {blobsRef.current.has(it.id) && (
+                            <button title="Download this screenshot image" onClick={() => downloadImage(it)} className="text-fg-muted hover:text-primary"><Download className="h-3.5 w-3.5" /></button>
+                          )}
                           <button title="Edit name / group / details / link" onClick={() => setModal({ mode: "edit", itemId: it.id, name: it.name, group: groupNameOf(it), details: it.details, link: it.user_link, preview: it.thumb || undefined })} className="text-fg-muted hover:text-primary"><Pencil className="h-3.5 w-3.5" /></button>
                           <button title="Delete screenshot" onClick={() => deleteItem(it.id)} className="text-fg-muted hover:text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
                         </span>
@@ -712,7 +743,7 @@ export default function ScreenshotOrganizerClient({ signedIn }: { signedIn: bool
             </datalist>
             <label className="mt-3 block text-xs font-semibold text-fg-muted">Details — why did you take this? (optional)</label>
             <textarea value={modal.details} onChange={(e) => setModal({ ...modal, details: e.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-primary" />
-            <label className="mt-3 block text-xs font-semibold text-fg-muted">Link (if you have one — leave empty and Hermes will try to recover it)</label>
+            <label className="mt-3 block text-xs font-semibold text-fg-muted">Link (if you have one — leave empty and Zotomic AI will try to recover it)</label>
             <input value={modal.link} onChange={(e) => setModal({ ...modal, link: e.target.value })} placeholder="https://…" className="mt-1 w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-primary" />
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setModal(null)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-fg">Cancel</button>

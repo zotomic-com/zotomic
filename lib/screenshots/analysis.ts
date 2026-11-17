@@ -94,7 +94,7 @@ async function geminiJson(parts: unknown[]): Promise<{ parsed: unknown; model: s
 
 /* ── per-screenshot analysis ─────────────────────────────────────────────── */
 
-const ANALYZE_PROMPT = `You are Hermes, the screenshot understanding engine of Zotomic's Screenshot Organizer.
+const ANALYZE_PROMPT = `You are Zotomic AI, the screenshot understanding engine of Zotomic's Screenshot Organizer.
 Analyse the screenshot and return ONLY a JSON object with these fields:
 
 {

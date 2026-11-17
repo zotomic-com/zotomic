@@ -77,7 +77,7 @@ ALTER TABLE service_usage
 -- public service card
 INSERT INTO platform_service_cards (title, description, icon, status, href, sort_order, enabled)
 SELECT 'Screenshot Organizer',
-       'Drop your screenshots or connect your screenshots folder — Hermes reads each one, extracts the key info, recovers hidden links and organizes everything into named groups with a copyable links file.',
+       'Drop your screenshots or connect your screenshots folder — Zotomic AI reads each one, extracts the key info, recovers hidden links and organizes everything into named groups with a copyable links file.',
        'Camera',
        'live',
        '/services/screenshot-organizer',
