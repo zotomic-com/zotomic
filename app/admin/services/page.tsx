@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AudioLines, Download, KeyRound, ShieldCheck, Activity } from "lucide-react";
+import { AudioLines, Download, KeyRound, ShieldCheck, Activity, Camera } from "lucide-react";
 import { requireAdmin, adminDb } from "@/lib/admin-server";
 import { getAllServiceCards } from "@/lib/service-cards";
 import { Card, CardBody } from "@/components/ui/card";
@@ -15,6 +15,7 @@ const TOOL_HREFS: Record<string, string> = {
   "Text to Audio": "/services/text-to-audio",
   "Online Downloader": "/services/online-downloader",
   "Video Generator": "/services/video-generator",
+  "Screenshot Organizer": "/services/screenshot-organizer",
 };
 
 function Stat({ icon: Icon, label, value, tone }: { icon: typeof Activity; label: string; value: string | number; tone?: string }) {
@@ -72,6 +73,15 @@ export default async function AdminServicesPage() {
         <Stat icon={ShieldCheck} label="Access rules" value={accessRows?.length ?? 0} />
         <Stat icon={Download} label="Tools live" value={toolCards.filter((c) => c.status === "live").length} />
       </div>
+
+      <Link
+        href="/admin/services/screenshots"
+        className="block rounded-lg border border-border bg-surface p-5 shadow-sm transition-colors hover:border-primary"
+      >
+        <Camera className="h-5 w-5 text-primary" />
+        <p className="mt-2 text-sm font-bold text-fg">Screenshot Organizer sessions</p>
+        <p className="mt-1 text-sm text-fg-muted">View, edit and delete users&apos; organized screenshot sessions (24h retention).</p>
+      </Link>
 
       <Card>
         <CardBody className="space-y-3">

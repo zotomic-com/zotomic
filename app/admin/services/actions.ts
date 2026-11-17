@@ -128,7 +128,7 @@ function revalidateServices() {
 export async function createServiceTokenAction(input: {
   userEmail: string;
   label?: string;
-  services: "downloader" | "text_to_audio" | "video_generator" | "both" | "all";
+  services: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "both" | "all";
   dailyLimit?: number | null;
   expiresAt?: string | null;
 }): Promise<{ ok: boolean; token?: string; error?: string }> {
@@ -153,7 +153,7 @@ export async function updateServiceTokenAction(
   id: string,
   patch: {
     label?: string | null;
-    services?: "downloader" | "text_to_audio" | "video_generator" | "both" | "all";
+    services?: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "both" | "all";
     status?: "active" | "revoked";
     dailyLimit?: number | null;
     expiresAt?: string | null;
@@ -194,7 +194,7 @@ export async function revealServiceTokenAction(id: string): Promise<string | nul
 
 export async function upsertServiceAccessAction(input: {
   userEmail: string;
-  service: "downloader" | "text_to_audio" | "video_generator" | "both" | "all";
+  service: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "both" | "all";
   mode: "plan" | "allow" | "block";
   dailyLimit?: number | null;
   maxQuality?: string | null;

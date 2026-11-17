@@ -4,6 +4,7 @@ import { money } from "@/lib/money";
 import { deliverReportEmail, deliverReportTelegram } from "@/lib/reports/deliver";
 import { groundedSearch, searchConfigured } from "@/lib/ai/search";
 import { webSearchesToday, webSearchCapFor } from "@/lib/credits";
+import { SCREENSHOT_TOOLS } from "@/lib/screenshots/hermes-tools";
 import {
   getStorefrontAssistantTraining,
   getStorefrontAssistantConfig,
@@ -1324,6 +1325,7 @@ export const TOOLS: ToolDef[] = [
   my_platform_orders,
   my_service_requests,
   platform_services,
+  ...SCREENSHOT_TOOLS,
 ];
 
 export const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));

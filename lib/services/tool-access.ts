@@ -8,7 +8,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 export interface ServiceAccessRow {
   id: string;
   userEmail: string;
-  service: "downloader" | "text_to_audio" | "video_generator";
+  service: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer";
   mode: "plan" | "allow" | "block";
   dailyLimit: number | null;
   maxQuality: string | null;
@@ -39,7 +39,7 @@ export async function listServiceAccess(): Promise<ServiceAccessRow[]> {
 
 export interface AccessInput {
   userEmail: string;
-  service: "downloader" | "text_to_audio" | "video_generator" | "both" | "all";
+  service: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "screenshot_organizer" | "both" | "all";
   mode: "plan" | "allow" | "block";
   dailyLimit?: number | null;
   maxQuality?: string | null;
@@ -55,11 +55,11 @@ export async function upsertServiceAccess(
     .split(/[,\s]+/)
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  const services: Array<"downloader" | "text_to_audio" | "video_generator"> =
+  const services: Array<"downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer"> =
     input.service === "both"
       ? ["downloader", "text_to_audio"]
       : input.service === "all"
-        ? ["downloader", "text_to_audio", "video_generator"]
+        ? ["downloader", "text_to_audio", "video_generator", "screenshot_organizer"]
         : [input.service];
 
   for (const email of emails) {

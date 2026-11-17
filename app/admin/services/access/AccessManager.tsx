@@ -23,7 +23,7 @@ function CreateForm() {
   const { toast } = useToast();
   const [pending, start] = useTransition();
   const [userEmail, setUserEmail] = useState("");
-  const [service, setService] = useState<"all" | "both" | "downloader" | "text_to_audio" | "video_generator">("all");
+  const [service, setService] = useState<"all" | "both" | "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer">("all");
   const [mode, setMode] = useState<"plan" | "allow" | "block">("allow");
   const [dailyLimit, setDailyLimit] = useState("");
   const [maxQuality, setMaxQuality] = useState("");
@@ -72,6 +72,7 @@ function CreateForm() {
               <option value="downloader">Online Downloader</option>
               <option value="text_to_audio">Text to Audio</option>
               <option value="video_generator">Video Generator</option>
+              <option value="screenshot_organizer">Screenshot Organizer</option>
             </Select>
           </Field>
           <Field label="Access mode" hint="allow = explicit grant · plan = follow subscription · block = deny">

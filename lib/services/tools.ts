@@ -24,7 +24,7 @@ import { getAdminSupabase } from "@/lib/supabase";
 import { getAuthUser } from "@/lib/auth-server";
 import { clientIp, enforceRateLimit } from "@/lib/ratelimit";
 
-export type ToolService = "downloader" | "text_to_audio" | "video_generator";
+export type ToolService = "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer";
 export type PlanName = "free" | "business" | "pro";
 
 export const RENDER_API_URL = process.env.RENDER_API_URL || "https://freedownloder-api.onrender.com";
@@ -36,25 +36,34 @@ export const TTS_MAX_CHARS = 3000;
 /** Plan entitlements for the tools ("follow the price system" defaults). */
 export const SERVICE_PLAN_LIMITS: Record<
   PlanName,
-  { downloaderPerDay: number; downloaderMaxQuality: number | null; ttsPerDay: number; videoPerDay: number }
+  {
+    downloaderPerDay: number;
+    downloaderMaxQuality: number | null;
+    ttsPerDay: number;
+    videoPerDay: number;
+    screenshotsPerDay: number;
+    linkRecoveriesPerDay: number;
+  }
 > = {
-  free: { downloaderPerDay: 5, downloaderMaxQuality: 720, ttsPerDay: 3, videoPerDay: 3 },
-  business: { downloaderPerDay: 30, downloaderMaxQuality: null, ttsPerDay: 20, videoPerDay: 20 },
-  pro: { downloaderPerDay: 100, downloaderMaxQuality: null, ttsPerDay: 100, videoPerDay: 50 },
+  free:     { downloaderPerDay: 5,   downloaderMaxQuality: 720, ttsPerDay: 3,   videoPerDay: 3,   screenshotsPerDay: 10,  linkRecoveriesPerDay: 5 },
+  business: { downloaderPerDay: 30,  downloaderMaxQuality: null, ttsPerDay: 20, videoPerDay: 20,  screenshotsPerDay: 75,  linkRecoveriesPerDay: 25 },
+  pro:      { downloaderPerDay: 100, downloaderMaxQuality: null, ttsPerDay: 100, videoPerDay: 50, screenshotsPerDay: 250, linkRecoveriesPerDay: 100 },
 };
 
 export const PLAN_RANK: Record<PlanName, number> = { free: 0, business: 1, pro: 2 };
 
 /** service → (quota limit key, usage-log action). */
-export const SERVICE_LIMIT_KEY: Record<ToolService, "downloaderPerDay" | "ttsPerDay" | "videoPerDay"> = {
+export const SERVICE_LIMIT_KEY: Record<ToolService, "downloaderPerDay" | "ttsPerDay" | "videoPerDay" | "screenshotsPerDay"> = {
   downloader: "downloaderPerDay",
   text_to_audio: "ttsPerDay",
   video_generator: "videoPerDay",
+  screenshot_organizer: "screenshotsPerDay",
 };
-export const SERVICE_ACTION: Record<ToolService, "download_start" | "tts" | "video"> = {
+export const SERVICE_ACTION: Record<ToolService, "download_start" | "tts" | "video" | "screenshot_analyze"> = {
   downloader: "download_start",
   text_to_audio: "tts",
   video_generator: "video",
+  screenshot_organizer: "screenshot_analyze",
 };
 
 export interface ToolLimits {
@@ -62,6 +71,8 @@ export interface ToolLimits {
   downloaderMaxQuality: number | null;
   ttsPerDay: number;
   videoPerDay: number;
+  screenshotsPerDay: number;
+  linkRecoveriesPerDay: number;
 }
 
 export interface ToolCaller {
@@ -229,6 +240,8 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
             ttsPerDay: SERVICE_PLAN_LIMITS.free.ttsPerDay,
             videoPerDay: SERVICE_PLAN_LIMITS.free.videoPerDay,
             downloaderMaxQuality: SERVICE_PLAN_LIMITS.free.downloaderMaxQuality,
+            screenshotsPerDay: SERVICE_PLAN_LIMITS.free.screenshotsPerDay,
+            linkRecoveriesPerDay: SERVICE_PLAN_LIMITS.free.linkRecoveriesPerDay,
           },
         },
       };
@@ -285,10 +298,13 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
         ttsPerDay: SERVICE_PLAN_LIMITS[plan].ttsPerDay,
         videoPerDay: SERVICE_PLAN_LIMITS[plan].videoPerDay,
         downloaderMaxQuality: maxQuality,
+        screenshotsPerDay: SERVICE_PLAN_LIMITS[plan].screenshotsPerDay,
+        linkRecoveriesPerDay: SERVICE_PLAN_LIMITS[plan].linkRecoveriesPerDay,
         // the calling service gets the effective (most restrictive) limit
         ...(service === "downloader" ? { downloaderPerDay: dailyLimit } : {}),
         ...(service === "text_to_audio" ? { ttsPerDay: dailyLimit } : {}),
         ...(service === "video_generator" ? { videoPerDay: dailyLimit } : {}),
+        ...(service === "screenshot_organizer" ? { screenshotsPerDay: dailyLimit } : {}),
       },
     },
   };
@@ -298,7 +314,7 @@ export async function resolveToolCaller(req: NextRequest, service: ToolService):
 
 export async function logUsage(entry: {
   service: ToolService;
-  action: "info" | "download_start" | "file" | "tts" | "voices" | "video";
+  action: "info" | "download_start" | "file" | "tts" | "voices" | "video" | "screenshot_analyze" | "screenshot_recover";
   user_email?: string | null;
   token_id?: string | null;
   ip?: string | null;
@@ -338,7 +354,7 @@ export async function logUsage(entry: {
  * guests, this IP (rows where user_email is null and the ip matches). */
 export async function countTodayUsage(opts: {
   service: ToolService;
-  action: "download_start" | "tts" | "video";
+  action: "download_start" | "tts" | "video" | "screenshot_analyze" | "screenshot_recover";
   email: string | null;
   tokenId: string | null;
   ip?: string | null;

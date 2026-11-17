@@ -28,7 +28,7 @@ function CreateForm() {
   const [pending, start] = useTransition();
   const [userEmail, setUserEmail] = useState("");
   const [label, setLabel] = useState("");
-  const [services, setServices] = useState<"all" | "both" | "downloader" | "text_to_audio" | "video_generator">("all");
+  const [services, setServices] = useState<"all" | "both" | "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer">("all");
   const [dailyLimit, setDailyLimit] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [issued, setIssued] = useState<{ token: string; email: string } | null>(null);
@@ -79,6 +79,7 @@ function CreateForm() {
               <option value="downloader">Online Downloader only</option>
               <option value="text_to_audio">Text to Audio only</option>
               <option value="video_generator">Video Generator only</option>
+              <option value="screenshot_organizer">Screenshot Organizer only</option>
             </Select>
           </Field>
           <Field label="Daily limit (optional)" hint="Leave empty to follow the user's plan">
@@ -279,6 +280,7 @@ function TokenRow({ token }: { token: ServiceToken }) {
               <option value="downloader">Online Downloader only</option>
               <option value="text_to_audio">Text to Audio only</option>
               <option value="video_generator">Video Generator only</option>
+              <option value="screenshot_organizer">Screenshot Organizer only</option>
             </Select>
           </Field>
           <Field label="Daily limit" hint="Empty = follow the user's plan">
