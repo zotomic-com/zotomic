@@ -48,7 +48,7 @@ STRICT FORMAT RULES — follow exactly:
 2. Start every scene with this exact header line:
 0:00 - 0:08 | Scene Title
 3. Under each header add exactly these four lines:
-Visual: ONE simple action the main character does (walk, run, jump, wave, point, fall, celebrate, think, write at a desk, cook, dance). No camera directions, no close-ups, no zooms, no scene changes.
+Visual: ONE simple action the main character does (walk, run, jump, wave, point, fall, celebrate, think, write at a desk, cook, dance, sit, sleep, cry, laugh, eat, drink, open a gift box, knock on a door, throw, catch, carry, push, climb, swim, bow, stretch). No camera directions, no close-ups, no zooms, no scene changes. Mentioning an object shows it in the scene: gift box, door, window, table, chair, car, ball, TV, couch, bed, desk, tree (for example "opens the gift box", "sits on the couch", "knocks on the door").
 Audio: sound effects or music mood (one short line).
 Colors: the scene's background and element color mood (one short line), for example "sunny yellow morning with warm orange light", "purple night with glowing cyan elements", "cool blue tech lab with chrome details". Each scene can have a different color mood that fits the story.
 Voiceover: the narration for that scene inside quotes, maximum 25 words, simple English words.

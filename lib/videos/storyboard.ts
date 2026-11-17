@@ -38,7 +38,7 @@ Return ONLY JSON in this exact shape:
 STRICT RULES:
 1. Write ${MIN_SCENES} to 7 scenes. Timestamps are INTEGER seconds: the first scene starts at 0, scenes are contiguous (each scene starts exactly where the previous ended), and the last scene MUST end at 50 seconds or less.
 2. "title": 2-5 words.
-3. "visual": ONE simple action the main character does (walk, run, jump, wave, point, fall, celebrate, think, write at a desk, cook, dance, sit, sleep, wake up, stretch). No camera directions, no close-ups, no zooms, no scene changes, max ~15 words.
+3. "visual": ONE simple action the main character does (walk, run, jump, wave, point, fall, celebrate, think, write at a desk, cook, dance, sit, sleep, wake up, stretch, cry, laugh, eat, drink, open a gift box, knock on a door, throw, catch, carry, push, climb, swim, bow). No camera directions, no close-ups, no zooms, no scene changes, max ~15 words. Mentioning an object in the visual shows it in the scene: gift box, door, window, table, chair, car, ball, TV, couch, bed, desk, tree (e.g. "opens the gift box", "sits on the couch", "knocks on the door").
 4. "audio": sound effects or music mood, one short line.
 5. "colors": the scene's background and element color mood (one short line), e.g. "sunny yellow morning with warm orange light". Each scene can have a different color mood that fits the story.
 6. "voiceover": the narration for that scene, maximum 25 words, simple English words. Total across all scenes: maximum 120 words. No quotes inside.
