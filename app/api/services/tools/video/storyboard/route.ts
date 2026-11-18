@@ -16,19 +16,18 @@ import {
   countTodayUsage,
   toolRateLimit,
 } from "@/lib/services/tools";
-import { writeStoryboard, MAX_IDEA_CHARS } from "@/lib/videos/storyboard";
+import { writeStoryboard, MAX_IDEA_CHARS, MAX_IDEA_CHARS_ADMIN } from "@/lib/videos/storyboard";
 import { CHARACTERS } from "@/lib/videos/characters";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300; // admin storyboards can run long (Gemini + repair pass)
 
 export async function POST(req: NextRequest) {
-  const rate = await toolRateLimit(req, "video_storyboard");
-  if (rate) return rate;
-
   const res = await resolveToolCaller(req, "video_generator");
   if (!res.caller) return NextResponse.json({ error: res.error }, { status: res.status ?? 401 });
   const caller = res.caller;
+  const rate = await toolRateLimit(req, "video_storyboard", caller.isAdmin);
+  if (rate) return rate;
 
   let body: { idea?: string; character?: string };
   try {
@@ -40,8 +39,9 @@ export async function POST(req: NextRequest) {
   if (idea.length < 10) {
     return NextResponse.json({ error: "Describe your idea in at least a sentence (10+ characters)." }, { status: 400 });
   }
-  if (idea.length > MAX_IDEA_CHARS) {
-    return NextResponse.json({ error: `The idea is too long (${MAX_IDEA_CHARS} characters max).` }, { status: 400 });
+  const ideaCap = caller.isAdmin ? MAX_IDEA_CHARS_ADMIN : MAX_IDEA_CHARS;
+  if (idea.length > ideaCap) {
+    return NextResponse.json({ error: `The idea is too long (${ideaCap} characters max).` }, { status: 400 });
   }
   const charId = (body.character ?? "").trim().slice(0, 24);
   const characterName = CHARACTERS.find((c) => c.id === charId)?.name;
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const result = await writeStoryboard({ idea, characterName });
+  const result = await writeStoryboard({ idea, characterName, extended: caller.isAdmin });
   if ("error" in result) {
     await logUsage({
       service: "video_generator",

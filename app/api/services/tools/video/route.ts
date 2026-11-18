@@ -20,13 +20,12 @@ export const maxDuration = 60;
  * finished file downloads straight from the engine via a signed ticket.
  */
 export async function POST(req: NextRequest) {
-  const limited = toolRateLimit(req, "video_start");
-  if (limited) return limited;
-
   const res = await resolveToolCaller(req, "video_generator");
   if (!res.caller) return NextResponse.json({ error: res.error }, { status: res.status });
   const caller = res.caller;
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const limited = toolRateLimit(req, "video_start", caller.isAdmin);
+  if (limited) return limited;
 
   let body: { text?: string; voice?: string; style?: string; character?: string; audioStyle?: string };
   try {
@@ -39,8 +38,9 @@ export async function POST(req: NextRequest) {
   const style = (body.style ?? "ocean").slice(0, 20);
   const character = (body.character ?? "").trim().slice(0, 24);
   const audioStyle = (body.audioStyle ?? "").trim().slice(0, 12);
+  const maxChars = caller.isAdmin ? 20000 : 5000;
   if (text.length < 10) return NextResponse.json({ error: "Please write at least a sentence (10+ characters)." }, { status: 400 });
-  if (text.length > 5000) return NextResponse.json({ error: "Script is too long (5000 characters max — about 60 seconds of video)." }, { status: 400 });
+  if (text.length > maxChars) return NextResponse.json({ error: `Script is too long (${maxChars} characters max — about 60 seconds of video).` }, { status: 400 });
   if (character && !/^[a-z0-9_-]+$/.test(character)) return NextResponse.json({ error: "Unknown character." }, { status: 400 });
   if (audioStyle && !/^[a-z]{1,12}$/.test(audioStyle)) return NextResponse.json({ error: "Unknown audio style." }, { status: 400 });
 
@@ -58,7 +58,12 @@ export async function POST(req: NextRequest) {
 
   let engine: Response;
   try {
-    engine = await engineFetch("/api/video", { method: "POST", body: { text, voice, style, character, audioStyle }, timeoutMs: 30_000 });
+    engine = await engineFetch("/api/video", {
+      method: "POST",
+      // admins get unlimited video time (engine hard-caps at 900s ≈ 15 min)
+      body: { text, voice, style, character, audioStyle, ...(caller.isAdmin ? { maxLen: 900 } : {}) },
+      timeoutMs: 30_000,
+    });
   } catch {
     return NextResponse.json({ error: "The video studio is warming up. Please try again in a moment." }, { status: 502 });
   }

@@ -22,13 +22,12 @@ export const maxDuration = 60;
  * stream through Zotomic.
  */
 export async function POST(req: NextRequest) {
-  const limited = toolRateLimit(req, "downloader_start");
-  if (limited) return limited;
-
   const res = await resolveToolCaller(req, "downloader");
   if (!res.caller) return NextResponse.json({ error: res.error }, { status: res.status });
   const caller = res.caller;
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const limited = toolRateLimit(req, "downloader_start", caller.isAdmin);
+  if (limited) return limited;
 
   let body: { url?: string; mode?: string; qualityId?: string };
   try {

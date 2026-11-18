@@ -13,10 +13,9 @@ export const maxDuration = 60;
 
 /** GET — voice catalogue from the engine (session or service token). */
 export async function GET(req: NextRequest) {
-  const limited = toolRateLimit(req, "tts_voices");
-  if (limited) return limited;
-
   const res = await resolveToolCaller(req, "text_to_audio");
+  const limited = toolRateLimit(req, "tts_voices", res.caller?.isAdmin === true);
+  if (limited) return limited;
   if (!res.caller) {
     await logUsage({
       service: "text_to_audio",
@@ -37,15 +36,14 @@ export async function GET(req: NextRequest) {
 
 /** POST — text → mp3. Counts against the caller's daily TTS quota. */
 export async function POST(req: NextRequest) {
-  const limited = toolRateLimit(req, "tts");
-  if (limited) return limited;
-
   const res = await resolveToolCaller(req, "text_to_audio");
   if (!res.caller) {
     return NextResponse.json({ error: res.error }, { status: res.status });
   }
   const caller = res.caller;
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const limited = toolRateLimit(req, "tts", caller.isAdmin);
+  if (limited) return limited;
 
   let body: { text?: string; voice?: string };
   try {
@@ -55,9 +53,10 @@ export async function POST(req: NextRequest) {
   }
   const text = (body.text ?? "").trim();
   const voice = (body.voice ?? "en-US-GuyNeural").slice(0, 100);
+  const maxChars = caller.isAdmin ? 12000 : 3000;
   if (!text) return NextResponse.json({ error: "Please enter some text." }, { status: 400 });
-  if (text.length > 3000) {
-    return NextResponse.json({ error: "Text is too long (3000 characters max)." }, { status: 400 });
+  if (text.length > maxChars) {
+    return NextResponse.json({ error: `Text is too long (${maxChars} characters max).` }, { status: 400 });
   }
 
   // Quota (admins unlimited).
@@ -74,7 +73,11 @@ export async function POST(req: NextRequest) {
 
   let engine: Response;
   try {
-    engine = await engineFetch("/api/tts", { method: "POST", body: { text, voice }, timeoutMs: 50_000 });
+    engine = await engineFetch("/api/tts", {
+      method: "POST",
+      body: { text, voice, ...(caller.isAdmin ? { maxLen: 1 } : {}) },
+      timeoutMs: 50_000,
+    });
   } catch {
     return NextResponse.json(
       { error: "Audio generation took too long. Please try again — shorter text is faster." },

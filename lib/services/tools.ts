@@ -396,8 +396,10 @@ export async function quotaStatus(caller: ToolCaller, service: ToolService) {
   };
 }
 
-/** Standard per-IP burst guards (in addition to per-day quotas). */
-export function toolRateLimit(req: NextRequest, name: string) {
+/** Standard per-IP burst guards (in addition to per-day quotas).
+ *  Admins are skipped entirely — unlimited rate and time on every service. */
+export function toolRateLimit(req: NextRequest, name: string, isAdmin = false) {
+  if (isAdmin) return null;
   return enforceRateLimit(req, {
     name,
     limit: 20,

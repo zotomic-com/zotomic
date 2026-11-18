@@ -20,6 +20,7 @@ export default function TextToAudioClient() {
   const [query, setQuery] = useState("");
   const [voice, setVoice] = useState("en-US-GuyNeural");
   const [text, setText] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [audioUrl, setAudioUrl] = useState("");
@@ -38,7 +39,10 @@ export default function TextToAudioClient() {
       .catch(() => setVoices([{ id: "en-US-GuyNeural", gender: "male", locale: "en-US" }]));
     fetch("/api/services/tools/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.tts && !d.tts.error && setQuota(d.tts))
+      .then((d) => {
+        setIsAdmin(!!d?.isAdmin);
+        if (d?.tts && !d.tts.error) setQuota(d.tts);
+      })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -130,13 +134,13 @@ export default function TextToAudioClient() {
           <label className="text-sm font-medium text-fg">Text</label>
           <textarea
             value={text}
-            onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
+            onChange={(e) => setText(e.target.value.slice(0, isAdmin ? 12000 : MAX_CHARS))}
             rows={6}
             placeholder="Type or paste the text you want to hear…"
             className="mt-1.5 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
           />
           <p className="mt-1 text-right text-xs text-fg-subtle">
-            {text.length} / {MAX_CHARS}
+            {text.length} / {isAdmin ? 12000 : MAX_CHARS}
           </p>
         </div>
 

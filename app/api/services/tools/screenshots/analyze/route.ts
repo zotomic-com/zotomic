@@ -51,12 +51,11 @@ function parseDataUrl(dataUrl: string): { base64: string; mime: string } | null 
 }
 
 export async function POST(req: NextRequest) {
-  const rate = await toolRateLimit(req, "screenshots_analyze");
-  if (rate) return rate;
-
   const res = await resolveToolCaller(req, "screenshot_organizer");
   if (!res.caller) return NextResponse.json({ error: res.error }, { status: res.status ?? 401 });
   const caller = res.caller;
+  const rate = await toolRateLimit(req, "screenshots_analyze", caller.isAdmin);
+  if (rate) return rate;
 
   let body: { sessionId?: string; consent?: boolean; items?: IncomingItem[] };
   try {
@@ -72,15 +71,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No screenshots to analyze." }, { status: 400 });
   }
 
-  // per-day screenshot quota
-  const used = await countTodayUsage({
+  // per-day screenshot quota (admins unlimited)
+  const used = caller.isAdmin ? 0 : await countTodayUsage({
     service: "screenshot_organizer",
     action: "screenshot_analyze",
     email: caller.email,
     tokenId: caller.tokenId,
     ip: caller.ip ?? undefined,
   });
-  const limit = caller.limits.screenshotsPerDay;
+  const limit = caller.isAdmin ? Number.POSITIVE_INFINITY : caller.limits.screenshotsPerDay;
   if (Number.isFinite(limit) && used + incoming.length > limit) {
     await logUsage({
       service: "screenshot_organizer",

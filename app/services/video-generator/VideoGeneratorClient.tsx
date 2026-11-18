@@ -15,6 +15,7 @@ interface Voice {
 }
 
 const MAX_CHARS = 5000;
+const MAX_CHARS_ADMIN = 20000;
 
 const STYLES = [
   { id: "auto", label: "Auto", hint: "adapts colors per scene" },
@@ -116,6 +117,7 @@ export default function VideoGeneratorClient() {
   const [error, setError] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -127,7 +129,10 @@ export default function VideoGeneratorClient() {
       .catch(() => setVoices([]));
     fetch("/api/services/tools/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.video && !d.video.error && setQuota(d.video))
+      .then((d) => {
+        setIsAdmin(!!d?.isAdmin);
+        if (d?.video && !d.video.error) setQuota(d.video);
+      })
       .catch(() => {});
     return () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
@@ -233,7 +238,7 @@ export default function VideoGeneratorClient() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.storyboard) throw new Error(data.error || `Server error (${res.status})`);
-      setText(String(data.storyboard).slice(0, MAX_CHARS));
+      setText(String(data.storyboard).slice(0, isAdmin ? MAX_CHARS_ADMIN : MAX_CHARS));
       setIdea("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -262,7 +267,7 @@ export default function VideoGeneratorClient() {
         <div>
           <textarea
             value={text}
-            onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
+            onChange={(e) => setText(e.target.value.slice(0, isAdmin ? MAX_CHARS_ADMIN : MAX_CHARS))}
             placeholder={
               character
                 ? "Paste a script or a timestamped storyboard (e.g. `0:00 - 0:08 | The Setup` + Visual/Audio/Voiceover lines) — the character acts out each scene. Plain scripts are narrated scene by scene."
@@ -272,8 +277,8 @@ export default function VideoGeneratorClient() {
             className="w-full rounded-lg border border-border bg-surface p-3 text-sm text-fg outline-none focus:border-primary"
           />
           <div className="mt-1 flex items-center justify-between text-xs text-fg-muted">
-            <span>~{Math.min(60, Math.max(1, Math.round(text.length / 20)))}s of video</span>
-            <span>{text.length}/{MAX_CHARS}</span>
+            <span>~{Math.min(isAdmin ? 900 : 60, Math.max(1, Math.round(text.length / 20)))}s of video{isAdmin ? " (unlimited as admin)" : ""}</span>
+            <span>{text.length}/{isAdmin ? MAX_CHARS_ADMIN : MAX_CHARS}</span>
           </div>
         </div>
 
@@ -286,7 +291,7 @@ export default function VideoGeneratorClient() {
           <div className="space-y-2 border-t border-primary/30 px-3 py-3">
             <textarea
               value={idea}
-              onChange={(e) => setIdea(e.target.value.slice(0, 2000))}
+              onChange={(e) => setIdea(e.target.value.slice(0, isAdmin ? 8000 : 2000))}
               rows={3}
               placeholder={`e.g. "a funny story about Max opening a mystery gift box that turns out to be full of socks" — or paste a rough script, bullet points, anything.`}
               className="w-full rounded-lg border border-border bg-surface p-3 text-sm text-fg outline-none focus:border-primary"

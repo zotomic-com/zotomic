@@ -23,5 +23,5 @@ export async function GET(req: NextRequest) {
     ? await quotaStatus(res3.caller, "video_generator")
     : { service: "video_generator", error: res3.error ?? "No access" };
 
-  return NextResponse.json({ email: res.caller.email, downloader, tts, video });
+  return NextResponse.json({ email: res.caller.email, isAdmin: res.caller.isAdmin, downloader, tts, video });
 }

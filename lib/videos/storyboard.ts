@@ -20,15 +20,30 @@ const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-flash-lite-latest"];
 
 export const MAX_IDEA_CHARS = 2000;
+export const MAX_IDEA_CHARS_ADMIN = 8000;
 const MAX_TOTAL_SECONDS = 55;
+const MAX_TOTAL_SECONDS_ADMIN = 540; // admins: ~9 minutes
 const MAX_VOICE_WORDS = 140;
+const MAX_VOICE_WORDS_ADMIN = 1500;
 const MIN_SCENES = 3;
 const MAX_SCENES = 8;
+const MAX_SCENES_ADMIN = 30;
+
+interface Limits {
+  total: number;
+  words: number;
+  scenes: number;
+  idea: number;
+  minutes: number;
+}
+
+const NORMAL: Limits = { total: MAX_TOTAL_SECONDS, words: MAX_VOICE_WORDS, scenes: MAX_SCENES, idea: MAX_IDEA_CHARS, minutes: 1 };
+const EXTENDED: Limits = { total: MAX_TOTAL_SECONDS_ADMIN, words: MAX_VOICE_WORDS_ADMIN, scenes: MAX_SCENES_ADMIN, idea: MAX_IDEA_CHARS_ADMIN, minutes: 9 };
 
 /* ── prompt ──────────────────────────────────────────────────────────────── */
 
-function writerPrompt(characterName: string, idea: string): string {
-  return `You are the storyboard writer for Zotomic's AI video generator. Turn the user's idea into a short vertical video (maximum 50 seconds) that Zotomic renders as an animated stick-figure video with voiceover.
+function writerPrompt(characterName: string, idea: string, L: Limits): string {
+  return `You are the storyboard writer for Zotomic's AI video generator. Turn the user's idea into a short vertical video (maximum ${L.minutes === 1 ? 50 : "540"} seconds) that Zotomic renders as an animated stick-figure video with voiceover.
 
 Return ONLY JSON in this exact shape:
 { "scenes": [
@@ -36,17 +51,17 @@ Return ONLY JSON in this exact shape:
 ] }
 
 STRICT RULES:
-1. Write ${MIN_SCENES} to 7 scenes. Timestamps are INTEGER seconds: the first scene starts at 0, scenes are contiguous (each scene starts exactly where the previous ended), and the last scene MUST end at 50 seconds or less.
+1. Write ${MIN_SCENES} to ${L.scenes} scenes. Timestamps are INTEGER seconds: the first scene starts at 0, scenes are contiguous (each scene starts exactly where the previous ended), and the last scene MUST end at ${L.total} seconds or less.
 2. "title": 2-5 words.
 3. "visual": ONE simple action the main character does (walk, run, jump, wave, point, fall, celebrate, think, write at a desk, cook, dance, sit, sleep, wake up, stretch, cry, laugh, eat, drink, open a gift box, knock on a door, throw, catch, carry, push, climb, swim, bow). No camera directions, no close-ups, no zooms, no scene changes, max ~15 words. Mentioning an object in the visual shows it in the scene: gift box, door, window, table, chair, car, ball, TV, couch, bed, desk, tree (e.g. "opens the gift box", "sits on the couch", "knocks on the door").
 4. "audio": sound effects or music mood, one short line.
 5. "colors": the scene's background and element color mood (one short line), e.g. "sunny yellow morning with warm orange light". Each scene can have a different color mood that fits the story.
-6. "voiceover": the narration for that scene, maximum 25 words, simple English words. Total across all scenes: maximum 120 words. No quotes inside.
+6. "voiceover": the narration for that scene, maximum ${Math.ceil(L.words / 4)} words, simple English words. Total across all scenes: maximum ${L.words} words. No quotes inside.
 7. The story has ONE main stick-figure character named "${characterName}" who appears in EVERY "visual" line.
 8. Be concrete and fun — a real mini-story with a beginning, a twist and an ending. Output ONLY the JSON object, no markdown, no explanations.
 
 THE USER'S IDEA:
-"""${idea.slice(0, MAX_IDEA_CHARS)}"""`;
+"""${idea.slice(0, L.idea)}"""`;
 }
 
 /* ── Gemini call (JSON mode) ─────────────────────────────────────────────── */
@@ -55,14 +70,14 @@ function apiKey(): string | null {
   return process.env.GEMINI_API_KEY_VIDEO || process.env.GEMINI_API_KEY || null;
 }
 
-async function geminiJson(parts: unknown[]): Promise<{ parsed: unknown } | { error: string }> {
+async function geminiJson(parts: unknown[], maxOutputTokens = 2048): Promise<{ parsed: unknown } | { error: string }> {
   const key = apiKey();
   if (!key) return { error: "The AI writer isn't configured yet." };
   if (chainOpen(MODEL_CHAIN)) return { error: "The AI is busy right now — try again shortly." };
 
   const body = {
     contents: [{ role: "user", parts }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 2048, responseMimeType: "application/json" },
+    generationConfig: { temperature: 0.7, maxOutputTokens, responseMimeType: "application/json" },
   };
 
   let transient = 0;
@@ -142,10 +157,10 @@ function validScene(s: unknown): s is StoryboardScene {
   );
 }
 
-function storyboardProblems(scenes: StoryboardScene[]): string[] {
+function storyboardProblems(scenes: StoryboardScene[], L: Limits): string[] {
   const problems: string[] = [];
   if (scenes.length < MIN_SCENES) problems.push(`only ${scenes.length} scenes — write at least ${MIN_SCENES}.`);
-  if (scenes.length > MAX_SCENES) problems.push(`${scenes.length} scenes is too many — keep it to 7 or fewer.`);
+  if (scenes.length > L.scenes) problems.push(`${scenes.length} scenes is too many — keep it to ${L.scenes} or fewer.`);
   if (scenes.length && scenes[0].start !== 0) problems.push("the first scene must start at 0 seconds.");
   for (let i = 0; i < scenes.length; i++) {
     const s = scenes[i];
@@ -153,10 +168,10 @@ function storyboardProblems(scenes: StoryboardScene[]): string[] {
     if (i > 0 && s.start < scenes[i - 1].end) problems.push(`scene ${i + 1} overlaps the previous scene.`);
   }
   const total = scenes.length ? scenes[scenes.length - 1].end : 0;
-  if (total > MAX_TOTAL_SECONDS) problems.push(`the video is ${total}s — the last scene must end at ${MAX_TOTAL_SECONDS}s or less.`);
+  if (total > L.total) problems.push(`the video is ${total}s — the last scene must end at ${L.total}s or less.`);
   if (total < 10) problems.push("the video is too short — make it at least ~15 seconds.");
   const words = scenes.reduce((n, s) => n + s.voiceover.trim().split(/\s+/).filter(Boolean).length, 0);
-  if (words > MAX_VOICE_WORDS) problems.push(`the voiceover is ${words} words — keep the total at ${MAX_VOICE_WORDS} or less.`);
+  if (words > L.words) problems.push(`the voiceover is ${words} words — keep the total at ${L.words} or less.`);
   return problems;
 }
 
@@ -192,27 +207,29 @@ function extractScenes(parsed: unknown): StoryboardScene[] {
 export async function writeStoryboard(input: {
   idea: string;
   characterName?: string; // the selected cast member's display name
+  extended?: boolean; // admins: longer videos, more scenes, more words
 }): Promise<{ storyboard: string; scenes: number; seconds: number; words: number } | { error: string }> {
   const characterName = (input.characterName || "the main character").slice(0, 24);
-  const first = await geminiJson([{ text: writerPrompt(characterName, input.idea) }]);
+  const L = input.extended ? EXTENDED : NORMAL;
+  const first = await geminiJson([{ text: writerPrompt(characterName, input.idea, L) }], input.extended ? 8192 : 2048);
   if ("error" in first) return first;
 
   let scenes = extractScenes(first.parsed);
-  let problems = storyboardProblems(scenes);
+  let problems = storyboardProblems(scenes, L);
 
   if (problems.length) {
     // one automatic repair pass with the specific issues
     const repair = await geminiJson([
-      { text: writerPrompt(characterName, input.idea) },
+      { text: writerPrompt(characterName, input.idea, L) },
       {
         text: `Your previous draft had these problems — fix ONLY them and return the corrected JSON:\n- ${problems.join("\n- ")}\n\nPrevious draft:\n${JSON.stringify(
           { scenes: scenes.map((s) => ({ ...s, voiceover: s.voiceover.slice(0, 200) })) },
         )}`,
       },
-    ]);
+    ], input.extended ? 8192 : 2048);
     if ("error" in repair) return { error: repair.error };
     const fixed = extractScenes(repair.parsed);
-    const fixedProblems = storyboardProblems(fixed);
+    const fixedProblems = storyboardProblems(fixed, L);
     if (fixed.length && fixedProblems.length < problems.length) {
       scenes = fixed;
       problems = fixedProblems;

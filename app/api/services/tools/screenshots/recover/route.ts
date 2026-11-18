@@ -18,12 +18,11 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  const rate = await toolRateLimit(req, "screenshots_recover");
-  if (rate) return rate;
-
   const res = await resolveToolCaller(req, "screenshot_organizer");
   if (!res.caller) return NextResponse.json({ error: res.error }, { status: res.status ?? 401 });
   const caller = res.caller;
+  const rate = await toolRateLimit(req, "screenshots_recover", caller.isAdmin);
+  if (rate) return rate;
 
   let body: { sessionId?: string; itemId?: string };
   try {
@@ -35,15 +34,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "sessionId and itemId are required." }, { status: 400 });
   }
 
-  // link recovery has its own daily quota (gated like Hermes chat usage)
-  const recUsed = await countTodayUsage({
+  // link recovery has its own daily quota (admins unlimited)
+  const recUsed = caller.isAdmin ? 0 : await countTodayUsage({
     service: "screenshot_organizer",
     action: "screenshot_recover",
     email: caller.email,
     tokenId: caller.tokenId,
     ip: caller.ip ?? undefined,
   });
-  const recLimit = caller.limits.linkRecoveriesPerDay;
+  const recLimit = caller.isAdmin ? Number.POSITIVE_INFINITY : caller.limits.linkRecoveriesPerDay;
   if (Number.isFinite(recLimit) && recUsed >= recLimit) {
     return NextResponse.json(
       { error: `Daily link recovery limit reached (${recLimit}/day on the ${caller.plan} plan).`, used: recUsed, limit: recLimit },
