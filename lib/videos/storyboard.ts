@@ -70,7 +70,8 @@ function apiKey(): string | null {
   return process.env.GEMINI_API_KEY_VIDEO || process.env.GEMINI_API_KEY || null;
 }
 
-async function geminiJson(parts: unknown[], maxOutputTokens = 2048): Promise<{ parsed: unknown } | { error: string }> {
+/** Single JSON call to the Gemini model chain (shared with the anim author). */
+export async function geminiJson(parts: unknown[], maxOutputTokens = 2048): Promise<{ parsed: unknown } | { error: string }> {
   const key = apiKey();
   if (!key) return { error: "The AI writer isn't configured yet." };
   if (chainOpen(MODEL_CHAIN)) return { error: "The AI is busy right now — try again shortly." };

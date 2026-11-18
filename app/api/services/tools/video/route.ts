@@ -8,6 +8,9 @@ import {
   signTicket,
   RENDER_API_URL,
 } from "@/lib/services/tools";
+import { parseStoryboardText, sceneHasKnownAction } from "@/lib/videos/anim-dsl";
+import { authorAnims } from "@/lib/videos/anim-author";
+import { findApprovedAnims, savePendingAnim } from "@/lib/videos/anim-library";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,12 +59,76 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── AI animation library (write-once-verify-once) ─────────────────────────
+  // Storyboard scenes whose action the engine doesn't know fall back to
+  // generic actions. We upgrade them: approved library animations attach
+  // silently; on paid plans/admins Gemini writes + debugs NEW ones (saved as
+  // pending for admin approval). Free plans keep the built-in fallbacks.
+  let anims: { slug: string; keywords: string[]; loop: boolean; cycle?: number; frames: { u: number; pose: Record<string, unknown> }[] }[] = [];
+  try {
+    const scenes = parseStoryboardText(text);
+    const gapScenes = scenes.filter((s) => !sceneHasKnownAction(`${s.title} ${s.visual}`));
+    if (gapScenes.length) {
+      const texts = scenes.map((s) => `${s.title} ${s.visual}`);
+      // approved library entries first — zero AI cost, instant
+      const library = await findApprovedAnims(texts);
+      let unmatched = gapScenes.filter((s) => {
+        const t = `${s.title} ${s.visual}`;
+        return !library.some((row) => row.keywords.some((k) => new RegExp(`\\b${String(k).replace(/[^a-z0-9 ']/g, ".")}\\b`, "i").test(t)));
+      });
+      anims = library.map((row) => ({
+        slug: row.slug,
+        keywords: row.keywords,
+        loop: row.definition.loop,
+        cycle: row.definition.cycle,
+        frames: row.definition.frames,
+      }));
+      // author the still-unmatched ones (plan-gated: paid plans + admins only)
+      if (unmatched.length && (caller.isAdmin || caller.plan !== "free")) {
+        const res = await authorAnims({ scenes, characterName: character || undefined, canAuthor: true });
+        anims.push(
+          ...res.anims.map((a) => ({
+            slug: a.slug,
+            keywords: a.keywords,
+            loop: a.loop,
+            cycle: a.cycle,
+            frames: a.frames,
+          })),
+        );
+        // write-once: every debugged-clean anim joins the library as pending
+        for (const a of res.anims) {
+          const scene = scenes[a.sceneIndex];
+          await savePendingAnim({
+            slug: a.slug,
+            definition: { slug: a.slug, keywords: a.keywords, loop: a.loop, cycle: a.cycle, frames: a.frames },
+            checks: { authored: res.authored, rejected: res.rejected, sceneTitle: scene?.title, visual: scene?.visual },
+            createdBy: caller.userId,
+          }).catch(() => {});
+        }
+        if (res.authored || res.rejected.length) {
+          await logUsage({
+            service: "video_generator",
+            action: "anim_author",
+            user_email: caller.email,
+            token_id: caller.tokenId,
+            ip,
+            ok: res.authored > 0,
+            reason: res.rejected.slice(0, 2).join(" | ").slice(0, 180) || undefined,
+            meta: { authored: res.authored, rejected: res.rejected.length },
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.error("anim library", (e as Error).message); // never block the video
+  }
+
   let engine: Response;
   try {
     engine = await engineFetch("/api/video", {
       method: "POST",
       // admins get unlimited video time (engine hard-caps at 900s ≈ 15 min)
-      body: { text, voice, style, character, audioStyle, ...(caller.isAdmin ? { maxLen: 900 } : {}) },
+      body: { text, voice, style, character, audioStyle, ...(anims.length ? { anims } : {}), ...(caller.isAdmin ? { maxLen: 900 } : {}) },
       timeoutMs: 30_000,
     });
   } catch {
