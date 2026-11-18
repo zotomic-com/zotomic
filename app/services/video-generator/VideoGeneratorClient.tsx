@@ -49,9 +49,9 @@ STRICT FORMAT RULES — follow exactly:
 2. Start every scene with this exact header line:
 0:00 - 0:08 | Scene Title
 3. Under each header add exactly these four lines:
-Visual: ONE simple action the main character does (walk, run, jump, wave, point, fall, celebrate, think, write at a desk, cook, dance, sit, sleep, cry, laugh, eat, drink, open a gift box, knock on a door, throw, catch, carry, push, climb, swim, bow, stretch). No camera directions, no close-ups, no zooms, no scene changes. Mentioning an object shows it in the scene: gift box, door, window, table, chair, car, ball, TV, couch, bed, desk, tree (for example "opens the gift box", "sits on the couch", "knocks on the door").
+Visual: ONE simple action the main character does (walk, run, jump, wave, point, fall, celebrate, think, write at a desk, cook, dance, sit on a chair, sit on the couch, sleep on the bed, cry, laugh, eat, drink, open a gift box, knock on a door, throw, catch, carry, push, climb, swim, bow, stretch, put it down). No camera directions, no close-ups, no zooms, no scene changes. Objects that appear in the scene: gift box, door, window, table, chair, car, ball, TV, couch, bed, desk, tree, cup of coffee, book, phone, plate of food. If the character carries, throws, catches, eats or drinks something, NAME the object and it will be held in the stick figure's hands (for example "carries the gift box", "drinks the coffee", "catches the ball", "puts the ball down" makes the character set it on the ground).
 Audio: sound effects or music mood (one short line).
-Colors: the scene's background and element color mood (one short line), for example "sunny yellow morning with warm orange light", "purple night with glowing cyan elements", "cool blue tech lab with chrome details". Each scene can have a different color mood that fits the story.
+Colors: ONE short line describing the scene's colors in this exact structure — BACKGROUND first (the sky / upper area: mood + color word), then GROUND (what the floor is made of and its color). Ground surfaces Zotomic can render: grass, sand, snow, water, wood, road, street, carpet, tile. Color words Zotomic knows: red, orange, gold, yellow, purple, pink, green, teal, blue, cyan, gray, silver. Examples: "blue morning sky, green grass ground", "purple night sky, gray city street", "golden sand ground, blue ocean water, warm sunset". Each scene can have a different mood that fits the story.
 Voiceover: the narration for that scene inside quotes, maximum 25 words, simple English words.
 4. The story has ONE main stick-figure character who appears in EVERY scene. Give the character a short name and use it in the Visual lines.
 5. Total Voiceover words across all scenes: maximum 120 words.
@@ -61,7 +61,7 @@ Example of the exact format:
 0:00 - 0:08 | The Dream
 Visual: Max wakes up, stretches and celebrates with both arms in the air.
 Audio: Soft morning music.
-Colors: sunny yellow morning with warm orange light.
+Colors: warm yellow morning sky, wooden floor ground.
 Voiceover: "Every morning, Max dreams of building something big."
 
 Now write the story on my TOPIC in my STORY STYLE.`;
