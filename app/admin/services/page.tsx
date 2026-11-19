@@ -16,6 +16,7 @@ const TOOL_HREFS: Record<string, string> = {
   "Online Downloader": "/services/online-downloader",
   "Video Generator": "/services/video-generator",
   "Screenshot Organizer": "/services/screenshot-organizer",
+  Converter: "/services/converter",
 };
 
 function Stat({ icon: Icon, label, value, tone }: { icon: typeof Activity; label: string; value: string | number; tone?: string }) {

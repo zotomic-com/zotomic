@@ -1,103 +1,103 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getAdminSupabase } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin-server";
-import { SERVICE_PLAN_LIMITS } from "@/lib/services/tools";
-import { ConvType } from "@/lib/services/converter";
+import {
+  createConvType,
+  deleteConvType,
+  listConvTypes,
+  updateConvType,
+  type ConvGroup,
+  type ConvOption,
+} from "@/lib/services/converter";
 
-export interface ConvAdminRow {
-  id: string;
-  convType: ConvType;
-  status: "pending" | "approved" | "rejected";
-  checks: {
-    authored: number;
-    rejected: string[];
-    sceneTitle?: string;
-    visual?: string;
-  };
-  created_by: string | null;
-  created_at: string;
-  decided_at: string | null;
-  decided_by: string | null;
+function str(form: FormData, key: string): string {
+  return String(form.get(key) ?? "").trim();
 }
 
-/** List all converter admin entries (pending/approved/rejected). */
-export async function listConvAnims(status?: "pending" | "approved" | "rejected"): Promise<ConvAdminRow[]> {
-  const db = getAdminSupabase();
-  let q = db.from("conv_library").select("*").order("created_at", { ascending: false }).limit(200);
-  if (status) q = q.eq("status", status);
-  const { data, error } = await q;
-  return error ? [] : (data as ConvAdminRow[]);
+function bool(form: FormData, key: string): boolean {
+  return form.get(key) === "on" || form.get(key) === "true";
 }
 
-/** Insert (or refresh) a pending converter animation after a successful author+debug pass. */
-export async function savePendingConvAnim(input: {
-  convType: ConvType;
-  definition: {
-    convType: ConvType;
-    keywords: string[];
-    loop: boolean;
-    cycle?: number;
-    frames: { u: number; pose: Record<string, unknown> }[];
-  };
-  checks: {
-    authored: number;
-    rejected: string[];
-    sceneTitle?: string;
-    visual?: string;
-  };
-  createdBy: string | null;
-}): Promise<void> {
-  const db = getAdminSupabase();
-  await db.from("conv_library").upsert(
-    {
-      convType: input.convType,
-      keywords: input.definition.keywords,
-      definition: input.definition,
-      status: "pending",
-      checks: input.checks,
-      created_by: input.createdBy,
-      decided_at: null,
-      decided_by: null,
-    },
-    { onConflict: "convType" },
-  );
+function parseOptions(raw: string): ConvOption[] {
+  if (!raw.trim()) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Options must be valid JSON.");
+  }
+  if (!Array.isArray(parsed)) throw new Error("Options must be a JSON array.");
+  return parsed.filter((o): o is ConvOption => !!o && typeof o === "object" && typeof (o as ConvOption).id === "string");
 }
 
-/** Admin queue listing. */
-export async function getConvAnims() {
+function readType(form: FormData) {
+  const group = (str(form, "group") || "image") as ConvGroup;
+  return {
+    slug: str(form, "slug"),
+    label: str(form, "label"),
+    group: (["image", "video", "audio"] as ConvGroup[]).includes(group) ? group : ("image" as ConvGroup),
+    description: str(form, "description") || null,
+    accept: str(form, "accept"),
+    multiple: bool(form, "multiple"),
+    needsFile: bool(form, "needsFile"),
+    enabled: bool(form, "enabled"),
+    sortOrder: Number(str(form, "sortOrder") || "0"),
+    options: parseOptions(str(form, "options")),
+  };
+}
+
+export async function createTypeAction(formData: FormData) {
   await requireAdmin();
-  return listConvAnims();
-}
-
-/** Admin: approve a converter animation into the permanent library. */
-export async function approveConvAnim(formData: FormData) {
-  const admin = await requireAdmin();
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-  // Mark as approved
-  const db = getAdminSupabase();
-  await db.from("conv_library").update({ status: "approved", decided_at: new Date().toISOString(), decided_by: admin.id }).eq("id", id);
+  const input = readType(formData);
+  if (!input.slug || !input.label) throw new Error("Slug and label are required.");
+  await createConvType(input);
   revalidatePath("/admin/services/converter");
+  revalidatePath("/services/converter");
 }
 
-/** Admin: reject a converter animation. */
-export async function rejectConvAnim(formData: FormData) {
-  const admin = await requireAdmin();
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-  const db = getAdminSupabase();
-  await db.from("conv_library").update({ status: "rejected", decided_at: new Date().toISOString(), decided_by: admin.id }).eq("id", id);
-  revalidatePath("/admin/services/converter");
-}
-
-/** Admin: delete a converter animation entry. */
-export async function removeConvAnim(formData: FormData) {
+export async function updateTypeAction(formData: FormData) {
   await requireAdmin();
-  const id = String(formData.get("id") ?? "");
+  const id = str(formData, "id");
   if (!id) return;
-  const db = getAdminSupabase();
-  await db.from("conv_library").delete().eq("id", id);
+  const input = readType(formData);
+  await updateConvType(id, input);
   revalidatePath("/admin/services/converter");
+  revalidatePath("/services/converter");
+}
+
+export async function toggleTypeAction(formData: FormData) {
+  await requireAdmin();
+  const id = str(formData, "id");
+  const enabled = bool(formData, "enabled");
+  if (!id) return;
+  await updateConvType(id, { enabled });
+  revalidatePath("/admin/services/converter");
+  revalidatePath("/services/converter");
+}
+
+export async function deleteTypeAction(formData: FormData) {
+  await requireAdmin();
+  const id = str(formData, "id");
+  if (!id) return;
+  await deleteConvType(id);
+  revalidatePath("/admin/services/converter");
+  revalidatePath("/services/converter");
+}
+
+export async function moveTypeAction(formData: FormData) {
+  await requireAdmin();
+  const id = str(formData, "id");
+  const direction = str(formData, "direction");
+  if (!id) return;
+  const all = await listConvTypes();
+  const index = all.findIndex((t) => t.id === id);
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (index === -1 || swapIndex < 0 || swapIndex >= all.length) return;
+  const a = all[index];
+  const b = all[swapIndex];
+  await updateConvType(a.id, { sortOrder: b.sortOrder });
+  await updateConvType(b.id, { sortOrder: a.sortOrder });
+  revalidatePath("/admin/services/converter");
+  revalidatePath("/services/converter");
 }

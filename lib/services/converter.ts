@@ -1,611 +1,259 @@
 /**
- * Zotomic Converter Service — image, video, and audio conversions.
+ * Zotomic Converter — service registry.
  *
- * Sub‑services (defined in CONV_TYPE_INFO below):
- *   image:
- *     - images-to-pdf   : images → single PDF
- *     - pdf-to-images   : PDF → individual images (with format/dpi options)
- *   video:
- *     - video-to-video   : re‑encode or change format/quality
- *     - video-to-audio   : extract audio from video
- *     - video-to-gif     : convert video to animated GIF
- *     - video-trim       : trim a video clip
- *     - video-compress   : compress a video (CRF/preset)
- *   audio:
- *     - audio-to-text    : speech‑to‑text transcription
- *     - audio-convert    : convert between audio formats
- *     - audio-compress   : compress audio bitrate
- *     - audio-trim       : trim an audio clip
+ * The converter is one Zotomic service with many sub-services (Images → PDF,
+ * Video → GIF, Trim Audio …). Every sub-service is a row in `converter_types`,
+ * so admins can add, edit, reorder, disable or delete them from
+ * /admin/services/converter without a deploy.
  *
- * Access model (same as other Zotomic tools):
- *   - session users: entitlements from subscription plan
- *   - service tokens (zt_…): issued in /admin/services/tokens, unlimited for admins
- *   - Admins are unlimited on every service
- *
- * Every attempt is logged to service_usage; per-day quotas are counted from that log.
+ * Conversions run on the Render engine (ffmpeg / img2pdf / pdftoppm). The
+ * browser uploads the file straight to the engine with a short-lived signed
+ * ticket so multi-hundred-MB videos never pass through Vercel's 4.5 MB body
+ * limit. Audio → Text is the one exception: it is transcribed by Gemini on the
+ * site itself, so that file is posted to /api/converter/transcribe.
  */
-
+import "server-only";
 import crypto from "crypto";
-import { NextRequest } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
-import { getAuthUser } from "@/lib/auth-server";
-import { clientIp, enforceRateLimit } from "@/lib/ratelimit";
 
-/** Converter sub‑service names — kept in sync with CONV_TYPE_INFO keys. */
-export type ConvType =
-  | "images-to-pdf"
-  | "pdf-to-images"
-  | "video-to-video"
-  | "video-to-audio"
-  | "video-to-gif"
-  | "video-trim"
-  | "video-compress"
-  | "audio-to-text"
-  | "audio-convert"
-  | "audio-compress"
-  | "audio-trim";
+export const CONV_GROUPS = [
+  { id: "image", label: "Image", blurb: "Photos and PDFs" },
+  { id: "video", label: "Video", blurb: "Clips, GIFs, soundtracks" },
+  { id: "audio", label: "Audio", blurb: "Music, voice, podcasts" },
+] as const;
 
-export type PlanName = "free" | "business" | "pro";
+export type ConvGroup = (typeof CONV_GROUPS)[number]["id"];
 
-/** Plan entitlements for the converter service. */
-export const SERVICE_PLAN_LIMITS: Record<PlanName, {
-  converterPerDay: number;
-  converterMaxQuality: number | null;
-}> = {
-  free:     { converterPerDay: 5,   converterMaxQuality: 720 },
-  business: { converterPerDay: 30,  converterMaxQuality: null },
-  pro:      { converterPerDay: 100, converterMaxQuality: null },
-};
+export type ConvOptionType = "select" | "number" | "text";
 
-/** service → quota‑limit key. */
-export const SERVICE_LIMIT_KEY: Record<ConvType, "converterPerDay"> = {
-  "images-to-pdf": "converterPerDay",
-  "pdf-to-images": "converterPerDay",
-  "video-to-video": "converterPerDay",
-  "video-to-audio": "converterPerDay",
-  "video-to-gif": "converterPerDay",
-  "video-trim": "converterPerDay",
-  "video-compress": "converterPerDay",
-  "audio-to-text": "converterPerDay",
-  "audio-convert": "converterPerDay",
-  "audio-compress": "converterPerDay",
-  "audio-trim": "converterPerDay",
-};
-
-/** Human‑readable action name for usage‑log entries. */
-export const SERVICE_ACTION: Record<ConvType, "convert"> = {
-  "images-to-pdf": "convert",
-  "pdf-to-images": "convert",
-  "video-to-video": "convert",
-  "video-to-audio": "convert",
-  "video-to-gif": "convert",
-  "video-trim": "convert",
-  "video-compress": "convert",
-  "audio-to-text": "convert",
-  "audio-convert": "convert",
-  "audio-compress": "convert",
-  "audio-trim": "convert",
-};
-
-/** Interface for the caller (session user or service token). */
-export interface ConvCaller {
-  email: string | null;
-  ip: string | null;
-  userId: string | null;
-  isAdmin: boolean;
-  source: "session" | "token" | "guest";
-  tokenId: string | null;
-  plan: PlanName;
-  limits: {
-    converterPerDay: number;
-    converterMaxQuality: number | null;
-  };
-}
-
-/** Interface returned by resolveConvCaller. */
-export interface ConvResolution {
-  caller?: ConvCaller;
-  error?: string;
-  status?: number;
-}
-
-/** Converter library admin row type. */
-export interface ConvAdminRow {
+export interface ConvOption {
   id: string;
-  convType: ConvType;
-  status: "pending" | "approved" | "rejected";
-  definition: {
-    convType: ConvType;
-    keywords: string[];
-    loop: boolean;
-    cycle?: number;
-    frames: { u: number; pose: Record<string, unknown> }[];
-  };
-  checks: {
-    authored: number;
-    rejected: string[];
-    sceneTitle?: string;
-    visual?: string;
-  };
-  created_by: string | null;
-  created_at: string;
-  decided_at: string | null;
-  decided_by: string | null;
+  label: string;
+  type: ConvOptionType;
+  value: string | number;
+  options?: string[];
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
-/** Reset counters to the start of today (UTC). */
-function todayStartIso(): string {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  return d.toISOString();
-}
-
-/* ── signed ticket for browser → engine progress/file calls ─────────────── */
-
-export function signTicket(jobId: string, ttlMs = 30 * 60 * 1000): string {
-  const exp = Date.now() + ttlMs;
-  const mac = crypto
-    .createHmac("sha256", process.env.DOWNLOADER_TICKET_SECRET || "default-ticket-secret")
-    .update(`${jobId}.${exp}`)
-    .digest("base64url");
-  return `${exp}.${mac}`;
-}
-
-export function verifyTicket(jobId: string, ticket: string | null): boolean {
-  if (!process.env.DOWNLOADER_TICKET_SECRET || !ticket) return false;
-  const [expRaw, mac] = ticket.split(".");
-  const exp = Number(expRaw);
-  if (!exp || !mac || exp < Date.now()) return false;
-  const expected = crypto
-    .createHmac("sha256", process.env.DOWNLOADER_TICKET_SECRET || "default-ticket-secret")
-    .update(`${jobId}.${exp}`)
-    .digest("base64url");
-  try {
-    return crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(expected));
-  } catch {
-    return false;
-  }
-}
-
-/* ── converter type information ───────────────────────────────────────── */
-
-/**
- * CONV_TYPE_INFO maps each converter type to its UI configuration:
- *   label, accept, multiple, options (format, quality, etc.), needsFile.
- *
- * The first entry for each top‑level group (image / video / audio) is the
- * "default" that appears in the sidebar; the group header toggles the whole
- * block of sub‑types.
- */
-export const CONV_TYPE_INFO = {
-  /* ── Image group ───────────────────────────────────────────────────── */
-  "images-to-pdf": {
-    label: "Images → PDF",
-    accept: "image/*",
-    multiple: true,
-    needsFile: true,
-    options: [],
-  },
-  "pdf-to-images": {
-    label: "PDF → Images",
-    accept: ".pdf",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "format", label: "Output format", type: "select", value: "png", options: ["png", "jpg", "jpeg", "webp", "tiff"] },
-      { id: "dpi", label: "DPI (quality)", type: "number", value: 150, min: 72, max: 600, step: 1 },
-    ],
-  },
-
-  /* ── Video group ───────────────────────────────────────────────────── */
-  "video-to-video": {
-    label: "Video → Video",
-    accept: "video/*,.mp4,.webm,.mov,.mkv,.avi,.flv,.wmv,.m4v",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "format", label: "Output format", type: "select", value: "mp4", options: ["mp4", "webm", "mov", "mkv"] },
-      { id: "quality", label: "Quality", type: "select", value: "original", options: ["original", "high", "medium", "low"] },
-    ],
-  },
-  "video-to-audio": {
-    label: "Video → Audio",
-    accept: "video/*,.mp4,.webm,.mov,.mkv,.avi,.flv,.wmv,.m4v",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "format", label: "Audio format", type: "select", value: "mp3", options: ["mp3", "aac", "ogg", "wav", "flac"] },
-      { id: "bitrate", label: "Bitrate", type: "select", value: "192k", options: ["64k", "128k", "192k", "256k", "320k"] },
-    ],
-  },
-  "video-to-gif": {
-    label: "Video → GIF",
-    accept: "video/*,.mp4,.webm,.mov,.mkv,.avi,.flv,.wmv,.m4v",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "fps", label: "FPS", type: "number", value: 10, min: 1, max: 30, step: 1 },
-      { id: "scale", label: "Max width", type: "number", value: 480, min: 100, max: 1920, step: 10 },
-    ],
-  },
-  "video-trim": {
-    label: "Trim Video",
-    accept: "video/*,.mp4,.webm,.mov,.mkv,.avi,.flv,.wmv,.m4v",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "start", label: "Start time (HH:MM:SS)", type: "text", value: "00:00:00" },
-      { id: "duration", label: "Duration (HH:MM:SS, optional)", type: "text", value: "" },
-    ],
-  },
-  "video-compress": {
-    label: "Compress Video",
-    accept: "video/*,.mp4,.webm,.mov,.mkv,.avi,.flv,.wmv,.m4v",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "crf", label: "CRF (quality)", type: "number", value: 28, min: 18, max: 35, step: 1 },
-      { id: "preset", label: "Preset", type: "select", value: "medium", options: ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"] },
-    ],
-  },
-
-  /* ── Audio group ───────────────────────────────────────────────────── */
-  "audio-to-text": {
-    label: "Audio → Text",
-    accept: "audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "language", label: "Language", type: "select", value: "auto", options: ["auto", "en", "es", "fr", "de", "it", "pt", "ru", "zh", "ja", "ko", "ar", "hi"] },
-    ],
-  },
-  "audio-convert": {
-    label: "Convert Audio",
-    accept: "audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac,.opus",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "format", label: "Output format", type: "select", value: "mp3", options: ["mp3", "wav", "ogg", "flac", "m4a", "aac", "opus"] },
-      { id: "bitrate", label: "Bitrate", type: "select", value: "192k", options: ["64k", "128k", "192k", "256k", "320k"] },
-    ],
-  },
-  "audio-compress": {
-    label: "Compress Audio",
-    accept: "audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "bitrate", label: "Target bitrate", type: "select", value: "128k", options: ["32k", "64k", "96k", "128k", "160k", "192k"] },
-    ],
-  },
-  "audio-trim": {
-    label: "Trim Audio",
-    accept: "audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac",
-    multiple: false,
-    needsFile: true,
-    options: [
-      { id: "start", label: "Start time (HH:MM:SS)", type: "text", value: "00:00:00" },
-      { id: "duration", label: "Duration (HH:MM:SS, optional)", type: "text", value: "" },
-    ],
-  },
-};
-
-/* ── caller resolution + access check ───────────────────────────────────── */
-
-interface AccessTokenRow {
+export interface ConvType {
   id: string;
-  status: string;
-  expires_at: string | null;
-  daily_limit: number | null;
-  services: string;
-  user_email: string;
+  slug: string;
+  label: string;
+  group: ConvGroup;
+  description: string | null;
+  accept: string;
+  multiple: boolean;
+  needsFile: boolean;
+  options: ConvOption[];
+  enabled: boolean;
+  sortOrder: number;
 }
 
-interface AccessRow {
-  mode: "plan" | "allow" | "block";
-  daily_limit: number | null;
-  max_quality: string | null;
-}
+/** Sub-services handled by Gemini on the site instead of the Render engine. */
+export const SITE_SIDE_TYPES = new Set(["audio-to-text"]);
 
-/** Does a token's `services` value grant this type? */
-export function convTypeCoversService(services: string, convType: ConvType): boolean {
-  if (services === "all") return true;
-  // legacy "both" covers the image group only
-  if (services === "both") return convType === "images-to-pdf" || convType === "pdf-to-images";
-  return services === convType;
-}
+/** Hard cap for site-side uploads (Vercel request body limit). */
+export const SITE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 
-/**
- * Resolve who is calling (session user or `zt_` service token), verify access
- * for `convType`, and compute effective limits. Never throws — returns an
- * error result the route handler can turn into a JSON response.
- */
-export async function resolveConvCaller(req: NextRequest, convType: ConvType): Promise<ConvResolution> {
-  const db = getAdminSupabase();
-  const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  const ip = clientIp(req);
-  let email: string | null;
-  let userId: string | null = null;
-  let isAdmin = false;
-  let source: ConvCaller["source"] = "session";
-  let tokenRow: AccessTokenRow | null = null;
+/** Hard cap for engine uploads. */
+export const ENGINE_UPLOAD_MAX_BYTES = 512 * 1024 * 1024;
 
-  if (bearer.startsWith("zt_")) {
-    const { data } = await db.from("service_tokens").select("*").eq("token", bearer).maybeSingle();
-    tokenRow = (data as AccessTokenRow) ?? null;
-    if (!tokenRow) return { error: "Invalid service token.", status: 401 };
-    if (tokenRow.status !== "active") return { error: "This token has been revoked.", status: 403 };
-    if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now())
-      return { error: "This token has expired.", status: 403 };
-    if (!convTypeCoversService(tokenRow.services, convType))
-      return { error: "This token is not authorized for this converter type.", status: 403 };
-    email = tokenRow.user_email;
-    source = "token";
-  } else {
-    const user = await getAuthUser(req);
-    if (!user) {
-      /* Guests: no signup needed — free-plan limits, counted per IP. */
-      return {
-        caller: {
-          email: null,
-          ip,
-          userId: null,
-          isAdmin: false,
-          source: "guest",
-          tokenId: null,
-          plan: "free",
-          limits: {
-            converterPerDay: SERVICE_PLAN_LIMITS.free.converterPerDay,
-            converterMaxQuality: SERVICE_PLAN_LIMITS.free.converterMaxQuality,
-          },
-        },
-      };
-    }
-    const { data: live } = await db.from("users").select("role, status, blocked").eq("id", user.id).maybeSingle();
-    if (!live || live.status === "suspended" || live.blocked) return { error: "Your account cannot use this service.", status: 403 };
-    email = user.email;
-    userId = user.id;
-    isAdmin = live.role === "admin";
-  }
+const TICKET_SECRET = process.env.DOWNLOADER_TICKET_SECRET || "";
 
-  // Per-user access control (block / allow / plan).
-  const { data: accessRow } = await db
-    .from("service_access")
-    .select("mode, daily_limit, max_quality")
-    .eq("user_email", email)
-    .eq("service", convType)
-    .maybeSingle();
-  const access = (accessRow as AccessRow | null) ?? null;
-  if (access?.mode === "block" && !isAdmin) {
-    return { error: "You do not have access to this converter type.", status: 403 };
-  }
-
-  // Plan defaults (admins skip — unlimited).
-  let plan: PlanName = "free";
-  if (!isAdmin) plan = await resolvePlan(db, userId ?? "");
-  const planLimits = SERVICE_PLAN_LIMITS[plan];
-
-  // Effective limits: most restrictive of plan / access override / token limit.
-  const limitKey = SERVICE_LIMIT_KEY[convType];
-  const candidates: Array<number | null> = [isAdmin ? null : planLimits[limitKey]];
-  if (access?.mode === "allow" && access.daily_limit != null) candidates.push(access.daily_limit);
-  if (tokenRow?.daily_limit != null) candidates.push(tokenRow.daily_limit);
-  const effective = candidates.filter((n): n is number => n != null);
-  const dailyLimit = isAdmin ? Number.POSITIVE_INFINITY : effective.length ? Math.min(...effective) : Number.POSITIVE_INFINITY;
-
+function rowToType(r: Record<string, unknown>): ConvType {
+  const raw = Array.isArray(r.options) ? (r.options as ConvOption[]) : [];
   return {
-    caller: {
-      email,
-      ip,
-      userId,
-      isAdmin,
-      source,
-      tokenId: tokenRow?.id ?? null,
-      plan,
-      limits: {
-        converterPerDay: SERVICE_PLAN_LIMITS[plan].converterPerDay,
-        converterMaxQuality: planLimits.converterMaxQuality,
-        // the calling service gets the effective (most restrictive) limit
-        ...("images-to-pdf" === convType || "pdf-to-images" === convType ? { converterPerDay: dailyLimit } : {}),
-        ...(["video-to-video", "video-to-audio", "video-to-gif", "video-trim", "video-compress"].includes(convType) ? { converterPerDay: dailyLimit } : {}),
-        ...(["audio-to-text", "audio-convert", "audio-compress", "audio-trim"].includes(convType) ? { converterPerDay: dailyLimit } : {}),
-      },
-    },
+    id: r.id as string,
+    slug: r.slug as string,
+    label: r.label as string,
+    group: (r.grp as ConvGroup) ?? "image",
+    description: (r.description as string) ?? null,
+    accept: (r.accept as string) ?? "",
+    multiple: !!r.multiple,
+    needsFile: r.needs_file === undefined ? true : !!r.needs_file,
+    options: raw.filter((o) => o && typeof o.id === "string"),
+    enabled: r.enabled === undefined ? true : !!r.enabled,
+    sortOrder: (r.sort_order as number) ?? 0,
   };
 }
 
-/* ── usage logging + quota counting ─────────────────────────────────────── */
-
-export async function logUsage(entry: {
-  service: ConvType;
-  action: "convert";
-  user_email?: string | null;
-  token_id?: string | null;
-  ip?: string | null;
-  ok?: boolean;
-  reason?: string | null;
-  meta?: Record<string, unknown>;
-}) {
-  try {
-    await getAdminSupabase().from("service_usage").insert({
-      service: entry.service,
-      action: entry.action,
-      user_email: entry.user_email ?? null,
-      token_id: entry.token_id ?? null,
-      ip: entry.ip ?? null,
-      ok: entry.ok ?? true,
-      reason: entry.reason ?? null,
-      meta: entry.meta ?? {},
-    });
-    if (entry.token_id && (entry.ok ?? true)) {
-      const db = getAdminSupabase();
-      const { data: row } = await db
-        .from("service_tokens")
-        .select("usage_count")
-        .eq("id", entry.token_id)
-        .maybeSingle();
-      await db
-        .from("service_tokens")
-        .update({ usage_count: ((row?.usage_count as number) ?? 0) + 1, last_used_at: new Date().toISOString() })
-        .eq("id", entry.token_id);
-    }
-  } catch {
-    // logging must never break the tool
-  }
-}
-
-/** Successful paid actions today (UTC) for this user, token — or, for
- * guests, this IP (rows where user_email is null and the ip matches). */
-export async function countTodayUsage(opts: {
-  service: ConvType;
-  action: "convert";
-  email: string | null;
-  tokenId: string | null;
-  ip?: string | null;
-}): Promise<number> {
+/** Every sub-service, ordered. `onlyEnabled` is what the public page uses. */
+export async function listConvTypes(opts: { onlyEnabled?: boolean } = {}): Promise<ConvType[]> {
   const db = getAdminSupabase();
-  let query = db
-    .from("service_usage")
-    .select("id", { count: "exact", head: true })
-    .eq("service", opts.service)
-    .eq("action", opts.action)
-    .eq("ok", true)
-    .gte("created_at", todayStartIso());
-  if (opts.tokenId) query = query.or(`user_email.eq.${opts.email},token_id.eq.${opts.tokenId}`);
-  else if (opts.email) query = query.eq("user_email", opts.email);
-  else if (opts.ip) query = query.eq("ip", opts.ip).is("user_email", null);
-  const { count } = await query;
-  return count ?? 0;
-}
-
-/** Remaining quota info for the UI. */
-export async function quotaStatus(caller: ConvCaller, service: ConvType) {
-  const action = SERVICE_ACTION[service];
-  const limitKey = SERVICE_LIMIT_KEY[service];
-  const used = await countTodayUsage({
-    service,
-    action,
-    email: caller.email,
-    tokenId: caller.tokenId,
-    ip: caller.ip,
-  });
-  const limit = caller.limits[limitKey];
-  return {
-    service,
-    used,
-    limit: Number.isFinite(limit) ? limit : null, // null = unlimited
-    remaining: Number.isFinite(limit) ? Math.max(0, limit - used) : null,
-    plan: caller.plan,
-  };
-}
-
-/** Cap a requested quality to the caller's max (720 …). */
-export function clampQuality(qualityId: string | undefined, maxQuality: number | null): string {
-  if (maxQuality == null) return qualityId || "best";
-  // qualityId like "h720" → number; keep it if ≤ maxQuality
-  const m = /^h(\d+)$/.exec(qualityId ?? "");
-  if (m) return Number(m[1]) <= maxQuality ? qualityId! : `h${maxQuality}`;
-  return `h${maxQuality}`;
-}
-
-/* ── rate limit (same 20/min per-IP for non‑admins) ─────────────────────── */
-export function convRateLimit(req: NextRequest, name: string, isAdmin = false) {
-  if (isAdmin) return null;
-  return enforceRateLimit(req, {
-    name,
-    limit: 20,
-    windowMs: 60_000,
-    key: clientIp(req),
-    message: "Too many requests — slow down and try again in a minute.",
-  });
-}
-
-/* ── engine call helper ───────────────────────────────────────────────── */
-
-export async function engineFetch(
-  path: string,
-  init: { method?: string; body?: unknown; timeoutMs?: number } = {},
-): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), init.timeoutMs ?? 25_000);
-  try {
-    return await fetch(`${process.env.RENDER_API_URL || "https://freedownloder-api.onrender.com"}${path}`, {
-      method: init.method ?? "POST",
-      headers: {
-        ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
-        "X-API-Key": process.env.DOWNLOADER_API_KEY || "",
-      },
-      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/* ── plan resolution across a user's businesses ──────────────────────────── */
-
-async function resolvePlan(db: ReturnType<typeof getAdminSupabase>, userId: string): Promise<PlanName> {
-  const { data } = await db
-    .from("business_members")
-    .select("business_id")
-    .eq("user_id", userId);
-  const ids = (data ?? []).map((r: { business_id: string }) => r.business_id);
-  if (!ids.length) return "free";
-  const { data: subs } = await db
-    .from("subscriptions")
-    .select("plan")
-    .in("business_id", ids)
-    .eq("status", "active");
-  let best: PlanName = "free";
-  for (const s of subs ?? []) {
-    const p = (s.plan as string) ?? "free";
-    if (p === "pro" || p === "business") {
-      if (SERVICE_PLAN_LIMITS.free.converterPerDay < SERVICE_PLAN_LIMITS[p as PlanName].converterPerDay) best = p as PlanName;
-    }
-  }
-  return best;
-}
-
-/* ── converter library admin functions ──────────────────────────────────── */
-
-export async function listConvAnims(status?: "pending" | "approved" | "rejected"): Promise<ConvAdminRow[]> {
-  const db = getAdminSupabase();
-  let q = db.from("conv_library").select("*").order("created_at", { ascending: false }).limit(200);
-  if (status) q = q.eq("status", status);
+  let q = db.from("converter_types").select("*").order("sort_order").order("label");
+  if (opts.onlyEnabled) q = q.eq("enabled", true);
   const { data, error } = await q;
-  return error ? [] : (data as ConvAdminRow[]);
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(rowToType);
 }
 
-export async function savePendingConvAnim(input: {
-  convType: ConvType;
-  definition: {
-    convType: ConvType;
-    keywords: string[];
-    loop: boolean;
-    cycle?: number;
-    frames: { u: number; pose: Record<string, unknown> }[];
-  };
-  checks: {
-    authored: number;
-    rejected: string[];
-    sceneTitle?: string;
-    visual?: string;
-  };
-  createdBy: string | null;
-}): Promise<void> {
+export async function getConvType(slug: string): Promise<ConvType | null> {
   const db = getAdminSupabase();
-  await db.from("conv_library").upsert(
-    {
-      convType: input.convType,
-      keywords: input.definition.keywords,
-      definition: input.definition,
-      status: "pending",
-      checks: input.checks,
-      created_by: input.createdBy,
-      decided_at: null,
-      decided_by: null,
-    },
-    { onConflict: "convType" },
-  );
+  const { data, error } = await db.from("converter_types").select("*").eq("slug", slug).maybeSingle();
+  if (error || !data) return null;
+  return rowToType(data as Record<string, unknown>);
+}
+
+export interface ConvTypeInput {
+  slug: string;
+  label: string;
+  group: ConvGroup;
+  description?: string | null;
+  accept?: string;
+  multiple?: boolean;
+  needsFile?: boolean;
+  options?: ConvOption[];
+  enabled?: boolean;
+  sortOrder?: number;
+}
+
+function cleanSlug(slug: string): string {
+  return slug
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+export async function createConvType(input: ConvTypeInput) {
+  const db = getAdminSupabase();
+  const slug = cleanSlug(input.slug);
+  if (!slug) throw new Error("Slug is required.");
+  if (!input.label.trim()) throw new Error("Label is required.");
+
+  // Append at the end of its group.
+  const { data: last } = await db
+    .from("converter_types")
+    .select("sort_order")
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sortOrder = input.sortOrder ?? ((last?.sort_order as number) ?? -1) + 1;
+
+  const { error } = await db.from("converter_types").insert({
+    slug,
+    label: input.label.trim().slice(0, 80),
+    grp: input.group,
+    description: input.description?.trim().slice(0, 300) || null,
+    accept: (input.accept ?? "").trim().slice(0, 300),
+    multiple: !!input.multiple,
+    needs_file: input.needsFile !== false,
+    options: input.options ?? [],
+    enabled: input.enabled !== false,
+    sort_order: sortOrder,
+  });
+  if (error) throw new Error(error.message);
+  return slug;
+}
+
+export async function updateConvType(id: string, patch: Partial<ConvTypeInput>) {
+  const db = getAdminSupabase();
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.slug !== undefined) {
+    const slug = cleanSlug(patch.slug);
+    if (!slug) throw new Error("Slug is required.");
+    update.slug = slug;
+  }
+  if (patch.label !== undefined) update.label = patch.label.trim().slice(0, 80);
+  if (patch.group !== undefined) update.grp = patch.group;
+  if (patch.description !== undefined) update.description = patch.description?.trim().slice(0, 300) || null;
+  if (patch.accept !== undefined) update.accept = patch.accept.trim().slice(0, 300);
+  if (patch.multiple !== undefined) update.multiple = !!patch.multiple;
+  if (patch.needsFile !== undefined) update.needs_file = !!patch.needsFile;
+  if (patch.options !== undefined) update.options = patch.options;
+  if (patch.enabled !== undefined) update.enabled = !!patch.enabled;
+  if (patch.sortOrder !== undefined) update.sort_order = patch.sortOrder;
+  const { error } = await db.from("converter_types").update(update).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteConvType(id: string) {
+  const db = getAdminSupabase();
+  const { error } = await db.from("converter_types").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/* ── option coercion ────────────────────────────────────────────────────── */
+
+const TIME_RE = /^\d{1,2}:\d{2}(:\d{2})?$/;
+
+/**
+ * Coerce user-supplied options against the admin-defined schema. Anything not
+ * declared is dropped, numbers are clamped, selects are restricted. This is
+ * what makes the browser's option values safe to sign into an engine ticket.
+ */
+export function normalizeConvOptions(
+  type: ConvType,
+  raw: Record<string, unknown> | null | undefined,
+): Record<string, string | number> {
+  const out: Record<string, string | number> = {};
+  for (const opt of type.options) {
+    const value = raw?.[opt.id];
+    if (opt.type === "select") {
+      const allowed = opt.options ?? [];
+      const candidate = value === undefined || value === null ? String(opt.value) : String(value);
+      out[opt.id] = allowed.includes(candidate) ? candidate : String(opt.value);
+      continue;
+    }
+    if (opt.type === "number") {
+      let n = Number(value);
+      if (!Number.isFinite(n)) n = Number(opt.value);
+      if (opt.min != null) n = Math.max(opt.min, n);
+      if (opt.max != null) n = Math.min(opt.max, n);
+      out[opt.id] = n;
+      continue;
+    }
+    // text
+    const s = value === undefined || value === null ? String(opt.value ?? "") : String(value).trim();
+    if (opt.id === "start" || opt.id === "duration") {
+      if (!s) {
+        out[opt.id] = opt.id === "start" ? "00:00:00" : "";
+      } else if (TIME_RE.test(s)) {
+        out[opt.id] = s;
+      } else {
+        throw new Error(`${opt.label}: use HH:MM:SS.`);
+      }
+      continue;
+    }
+    out[opt.id] = s.slice(0, 200);
+  }
+  return out;
+}
+
+/* ── signed engine upload ticket ────────────────────────────────────────── */
+
+export interface ConvertPayload {
+  /** sub-service slug */
+  t: string;
+  /** normalized options */
+  o: Record<string, string | number>;
+  /** max upload bytes */
+  n: number;
+  /** job id chosen by the site, so progress/file tickets match */
+  j: string;
+}
+
+/**
+ * `<exp>.<payloadB64>.<hmac>` — the engine verifies the HMAC over
+ * `convert.<payloadB64>.<exp>` with TICKET_SECRET before accepting an upload.
+ * Signing the whole payload means the browser cannot swap in a different type,
+ * larger file or different options.
+ */
+export function signConvertPayload(payload: ConvertPayload, ttlMs = 20 * 60 * 1000): string {
+  if (!TICKET_SECRET) throw new Error("Converter is not configured (missing ticket secret).");
+  const exp = Date.now() + ttlMs;
+  const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const mac = crypto
+    .createHmac("sha256", TICKET_SECRET)
+    .update(`convert.${payloadB64}.${exp}`)
+    .digest("base64url");
+  return `${exp}.${payloadB64}.${mac}`;
+}
+
+/** Job id the engine will use — 16 hex chars, same shape as engine jobs. */
+export function newConvertJobId(): string {
+  return crypto.randomBytes(8).toString("hex");
 }

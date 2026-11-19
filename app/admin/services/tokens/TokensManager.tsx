@@ -80,6 +80,7 @@ function CreateForm() {
               <option value="text_to_audio">Text to Audio only</option>
               <option value="video_generator">Video Generator only</option>
               <option value="screenshot_organizer">Screenshot Organizer only</option>
+              <option value="converter">Converter only</option>
             </Select>
           </Field>
           <Field label="Daily limit (optional)" hint="Leave empty to follow the user's plan">
@@ -281,6 +282,7 @@ function TokenRow({ token }: { token: ServiceToken }) {
               <option value="text_to_audio">Text to Audio only</option>
               <option value="video_generator">Video Generator only</option>
               <option value="screenshot_organizer">Screenshot Organizer only</option>
+              <option value="converter">Converter only</option>
             </Select>
           </Field>
           <Field label="Daily limit" hint="Empty = follow the user's plan">

@@ -11,7 +11,7 @@ export interface ServiceToken {
   prefix: string;
   label: string | null;
   userEmail: string;
-  services: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "both" | "all";
+  services: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "converter" | "both" | "all";
   status: "active" | "revoked";
   dailyLimit: number | null;
   expiresAt: string | null;
@@ -58,7 +58,7 @@ export async function listMyServiceTokens(email: string): Promise<Array<ServiceT
 export interface CreateTokenInput {
   userEmail: string;
   label?: string;
-  services: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "both" | "all";
+  services: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "converter" | "both" | "all";
   dailyLimit?: number | null;
   expiresAt?: string | null;
 }
@@ -80,7 +80,7 @@ export async function createServiceToken(input: CreateTokenInput): Promise<{ tok
 
 export interface UpdateTokenPatch {
   label?: string | null;
-  services?: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "both" | "all";
+  services?: "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "converter" | "both" | "all";
   status?: "active" | "revoked";
   dailyLimit?: number | null;
   expiresAt?: string | null;
