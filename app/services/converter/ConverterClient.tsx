@@ -651,12 +651,20 @@ export default function ConverterClient({ types, groups }: Props) {
   const resKind = result?.kind === "file" ? kindOfName(result.name) : "other";
   const showOrig = !!originalUrl && origKind !== "other" && origKind !== "pdf";
   const showRes = result?.kind === "file" && resKind !== "other" && resKind !== "pdf";
+  /* Engine files are one-shot: the first fetch deletes them. Preview requests
+     are marked so they never use up the Download button's only fetch. */
+  const resultPreviewUrl =
+    result?.kind === "file"
+      ? result.url.startsWith("http")
+        ? `${result.url}${result.url.includes("?") ? "&" : "?"}preview=1`
+        : result.url
+      : "";
   const mediaPreview =
     showOrig || showRes ? (
       <div className={`grid gap-3 ${showOrig && showRes ? "sm:grid-cols-2" : ""}`}>
         {showOrig && <MediaPane label="Original" url={originalUrl} kind={origKind} />}
         {showRes && result?.kind === "file" && (
-          <MediaPane label="Result" url={result.url} kind={resKind} checker />
+          <MediaPane label="Result" url={resultPreviewUrl} kind={resKind} checker />
         )}
       </div>
     ) : null;
