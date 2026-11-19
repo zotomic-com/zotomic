@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       token_id: caller.tokenId,
       ip: caller.ip,
       ok: true,
-      meta: { slug: type.slug, phase: "authorized", site: true },
+      meta: { slug: type.slug, phase: "authorized", site: true, jobId },
     });
     return NextResponse.json({
       mode: "site",

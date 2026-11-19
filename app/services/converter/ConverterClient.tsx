@@ -148,6 +148,7 @@ export default function ConverterClient({ types }: Props) {
     setResult(null);
     setProgress(3);
     setStatus("Starting…");
+    let charge: { jobId: string; mode: string } | null = null;
     try {
       const auth = await fetch("/api/converter", {
         method: "POST",
@@ -156,6 +157,7 @@ export default function ConverterClient({ types }: Props) {
       });
       const data = await auth.json().catch(() => ({}));
       if (!auth.ok) throw new Error(data.error || `Could not start (${auth.status}).`);
+      if (data.jobId) charge = { jobId: String(data.jobId), mode: String(data.mode ?? "engine") };
 
       if (data.mode === "site") {
         const fd = new FormData();
@@ -191,6 +193,14 @@ export default function ConverterClient({ types }: Props) {
       setError((e as Error).message || "Conversion failed.");
       setProgress(0);
       setStatus("");
+      // A failed conversion should not cost the user one of their daily credits.
+      if (charge) {
+        fetch("/api/converter/refund", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(charge),
+        }).catch(() => {});
+      }
     } finally {
       if (alive.current) setBusy(false);
       loadQuota();
