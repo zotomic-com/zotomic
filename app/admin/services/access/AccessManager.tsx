@@ -18,12 +18,22 @@ const MODE_BADGE: Record<ServiceAccessRow["mode"], "success" | "info" | "danger"
   block: "danger",
 };
 
+const SERVICE_LABEL: Record<string, string> = {
+  downloader: "Downloader",
+  text_to_audio: "Text to Audio",
+  video_generator: "Video Generator",
+  screenshot_organizer: "Screenshot Organizer",
+  converter: "Converter",
+};
+
 function CreateForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, start] = useTransition();
   const [userEmail, setUserEmail] = useState("");
-  const [service, setService] = useState<"all" | "both" | "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer">("all");
+  const [service, setService] = useState<
+    "all" | "both" | "downloader" | "text_to_audio" | "video_generator" | "screenshot_organizer" | "converter"
+  >("all");
   const [mode, setMode] = useState<"plan" | "allow" | "block">("allow");
   const [dailyLimit, setDailyLimit] = useState("");
   const [maxQuality, setMaxQuality] = useState("");
@@ -73,6 +83,7 @@ function CreateForm() {
               <option value="text_to_audio">Text to Audio</option>
               <option value="video_generator">Video Generator</option>
               <option value="screenshot_organizer">Screenshot Organizer</option>
+              <option value="converter">Converter</option>
             </Select>
           </Field>
           <Field label="Access mode" hint="allow = explicit grant · plan = follow subscription · block = deny">
@@ -129,7 +140,7 @@ function AccessRowItem({ row }: { row: ServiceAccessRow }) {
         <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-fg">
           {row.userEmail}
           <Badge tone={MODE_BADGE[row.mode]}>{row.mode}</Badge>
-          <Badge tone="neutral">{row.service === "downloader" ? "Downloader" : "Text to Audio"}</Badge>
+          <Badge tone="neutral">{SERVICE_LABEL[row.service] ?? row.service}</Badge>
         </p>
         <p className="mt-1 text-xs text-fg-muted">
           {row.mode === "allow"
