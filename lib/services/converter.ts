@@ -18,13 +18,16 @@ import { getAdminSupabase } from "@/lib/supabase";
 
 export const CONV_GROUPS = [
   { id: "image", label: "Image", blurb: "Photos and PDFs" },
+  { id: "document", label: "Document", blurb: "Word, Excel, PowerPoint" },
   { id: "video", label: "Video", blurb: "Clips, GIFs, soundtracks" },
   { id: "audio", label: "Audio", blurb: "Music, voice, podcasts" },
+  { id: "text", label: "Text", blurb: "Translate, Bijoy, encode" },
+  { id: "ai", label: "AI Image", blurb: "Backgrounds & overlays" },
 ] as const;
 
 export type ConvGroup = (typeof CONV_GROUPS)[number]["id"];
 
-export type ConvOptionType = "select" | "number" | "text";
+export type ConvOptionType = "select" | "number" | "text" | "textarea";
 
 export interface ConvOption {
   id: string;
@@ -35,6 +38,8 @@ export interface ConvOption {
   min?: number;
   max?: number;
   step?: number;
+  placeholder?: string;
+  rows?: number;
 }
 
 export interface ConvType {
@@ -51,11 +56,50 @@ export interface ConvType {
   sortOrder: number;
 }
 
-/** Sub-services handled by Gemini on the site instead of the Render engine. */
-export const SITE_SIDE_TYPES = new Set(["audio-to-text"]);
+/** Sub-services handled by the site itself instead of the Render engine. */
+export const SITE_TEXT_TYPES = new Set([
+  "text-translate",
+  "unicode-to-bijoy",
+  "bijoy-to-unicode",
+  "text-case",
+  "text-encode",
+  "text-hash",
+  "text-diff",
+  "text-count",
+]);
+
+/** Text → speech, streamed from the engine's edge-tts endpoint. */
+export const SITE_TTS_TYPES = new Set(["text-to-audio"]);
+
+/** Transcribed by Gemini from a file the browser posts to the site. */
+export const TRANSCRIBE_UPLOAD_TYPES = new Set(["audio-to-text"]);
+
+/** The engine extracts the audio track first, then the site transcribes it. */
+export const TRANSCRIBE_JOB_TYPES = new Set(["video-to-text", "video-to-skill"]);
+
+export const SITE_SIDE_TYPES = new Set<string>([
+  ...SITE_TEXT_TYPES,
+  ...SITE_TTS_TYPES,
+  ...TRANSCRIBE_UPLOAD_TYPES,
+  ...TRANSCRIBE_JOB_TYPES,
+]);
+
+export type ConvTransport = "engine" | "text" | "tts" | "transcribe" | "transcribe-job";
+
+/** How the browser should run a given sub-service. */
+export function convTransport(slug: string): ConvTransport {
+  if (SITE_TEXT_TYPES.has(slug)) return "text";
+  if (SITE_TTS_TYPES.has(slug)) return "tts";
+  if (TRANSCRIBE_UPLOAD_TYPES.has(slug)) return "transcribe";
+  if (TRANSCRIBE_JOB_TYPES.has(slug)) return "transcribe-job";
+  return "engine";
+}
 
 /** Hard cap for site-side uploads (Vercel request body limit). */
 export const SITE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+
+/** Hard cap for audio the site pulls from the engine to transcribe. */
+export const TRANSCRIBE_MAX_BYTES = 20 * 1024 * 1024;
 
 /** Hard cap for engine uploads. */
 export const ENGINE_UPLOAD_MAX_BYTES = 512 * 1024 * 1024;
@@ -204,6 +248,11 @@ export function normalizeConvOptions(
       if (opt.min != null) n = Math.max(opt.min, n);
       if (opt.max != null) n = Math.min(opt.max, n);
       out[opt.id] = n;
+      continue;
+    }
+    if (opt.type === "textarea") {
+      const s = value === undefined || value === null ? String(opt.value ?? "") : String(value);
+      out[opt.id] = s.slice(0, 200_000);
       continue;
     }
     // text

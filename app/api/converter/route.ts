@@ -9,8 +9,8 @@ import {
 } from "@/lib/services/tools";
 import {
   ENGINE_UPLOAD_MAX_BYTES,
-  SITE_SIDE_TYPES,
   SITE_UPLOAD_MAX_BYTES,
+  convTransport,
   getConvType,
   newConvertJobId,
   normalizeConvOptions,
@@ -83,8 +83,9 @@ export async function POST(req: NextRequest) {
   }
 
   const jobId = newConvertJobId();
+  const transport = convTransport(type.slug);
 
-  if (SITE_SIDE_TYPES.has(type.slug)) {
+  if (transport === "text" || transport === "tts" || transport === "transcribe") {
     await logUsage({
       service: "converter",
       action: "convert",
@@ -96,9 +97,11 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({
       mode: "site",
+      siteKind: transport,
       jobId,
       slug: type.slug,
-      maxBytes: SITE_UPLOAD_MAX_BYTES,
+      maxBytes: transport === "transcribe" ? SITE_UPLOAD_MAX_BYTES : 0,
+      options,
     });
   }
 
@@ -121,6 +124,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     mode: "engine",
+    siteKind: transport === "transcribe-job" ? "transcribe-job" : undefined,
     slug: type.slug,
     jobId,
     engineUrl: RENDER_API_URL,

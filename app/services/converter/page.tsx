@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getSessionUser } from "@/lib/tenant-server";
 import { listMyServiceTokens } from "@/lib/services/tool-tokens";
 import { ToolPageHero, MyTokensPanel } from "@/components/site/service-tools";
-import { listConvTypes } from "@/lib/services/converter";
+import { listConvTypes, CONV_GROUPS } from "@/lib/services/converter";
 import ConverterClient from "./ConverterClient";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,10 @@ export default async function ConverterPage() {
         subtitle="One place for the file conversions you actually need — images to PDF, PDF to images, video to GIF or MP3, trim and compress, transcribe audio. Pick a converter, drop a file, download the result. No signup needed."
       />
       <div className="mx-auto max-w-3xl space-y-4 px-4 pb-16 sm:px-6">
-        <ConverterClient types={types} />
+        <ConverterClient
+          types={types}
+          groups={CONV_GROUPS.map((g) => ({ id: g.id, label: g.label, blurb: g.blurb }))}
+        />
         {user && (
           <MyTokensPanel
             email={user.email}

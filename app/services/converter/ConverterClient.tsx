@@ -7,16 +7,15 @@ import { Button } from "@/components/ui/button";
 import { QuotaPanel, type QuotaInfo } from "@/components/site/service-tools";
 import type { ConvGroup, ConvType } from "@/lib/services/converter";
 
-const GROUP_ORDER: ConvGroup[] = ["image", "video", "audio"];
-const GROUP_LABEL: Record<ConvGroup, string> = { image: "Image", video: "Video", audio: "Audio" };
-const GROUP_BLURB: Record<ConvGroup, string> = {
-  image: "Photos and PDFs",
-  video: "Clips, GIFs, soundtracks",
-  audio: "Music, voice, podcasts",
-};
+export interface ConvGroupInfo {
+  id: ConvGroup;
+  label: string;
+  blurb: string;
+}
 
 interface Props {
   types: ConvType[];
+  groups: ConvGroupInfo[];
 }
 
 type Result =
@@ -36,11 +35,16 @@ function defaultOptions(type: ConvType): Record<string, string | number> {
   return out;
 }
 
-export default function ConverterClient({ types }: Props) {
+/** The long free-text box some converters take instead of a file. */
+function textOptionOf(type: ConvType) {
+  return type.options.find((o) => o.type === "textarea") ?? null;
+}
+
+export default function ConverterClient({ types, groups }: Props) {
   const firstGroup = useMemo<ConvGroup>(() => {
-    for (const g of GROUP_ORDER) if (types.some((t) => t.group === g)) return g;
-    return "image";
-  }, [types]);
+    for (const g of groups) if (types.some((t) => t.group === g.id)) return g.id;
+    return groups[0]?.id ?? "image";
+  }, [types, groups]);
 
   const [group, setGroup] = useState<ConvGroup>(firstGroup);
   const [slug, setSlug] = useState<string>(types.find((t) => t.group === firstGroup)?.slug ?? "");
@@ -59,6 +63,7 @@ export default function ConverterClient({ types }: Props) {
 
   const active = types.find((t) => t.slug === slug) ?? null;
   const groupTypes = types.filter((t) => t.group === group);
+  const textOption = active ? textOptionOf(active) : null;
 
   const loadQuota = useCallback(() => {
     fetch("/api/converter/me")
@@ -106,7 +111,7 @@ export default function ConverterClient({ types }: Props) {
   const poll = async (engineUrl: string, jobId: string, ticket: string, fallbackName: string) => {
     const deadline = Date.now() + 15 * 60 * 1000;
     for (;;) {
-      if (!alive.current) return;
+      if (!alive.current) return null;
       if (Date.now() > deadline) throw new Error("Conversion took too long — try a smaller file.");
       await new Promise((r) => setTimeout(r, 1500));
       const r = await fetch(`${engineUrl}/api/progress/${jobId}?t=${encodeURIComponent(ticket)}`);
@@ -121,17 +126,15 @@ export default function ConverterClient({ types }: Props) {
         error?: string;
         title?: string;
       };
-      if (!alive.current) return;
+      if (!alive.current) return null;
       setProgress(Math.max(5, Math.min(99, Math.round(job.percent ?? 0))));
       if (job.status === "error") throw new Error(job.error || "Conversion failed.");
       if (job.status === "done") {
         setProgress(100);
-        setResult({
-          kind: "file",
+        return {
           url: `${engineUrl}/api/file/${jobId}?t=${encodeURIComponent(ticket)}`,
           name: job.filename || fallbackName,
-        });
-        return;
+        };
       }
       setStatus(job.status === "downloading" ? "Uploading your file…" : "Converting…");
     }
@@ -140,8 +143,15 @@ export default function ConverterClient({ types }: Props) {
   const convert = async () => {
     if (!active || busy) return;
     if (active.needsFile && !files.length) {
-      setError("Choose a file first.");
+      setError(active.multiple ? "Choose at least one file first." : "Choose a file first.");
       return;
+    }
+    if (textOption) {
+      const value = String(opts[textOption.id] ?? "").trim();
+      if (!value) {
+        setError(`Enter some text in “${textOption.label}” first.`);
+        return;
+      }
     }
     setBusy(true);
     setError("");
@@ -157,24 +167,77 @@ export default function ConverterClient({ types }: Props) {
       });
       const data = await auth.json().catch(() => ({}));
       if (!auth.ok) throw new Error(data.error || `Could not start (${auth.status}).`);
-      if (data.jobId) charge = { jobId: String(data.jobId), mode: String(data.mode ?? "engine") };
+      if (data.jobId) {
+        charge = {
+          jobId: String(data.jobId),
+          // Video → Text/Skill run on the engine but can still fail in the
+          // site-side transcription step, so refunds are site-side.
+          mode: data.siteKind === "transcribe-job" ? "site" : String(data.mode ?? "engine"),
+        };
+      }
 
-      if (data.mode === "site") {
+      const base = (files[0]?.name ?? "converted").replace(/\.[^.]+$/, "");
+
+      /* ── site-side: text utilities ─────────────────────────────────── */
+      if (data.mode === "site" && data.siteKind === "text") {
+        const fd = new FormData();
+        fd.append("slug", active.slug);
+        fd.append("options", JSON.stringify(opts));
+        for (const f of files) fd.append("files", f);
+        setStatus("Working…");
+        setProgress(45);
+        const r = await fetch("/api/converter/run", { method: "POST", body: fd });
+        const out = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(out.error || "Conversion failed.");
+        setProgress(100);
+        setResult({ kind: "text", text: out.text ?? "", name: `${base === "converted" ? active.slug : base}.txt` });
+        return;
+      }
+
+      /* ── site-side: text → speech ──────────────────────────────────── */
+      if (data.mode === "site" && data.siteKind === "tts") {
+        setStatus("Generating speech…");
+        setProgress(45);
+        const voice = String(opts.voice ?? "en-US-GuyNeural");
+        const r = await fetch("/api/converter/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: String(opts.text ?? ""),
+            voice,
+            rate: String(opts.rate ?? "0%"),
+            volume: String(opts.volume ?? "0%"),
+          }),
+        });
+        if (!r.ok) {
+          const out = await r.json().catch(() => ({}));
+          throw new Error(out.error || "Speech generation failed.");
+        }
+        const blob = await r.blob();
+        setProgress(100);
+        setResult({ kind: "file", url: URL.createObjectURL(blob), name: `speech-${voice}.mp3` });
+        return;
+      }
+
+      /* ── site-side: transcribe a small file ────────────────────────── */
+      if (data.mode === "site" && data.siteKind === "transcribe") {
         const fd = new FormData();
         fd.append("file", files[0]);
+        fd.append("slug", active.slug);
         fd.append("language", String(opts.language ?? "auto"));
+        fd.append("skillName", String(opts.skillName ?? ""));
+        fd.append("targetLLM", String(opts.targetLLM ?? "universal"));
         setStatus("Transcribing…");
         setProgress(40);
         const r = await fetch("/api/converter/transcribe", { method: "POST", body: fd });
         const out = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(out.error || "Transcription failed.");
         setProgress(100);
-        const base = files[0].name.replace(/\.[^.]+$/, "");
         setResult({ kind: "text", text: out.text, name: `${base}.txt` });
         return;
       }
 
-      // Engine upload — the file goes straight to Render, never through Vercel.
+      /* ── engine: upload the file straight to Render ────────────────── */
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
       setStatus("Uploading your file…");
@@ -187,8 +250,34 @@ export default function ConverterClient({ types }: Props) {
       if (!up.ok) throw new Error(upJson.error || `Upload failed (${up.status}).`);
 
       const jobId = String(upJson.jobId || data.jobId);
-      const base = (files[0]?.name ?? "converted").replace(/\.[^.]+$/, "");
-      await poll(data.engineUrl, jobId, data.progressTicket, `${base}-converted`);
+
+      /* Video → Text / Skill: the engine hands back the audio track, then
+         the site transcribes it (video files are too big for Gemini inline). */
+      if (data.siteKind === "transcribe-job") {
+        await poll(data.engineUrl, jobId, data.progressTicket, "audio");
+        setStatus("Transcribing…");
+        setProgress(85);
+        const r = await fetch("/api/converter/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobId,
+            ticket: data.progressTicket,
+            slug: active.slug,
+            language: String(opts.language ?? "auto"),
+            skillName: String(opts.skillName ?? ""),
+            targetLLM: String(opts.targetLLM ?? "universal"),
+          }),
+        });
+        const out = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(out.error || "Transcription failed.");
+        setProgress(100);
+        setResult({ kind: "text", text: out.text, name: `${base}.txt` });
+        return;
+      }
+
+      const done = await poll(data.engineUrl, jobId, data.progressTicket, `${base}-converted`);
+      if (done) setResult({ kind: "file", url: done.url, name: done.name });
     } catch (e) {
       setError((e as Error).message || "Conversion failed.");
       setProgress(0);
@@ -252,23 +341,21 @@ export default function ConverterClient({ types }: Props) {
 
           {/* group tabs */}
           <div className="flex flex-wrap gap-2">
-            {GROUP_ORDER.map((g) => {
-              const count = types.filter((t) => t.group === g).length;
+            {groups.map((g) => {
+              const count = types.filter((t) => t.group === g.id).length;
               if (!count) return null;
-              const on = g === group;
+              const on = g.id === group;
               return (
                 <button
-                  key={g}
+                  key={g.id}
                   type="button"
-                  onClick={() => pickGroup(g)}
+                  onClick={() => pickGroup(g.id)}
                   className={`rounded-lg border px-3 py-2 text-left transition-colors ${
                     on ? "border-primary bg-primary-soft" : "border-border bg-surface hover:border-primary"
                   }`}
                 >
-                  <span className={`block text-sm font-bold ${on ? "text-primary" : "text-fg"}`}>
-                    {GROUP_LABEL[g]}
-                  </span>
-                  <span className="block text-[11px] text-fg-subtle">{GROUP_BLURB[g]}</span>
+                  <span className={`block text-sm font-bold ${on ? "text-primary" : "text-fg"}`}>{g.label}</span>
+                  <span className="block text-[11px] text-fg-subtle">{g.blurb}</span>
                 </button>
               );
             })}
@@ -299,101 +386,122 @@ export default function ConverterClient({ types }: Props) {
       {active && (
         <Card>
           <CardBody className="space-y-4">
-            {/* dropzone */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragging(false);
-                addFiles(e.dataTransfer.files);
-              }}
-              onClick={() => inputRef.current?.click()}
-              className={`cursor-pointer rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors ${
-                dragging ? "border-primary bg-primary-soft" : "border-border bg-surface-2 hover:border-primary"
-              }`}
-            >
-              <Upload className="mx-auto h-6 w-6 text-primary" />
-              <p className="mt-2 text-sm font-semibold text-fg">
-                {active.multiple ? "Drop files here, or click to choose" : "Drop a file here, or click to choose"}
-              </p>
-              <p className="mt-1 text-xs text-fg-subtle">
-                {active.accept ? active.accept.replace(/,/g, " · ") : "Any file"}
-              </p>
-              <input
-                ref={inputRef}
-                type="file"
-                accept={active.accept || undefined}
-                multiple={active.multiple}
-                className="hidden"
-                onChange={(e) => {
-                  addFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </div>
-
-            {files.length > 0 && (
-              <ul className="space-y-1.5">
-                {files.map((f, i) => (
-                  <li
-                    key={`${f.name}-${i}`}
-                    className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <FileText className="h-4 w-4 shrink-0 text-fg-subtle" />
-                      <span className="truncate text-fg">{f.name}</span>
-                      <span className="shrink-0 text-xs text-fg-subtle">{formatBytes(f.size)}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(i)}
-                      className="rounded p-1 text-fg-subtle hover:bg-danger-soft hover:text-danger"
-                      aria-label={`Remove ${f.name}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {/* text box (text tools, text → audio) */}
+            {textOption && (
+              <div>
+                <label className="text-sm font-medium text-fg">{textOption.label}</label>
+                <textarea
+                  value={String(opts[textOption.id] ?? "")}
+                  onChange={(e) => setOption(textOption.id, e.target.value)}
+                  rows={textOption.rows ?? 6}
+                  placeholder={textOption.placeholder ?? ""}
+                  className="mt-1.5 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+                />
+              </div>
             )}
 
-            {/* options */}
-            {active.options.length > 0 && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {active.options.map((o) => (
-                  <div key={o.id}>
-                    <label className="text-sm font-medium text-fg">{o.label}</label>
-                    {o.type === "select" ? (
-                      <select
-                        value={String(opts[o.id] ?? o.value)}
-                        onChange={(e) => setOption(o.id, e.target.value)}
-                        className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+            {/* dropzone */}
+            {active.needsFile && (
+              <>
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    addFiles(e.dataTransfer.files);
+                  }}
+                  onClick={() => inputRef.current?.click()}
+                  className={`cursor-pointer rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors ${
+                    dragging ? "border-primary bg-primary-soft" : "border-border bg-surface-2 hover:border-primary"
+                  }`}
+                >
+                  <Upload className="mx-auto h-6 w-6 text-primary" />
+                  <p className="mt-2 text-sm font-semibold text-fg">
+                    {active.multiple ? "Drop files here, or click to choose" : "Drop a file here, or click to choose"}
+                  </p>
+                  <p className="mt-1 text-xs text-fg-subtle">
+                    {active.accept ? active.accept.replace(/,/g, " · ") : "Any file"}
+                  </p>
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept={active.accept || undefined}
+                    multiple={active.multiple}
+                    className="hidden"
+                    onChange={(e) => {
+                      addFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+
+                {files.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {files.map((f, i) => (
+                      <li
+                        key={`${f.name}-${i}`}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm"
                       >
-                        {(o.options ?? []).map((v) => (
-                          <option key={v} value={v}>
-                            {v}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type={o.type === "number" ? "number" : "text"}
-                        value={String(opts[o.id] ?? o.value)}
-                        min={o.min}
-                        max={o.max}
-                        step={o.step}
-                        onChange={(e) =>
-                          setOption(o.id, o.type === "number" ? Number(e.target.value) : e.target.value)
-                        }
-                        className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
-                      />
-                    )}
-                  </div>
-                ))}
+                        <span className="flex min-w-0 items-center gap-2">
+                          <FileText className="h-4 w-4 shrink-0 text-fg-subtle" />
+                          <span className="truncate text-fg">{f.name}</span>
+                          <span className="shrink-0 text-xs text-fg-subtle">{formatBytes(f.size)}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(i)}
+                          className="rounded p-1 text-fg-subtle hover:bg-danger-soft hover:text-danger"
+                          aria-label={`Remove ${f.name}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+
+            {/* options (select / number / short text) */}
+            {active.options.filter((o) => o.type !== "textarea").length > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {active.options
+                  .filter((o) => o.type !== "textarea")
+                  .map((o) => (
+                    <div key={o.id}>
+                      <label className="text-sm font-medium text-fg">{o.label}</label>
+                      {o.type === "select" ? (
+                        <select
+                          value={String(opts[o.id] ?? o.value)}
+                          onChange={(e) => setOption(o.id, e.target.value)}
+                          className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+                        >
+                          {(o.options ?? []).map((v) => (
+                            <option key={v} value={v}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={o.type === "number" ? "number" : "text"}
+                          value={String(opts[o.id] ?? o.value)}
+                          min={o.min}
+                          max={o.max}
+                          step={o.step}
+                          placeholder={o.placeholder}
+                          onChange={(e) =>
+                            setOption(o.id, o.type === "number" ? Number(e.target.value) : e.target.value)
+                          }
+                          className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+                        />
+                      )}
+                    </div>
+                  ))}
               </div>
             )}
 
@@ -424,7 +532,9 @@ export default function ConverterClient({ types }: Props) {
                 )}
               </Button>
               <span className="text-xs text-fg-subtle">
-                Files are processed on our engine and deleted after download.
+                {active.needsFile
+                  ? "Files are processed on our engine and deleted after download."
+                  : "Nothing is stored — the result is shown here only."}
               </span>
             </div>
 
@@ -435,6 +545,7 @@ export default function ConverterClient({ types }: Props) {
                 </p>
                 <a
                   href={result.url}
+                  download={result.name}
                   className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-fg hover:bg-primary-hover"
                 >
                   <Download className="h-4 w-4" /> Download {result.name}
@@ -448,7 +559,7 @@ export default function ConverterClient({ types }: Props) {
             {result?.kind === "text" && (
               <div className="space-y-2 rounded-lg border border-border bg-surface-2 p-4">
                 <p className="flex items-center gap-2 text-sm font-semibold text-fg">
-                  <Check className="h-4 w-4 text-success" /> Transcript ready
+                  <Check className="h-4 w-4 text-success" /> Result ready
                 </p>
                 <textarea
                   readOnly
