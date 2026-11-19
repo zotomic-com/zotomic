@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AudioLines, Download, KeyRound, ShieldCheck, Activity, Camera } from "lucide-react";
+import { AudioLines, Download, KeyRound, ShieldCheck, Activity, Camera, FileText } from "lucide-react";
 import { requireAdmin, adminDb } from "@/lib/admin-server";
 import { getAllServiceCards } from "@/lib/service-cards";
 import { Card, CardBody } from "@/components/ui/card";
@@ -64,7 +64,7 @@ export default async function AdminServicesPage() {
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-navy">Service Tools</h1>
         <p className="mt-1 text-sm text-fg-muted">
-          Text to Audio &amp; Online Downloader — engine status, tokens, access and usage.
+          Text to Audio, Online Downloader, Video Generator, Screenshot Organizer &amp; Converter — engine status, tokens, access and usage.
         </p>
       </div>
 
@@ -75,14 +75,27 @@ export default async function AdminServicesPage() {
         <Stat icon={Download} label="Tools live" value={toolCards.filter((c) => c.status === "live").length} />
       </div>
 
-      <Link
-        href="/admin/services/screenshots"
-        className="block rounded-lg border border-border bg-surface p-5 shadow-sm transition-colors hover:border-primary"
-      >
-        <Camera className="h-5 w-5 text-primary" />
-        <p className="mt-2 text-sm font-bold text-fg">Screenshot Organizer sessions</p>
-        <p className="mt-1 text-sm text-fg-muted">View, edit and delete users&apos; organized screenshot sessions (24h retention).</p>
-      </Link>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/admin/services/converter"
+          className="block rounded-lg border border-border bg-surface p-5 shadow-sm transition-colors hover:border-primary"
+        >
+          <FileText className="h-5 w-5 text-primary" />
+          <p className="mt-2 text-sm font-bold text-fg">Converter sub-services</p>
+          <p className="mt-1 text-sm text-fg-muted">
+            Add, edit, reorder, hide or delete the converters customers see under Services → Converter.
+          </p>
+        </Link>
+
+        <Link
+          href="/admin/services/screenshots"
+          className="block rounded-lg border border-border bg-surface p-5 shadow-sm transition-colors hover:border-primary"
+        >
+          <Camera className="h-5 w-5 text-primary" />
+          <p className="mt-2 text-sm font-bold text-fg">Screenshot Organizer sessions</p>
+          <p className="mt-1 text-sm text-fg-muted">View, edit and delete users&apos; organized screenshot sessions (24h retention).</p>
+        </Link>
+      </div>
 
       <Card>
         <CardBody className="space-y-3">
