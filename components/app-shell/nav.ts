@@ -101,6 +101,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/integrations", label: "Integrations", icon: Plug },
   { href: "/admin/services", label: "Service Tools", icon: Wrench },
   { href: "/admin/services/anims", label: "Animation Library", icon: Film },
+  { href: "/admin/services/converter", label: "Converter", icon: ImageIcon },
   { href: "/admin/users", label: "Users & Roles", icon: Users },
   { href: "/admin/audit-logs", label: "Audit Logs", icon: ShieldCheck },
   { href: "/admin/system-health", label: "System Health", icon: Activity },
