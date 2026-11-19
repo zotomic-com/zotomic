@@ -32,7 +32,7 @@ values
   ('pdf-to-images', 'PDF → Images', 'image',
    'Split every PDF page into its own image file.',
    '.pdf,.application/pdf', false,
-   '[{"id":"format","label":"Output format","type":"select","value":"png","options":["png","jpg","webp"]},{"id":"dpi","label":"DPI (quality)","type":"number","value":150,"min":72,"max":600,"step":1}]'::jsonb, 1),
+   '[{"id":"format","label":"Output format","type":"select","value":"png","options":["png","jpg","tiff"]},{"id":"dpi","label":"DPI (quality)","type":"number","value":150,"min":72,"max":600,"step":1}]'::jsonb, 1),
 
   ('video-to-video', 'Video → Video', 'video',
    'Re-encode a video into another format or quality.',
