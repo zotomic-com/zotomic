@@ -98,8 +98,9 @@ export function convTransport(slug: string): ConvTransport {
 /** Hard cap for site-side uploads (Vercel request body limit). */
 export const SITE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 
-/** Hard cap for audio the site pulls from the engine to transcribe. */
-export const TRANSCRIBE_MAX_BYTES = 20 * 1024 * 1024;
+/** Hard cap for audio the site pulls from the engine to transcribe.
+ *  Base64 inflates by ~33%, so 14 MB keeps the Gemini inline request under 20 MB. */
+export const TRANSCRIBE_MAX_BYTES = 14 * 1024 * 1024;
 
 /** Hard cap for engine uploads. */
 export const ENGINE_UPLOAD_MAX_BYTES = 512 * 1024 * 1024;
