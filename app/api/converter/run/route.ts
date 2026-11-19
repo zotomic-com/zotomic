@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { ConvertToASCII, ConvertToUnicode } from "unicode2ascii";
 import { resolveToolCaller } from "@/lib/services/tools";
 import { getConvType, normalizeConvOptions, SITE_TEXT_TYPES } from "@/lib/services/converter";
 
@@ -32,61 +33,17 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 /* ── Bijoy ⇄ Unicode ─────────────────────────────────────────────────────── */
-
-const BIJOY_MAP: Record<string, string> = {
-  "অ": "Av", "আ": "Avb", "ই": "Avc", "ঈ": "Avd", "উ": "Ave", "ঊ": "Avf", "ঋ": "Avg", "এ": "Avh", "ঐ": "Avj", "ও": "Avk", "ঔ": "Avl",
-  "ক": "Aw", "খ": "Ax", "গ": "Ay", "ঘ": "Az", "ঙ": "A_", "চ": "A`", "ছ": "Aa", "জ": "Ab", "ঝ": "Ac", "ঞ": "Ad",
-  "ট": "Ae", "ঠ": "Af", "ড": "Ag", "ঢ": "Ah", "ণ": "Ai", "ত": "Aj", "থ": "Ak", "দ": "Al", "ধ": "Am", "ন": "An",
-  "প": "Ao", "ফ": "Ap", "ব": "Aq", "ভ": "Ar", "ম": "As", "য": "At", "র": "Au", "ল": "Av", "শ": "Aw", "ষ": "Ax", "স": "Ay", "হ": "Az",
-  "া": "b", "ি": "c", "ী": "d", "ু": "e", "ূ": "f", "ৃ": "g", "ে": "h", "ৈ": "j", "ো": "k", "ৌ": "l", "্": "m",
-  "ৎ": "n", "ং": "o", "ঃ": "p", "ঁ": "q", "়": "r", "য়": "s", "০": "A0", "১": "A1", "২": "A2", "৩": "A3", "৪": "A4", "৫": "A5", "৬": "A6", "৭": "A7", "৮": "A8", "৯": "A9",
-  "।": "A.", "၊": "A,", "；": "A;", "?": "A?", "!": "A!", "(": "A(", ")": "A)", "[": "A[", "]": "A]", "{": "A{", "}": "A}",
-  " ": " ", "\n": "\n", "\r": "", "\t": " ",
-};
-
-const UNICODE_MAP: Record<string, string> = {};
-for (const [uni, bijoy] of Object.entries(BIJOY_MAP)) {
-  if (bijoy.length > 1) UNICODE_MAP[bijoy] = uni;
-}
+/* unicode2ascii implements the real Bijoy/SutonnyMJ ANSI mapping, including
+ * conjunct glyphs and the pre-base reordering of ে / ি / ৈ. The previous
+ * hand-written table mapped letters to "A" + a letter and produced nonsense,
+ * so it has been replaced. */
 
 function unicodeToBijoy(text: string): string {
-  let result = "";
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const next = text[i + 1] || "";
-    const combined = char + next;
-    if (BIJOY_MAP[combined]) {
-      result += BIJOY_MAP[combined];
-      i++;
-    } else if (BIJOY_MAP[char]) {
-      result += BIJOY_MAP[char];
-    } else {
-      result += char;
-    }
-  }
-  return result;
+  return ConvertToASCII("bijoy", text);
 }
 
 function bijoyToUnicode(text: string): string {
-  let result = "";
-  let i = 0;
-  while (i < text.length) {
-    let matched = false;
-    for (let len = 3; len >= 1; len--) {
-      const part = text.substr(i, len);
-      if (UNICODE_MAP[part]) {
-        result += UNICODE_MAP[part];
-        i += len;
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) {
-      result += text[i];
-      i++;
-    }
-  }
-  return result;
+  return ConvertToUnicode("bijoy", text);
 }
 
 /* ── text helpers ────────────────────────────────────────────────────────── */

@@ -258,6 +258,23 @@ export function normalizeConvOptions(
     }
     // text
     const s = value === undefined || value === null ? String(opt.value ?? "") : String(value).trim();
+    if (opt.id === "url") {
+      if (!s) {
+        out[opt.id] = "";
+        continue;
+      }
+      let parsed: URL;
+      try {
+        parsed = new URL(s);
+      } catch {
+        throw new Error(`${opt.label}: paste a full http(s) link.`);
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        throw new Error(`${opt.label}: only http(s) links work.`);
+      }
+      out[opt.id] = parsed.toString().slice(0, 2000);
+      continue;
+    }
     if (opt.id === "start" || opt.id === "duration") {
       if (!s) {
         out[opt.id] = opt.id === "start" ? "00:00:00" : "";

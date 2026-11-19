@@ -1,11 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Copy, Download, FileText, Loader2, RefreshCw, Upload, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Download,
+  FileText,
+  Image as ImageIcon,
+  Link2,
+  Loader2,
+  Music,
+  RefreshCw,
+  Upload,
+  Video,
+  X,
+} from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { QuotaPanel, type QuotaInfo } from "@/components/site/service-tools";
 import type { ConvGroup, ConvType } from "@/lib/services/converter";
+import { buildDocxBlob, saveBlob, saveText } from "@/lib/text-export";
 
 export interface ConvGroupInfo {
   id: ConvGroup;
@@ -19,8 +33,39 @@ interface Props {
 }
 
 type Result =
-  | { kind: "file"; url: string; name: string }
-  | { kind: "text"; text: string; name: string };
+  | { kind: "text"; text: string; name: string }
+  | { kind: "file"; url: string; name: string };
+
+type MediaKind = "image" | "video" | "audio" | "pdf" | "other";
+
+const TEXT_FILE_ACCEPT =
+  ".txt,.text,.md,.markdown,.csv,.json,.log,.srt,.vtt,.xml,.html,.htm,text/*";
+
+const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "avif"];
+const VIDEO_EXT = ["mp4", "webm", "mov", "mkv", "avi", "flv", "wmv", "m4v"];
+const AUDIO_EXT = ["mp3", "wav", "ogg", "aac", "flac", "m4a", "opus"];
+
+function extOf(name: string): string {
+  return name.split(".").pop()?.toLowerCase() ?? "";
+}
+
+function kindOfName(name: string): MediaKind {
+  const ext = extOf(name);
+  if (IMAGE_EXT.includes(ext)) return "image";
+  if (VIDEO_EXT.includes(ext)) return "video";
+  if (AUDIO_EXT.includes(ext)) return "audio";
+  if (ext === "pdf") return "pdf";
+  return "other";
+}
+
+function kindOfFile(file: File | undefined): MediaKind {
+  if (!file) return "other";
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("audio/")) return "audio";
+  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) return "pdf";
+  return kindOfName(file.name);
+}
 
 function formatBytes(n: number): string {
   if (!n) return "0 B";
@@ -40,6 +85,47 @@ function textOptionOf(type: ConvType) {
   return type.options.find((o) => o.type === "textarea") ?? null;
 }
 
+/** The optional “paste a video link instead of uploading” field. */
+function urlOptionOf(type: ConvType) {
+  return type.options.find((o) => o.id === "url") ?? null;
+}
+
+/** A checkerboard so transparent PNGs read clearly in the preview. */
+const CHECKER_STYLE = {
+  backgroundImage:
+    "repeating-conic-gradient(var(--border) 0% 25%, var(--surface) 0% 50%)",
+  backgroundSize: "18px 18px",
+} as const;
+
+function MediaPane({
+  label,
+  url,
+  kind,
+  checker,
+}: {
+  label: string;
+  url: string;
+  kind: MediaKind;
+  checker?: boolean;
+}) {
+  return (
+    <div className="min-w-0 rounded-lg border border-border bg-surface-2 p-3">
+      <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-fg-subtle">{label}</p>
+      {kind === "image" && (
+        <div
+          className="flex items-center justify-center overflow-hidden rounded-md"
+          style={checker ? CHECKER_STYLE : undefined}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={label} className="max-h-72 w-full object-contain" />
+        </div>
+      )}
+      {kind === "video" && <video src={url} controls className="w-full rounded-md" />}
+      {kind === "audio" && <audio src={url} controls className="w-full" />}
+    </div>
+  );
+}
+
 export default function ConverterClient({ types, groups }: Props) {
   const firstGroup = useMemo<ConvGroup>(() => {
     for (const g of groups) if (types.some((t) => t.group === g.id)) return g.id;
@@ -57,13 +143,30 @@ export default function ConverterClient({ types, groups }: Props) {
   const [result, setResult] = useState<Result | null>(null);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [textDragging, setTextDragging] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [textFileName, setTextFileName] = useState("");
+  const [originalUrl, setOriginalUrl] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLTextAreaElement>(null);
   const alive = useRef(true);
 
   const active = types.find((t) => t.slug === slug) ?? null;
   const groupTypes = types.filter((t) => t.group === group);
   const textOption = active ? textOptionOf(active) : null;
+  const urlOption = active ? urlOptionOf(active) : null;
+  const isTextGroup = active?.group === "text";
+  const wantsTextPreview =
+    isTextGroup ||
+    active?.slug === "video-to-text" ||
+    active?.slug === "video-to-skill" ||
+    active?.slug === "audio-to-text";
+  const videoUrl = urlOption ? String(opts.url ?? "").trim() : "";
+  const boxHeight = (textOption?.rows ?? 8) * 20 + 18;
+
+  const previewText = result?.kind === "text" ? result.text : "";
+  const hasPreviewText = previewText.length > 0;
 
   const loadQuota = useCallback(() => {
     fetch("/api/converter/me")
@@ -88,7 +191,31 @@ export default function ConverterClient({ types, groups }: Props) {
     setError("");
     setProgress(0);
     setStatus("");
+    setTextFileName("");
   }, [active]);
+
+  /* A local object URL previews the chosen file before it is converted. */
+  useEffect(() => {
+    const f = files[0];
+    if (!f) {
+      setOriginalUrl("");
+      return;
+    }
+    const kind = kindOfFile(f);
+    if (kind !== "image" && kind !== "video" && kind !== "audio") {
+      setOriginalUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(f);
+    setOriginalUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [files]);
+
+  /* Free the blob URL created for a text → audio result. */
+  useEffect(() => {
+    if (result?.kind !== "file" || !result.url.startsWith("blob:")) return;
+    return () => URL.revokeObjectURL(result.url);
+  }, [result]);
 
   const pickGroup = (g: ConvGroup) => {
     setGroup(g);
@@ -108,7 +235,31 @@ export default function ConverterClient({ types, groups }: Props) {
 
   const setOption = (id: string, value: string | number) => setOpts((prev) => ({ ...prev, [id]: value }));
 
-  const poll = async (engineUrl: string, jobId: string, ticket: string, fallbackName: string) => {
+  /** Load a text file straight into the converter's textarea. */
+  const loadTextFile = async (file: File | undefined) => {
+    if (!file || !textOption) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setError("That text file is too large — 2 MB is the limit.");
+      return;
+    }
+    try {
+      const text = await file.text();
+      setOption(textOption.id, text);
+      setTextFileName(file.name);
+      setResult(null);
+      setError("");
+    } catch {
+      setError("That file could not be read as text.");
+    }
+  };
+
+  const poll = async (
+    engineUrl: string,
+    jobId: string,
+    ticket: string,
+    fallbackName: string,
+    fromUrl: boolean,
+  ) => {
     const deadline = Date.now() + 15 * 60 * 1000;
     for (;;) {
       if (!alive.current) return null;
@@ -136,14 +287,26 @@ export default function ConverterClient({ types, groups }: Props) {
           name: job.filename || fallbackName,
         };
       }
-      setStatus(job.status === "downloading" ? "Uploading your file…" : "Converting…");
+      setStatus(
+        job.status === "downloading"
+          ? fromUrl
+            ? "Fetching the video…"
+            : "Uploading your file…"
+          : "Converting…",
+      );
     }
   };
 
   const convert = async () => {
     if (!active || busy) return;
-    if (active.needsFile && !files.length) {
-      setError(active.multiple ? "Choose at least one file first." : "Choose a file first.");
+    if (active.needsFile && !files.length && !videoUrl) {
+      setError(
+        urlOption
+          ? "Choose a file or paste a video link first."
+          : active.multiple
+            ? "Choose at least one file first."
+            : "Choose a file first.",
+      );
       return;
     }
     if (textOption) {
@@ -176,7 +339,7 @@ export default function ConverterClient({ types, groups }: Props) {
         };
       }
 
-      const base = (files[0]?.name ?? "converted").replace(/\.[^.]+$/, "");
+      const base = (files[0]?.name ?? (videoUrl ? "video" : "converted")).replace(/\.[^.]+$/, "");
 
       /* ── site-side: text utilities ─────────────────────────────────── */
       if (data.mode === "site" && data.siteKind === "text") {
@@ -240,7 +403,7 @@ export default function ConverterClient({ types, groups }: Props) {
       /* ── engine: upload the file straight to Render ────────────────── */
       const fd = new FormData();
       for (const f of files) fd.append("files", f);
-      setStatus("Uploading your file…");
+      setStatus(files.length ? "Uploading your file…" : "Sending the link to the engine…");
       setProgress(8);
       const up = await fetch(`${data.uploadUrl}?p=${encodeURIComponent(data.ticket)}`, {
         method: "POST",
@@ -254,7 +417,7 @@ export default function ConverterClient({ types, groups }: Props) {
       /* Video → Text / Skill: the engine hands back the audio track, then
          the site transcribes it (video files are too big for Gemini inline). */
       if (data.siteKind === "transcribe-job") {
-        await poll(data.engineUrl, jobId, data.progressTicket, "audio");
+        await poll(data.engineUrl, jobId, data.progressTicket, "audio", !files.length);
         setStatus("Transcribing…");
         setProgress(85);
         const r = await fetch("/api/converter/transcribe", {
@@ -276,7 +439,13 @@ export default function ConverterClient({ types, groups }: Props) {
         return;
       }
 
-      const done = await poll(data.engineUrl, jobId, data.progressTicket, `${base}-converted`);
+      const done = await poll(
+        data.engineUrl,
+        jobId,
+        data.progressTicket,
+        `${base}-converted`,
+        !files.length,
+      );
       if (done) setResult({ kind: "file", url: done.url, name: done.name });
     } catch (e) {
       setError((e as Error).message || "Conversion failed.");
@@ -297,25 +466,39 @@ export default function ConverterClient({ types, groups }: Props) {
   };
 
   const copyText = async () => {
-    if (result?.kind !== "text") return;
+    if (!hasPreviewText) return;
+    let ok = false;
     try {
-      await navigator.clipboard.writeText(result.text);
+      await navigator.clipboard.writeText(previewText);
+      ok = true;
+    } catch {
+      /* The async clipboard API can be blocked (permissions, http). Fall
+         back to selecting the read-only preview and copying it the old way. */
+      const el = previewRef.current;
+      if (el) {
+        el.select();
+        try {
+          ok = document.execCommand("copy");
+        } catch {
+          ok = false;
+        }
+        el.setSelectionRange(0, 0);
+      }
+    }
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* clipboard blocked — the text is selectable anyway */
     }
   };
 
-  const downloadText = () => {
-    if (result?.kind !== "text") return;
-    const blob = new Blob([result.text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = result.name;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadTextAs = (format: "txt" | "docx") => {
+    if (!hasPreviewText) return;
+    const baseName = (result?.kind === "text" ? result.name : "result").replace(/\.[^.]+$/, "") || "result";
+    if (format === "docx") {
+      saveBlob(buildDocxBlob(previewText), `${baseName}.docx`);
+    } else {
+      saveText(previewText, `${baseName}.txt`);
+    }
   };
 
   if (!types.length) {
@@ -327,6 +510,156 @@ export default function ConverterClient({ types, groups }: Props) {
       </Card>
     );
   }
+
+  const optionFields = active
+    ? active.options.filter((o) => o.type !== "textarea" && o.id !== "url")
+    : [];
+
+  const optionsGrid = optionFields.length ? (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {optionFields.map((o) => (
+        <div key={o.id}>
+          <label className="text-sm font-medium text-fg">{o.label}</label>
+          {o.type === "select" ? (
+            <select
+              value={String(opts[o.id] ?? o.value)}
+              onChange={(e) => setOption(o.id, e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+            >
+              {(o.options ?? []).map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type={o.type === "number" ? "number" : "text"}
+              value={String(opts[o.id] ?? o.value)}
+              min={o.min}
+              max={o.max}
+              step={o.step}
+              placeholder={o.placeholder}
+              onChange={(e) => setOption(o.id, o.type === "number" ? Number(e.target.value) : e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  ) : null;
+
+  const fileDrop = active?.needsFile ? (
+    <>
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          addFiles(e.dataTransfer.files);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={`cursor-pointer rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors ${
+          dragging ? "border-primary bg-primary-soft" : "border-border bg-surface-2 hover:border-primary"
+        }`}
+      >
+        <Upload className="mx-auto h-6 w-6 text-primary" />
+        <p className="mt-2 text-sm font-semibold text-fg">
+          {active.multiple ? "Drop files here, or click to choose" : "Drop a file here, or click to choose"}
+        </p>
+        <p className="mt-1 text-xs text-fg-subtle">
+          {active.accept ? active.accept.replace(/,/g, " · ") : "Any file"}
+          {urlOption ? " — or paste a link above" : ""}
+        </p>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={active.accept || undefined}
+          multiple={active.multiple}
+          className="hidden"
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+      </div>
+
+      {files.length > 0 && (
+        <ul className="space-y-1.5">
+          {files.map((f, i) => (
+            <li
+              key={`${f.name}-${i}`}
+              className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <FileText className="h-4 w-4 shrink-0 text-fg-subtle" />
+                <span className="truncate text-fg">{f.name}</span>
+                <span className="shrink-0 text-xs text-fg-subtle">{formatBytes(f.size)}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => removeFile(i)}
+                className="rounded p-1 text-fg-subtle hover:bg-danger-soft hover:text-danger"
+                aria-label={`Remove ${f.name}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  ) : null;
+
+  const textPreview = wantsTextPreview ? (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="text-sm font-medium text-fg">Preview</label>
+        <span className="text-xs text-fg-subtle">
+          {hasPreviewText ? "Result ready — copy or download it" : "The result appears here"}
+        </span>
+      </div>
+      <textarea
+        ref={previewRef}
+        readOnly
+        value={previewText}
+        rows={textOption?.rows ?? 8}
+        style={{ minHeight: boxHeight }}
+        placeholder="Your result will appear here after you convert."
+        className="mt-1.5 w-full resize-y rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none"
+      />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button variant="secondary" size="sm" onClick={copyText} disabled={!hasPreviewText}>
+          {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+          {copied ? "Copied" : "Copy text"}
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => downloadTextAs("txt")} disabled={!hasPreviewText}>
+          <Download className="h-4 w-4" /> .txt
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => downloadTextAs("docx")} disabled={!hasPreviewText}>
+          <Download className="h-4 w-4" /> .docx
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
+  const origKind = kindOfFile(files[0]);
+  const resKind = result?.kind === "file" ? kindOfName(result.name) : "other";
+  const showOrig = !!originalUrl && origKind !== "other" && origKind !== "pdf";
+  const showRes = result?.kind === "file" && resKind !== "other" && resKind !== "pdf";
+  const mediaPreview =
+    showOrig || showRes ? (
+      <div className={`grid gap-3 ${showOrig && showRes ? "sm:grid-cols-2" : ""}`}>
+        {showOrig && <MediaPane label="Original" url={originalUrl} kind={origKind} />}
+        {showRes && result?.kind === "file" && (
+          <MediaPane label="Result" url={result.url} kind={resKind} checker />
+        )}
+      </div>
+    ) : null;
 
   return (
     <div className="space-y-4">
@@ -386,124 +719,111 @@ export default function ConverterClient({ types, groups }: Props) {
       {active && (
         <Card>
           <CardBody className="space-y-4">
-            {/* text box (text tools, text → audio) */}
-            {textOption && (
-              <div>
-                <label className="text-sm font-medium text-fg">{textOption.label}</label>
-                <textarea
-                  value={String(opts[textOption.id] ?? "")}
-                  onChange={(e) => setOption(textOption.id, e.target.value)}
-                  rows={textOption.rows ?? 6}
-                  placeholder={textOption.placeholder ?? ""}
-                  className="mt-1.5 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
-                />
-              </div>
-            )}
+            <div>
+              <p className="flex items-center gap-2 text-sm font-bold text-fg">
+                {active.group === "text" && <FileText className="h-4 w-4 text-primary" />}
+                {active.group === "video" && <Video className="h-4 w-4 text-primary" />}
+                {active.group === "audio" && <Music className="h-4 w-4 text-primary" />}
+                {active.group === "image" && <ImageIcon className="h-4 w-4 text-primary" />}
+                {active.group === "ai" && <ImageIcon className="h-4 w-4 text-primary" />}
+                {active.group === "document" && <FileText className="h-4 w-4 text-primary" />}
+                {active.label}
+              </p>
+              {active.description && <p className="mt-0.5 text-xs text-fg-muted">{active.description}</p>}
+            </div>
 
-            {/* dropzone */}
-            {active.needsFile && (
+            {/* options first for text tools, so the preview sits right under the input */}
+            {isTextGroup && optionsGrid}
+
+            {/* text input + file loader + preview */}
+            {textOption && (
               <>
+                <div>
+                  <label className="text-sm font-medium text-fg">{textOption.label}</label>
+                  <textarea
+                    value={String(opts[textOption.id] ?? "")}
+                    onChange={(e) => setOption(textOption.id, e.target.value)}
+                    rows={textOption.rows ?? 8}
+                    style={{ minHeight: boxHeight }}
+                    placeholder={textOption.placeholder ?? ""}
+                    className="mt-1.5 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+                  />
+                </div>
+
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
-                    setDragging(true);
+                    setTextDragging(true);
                   }}
-                  onDragLeave={() => setDragging(false)}
+                  onDragLeave={() => setTextDragging(false)}
                   onDrop={(e) => {
                     e.preventDefault();
-                    setDragging(false);
-                    addFiles(e.dataTransfer.files);
+                    setTextDragging(false);
+                    void loadTextFile(e.dataTransfer.files[0]);
                   }}
-                  onClick={() => inputRef.current?.click()}
-                  className={`cursor-pointer rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors ${
-                    dragging ? "border-primary bg-primary-soft" : "border-border bg-surface-2 hover:border-primary"
+                  onClick={() => textInputRef.current?.click()}
+                  style={{ minHeight: boxHeight }}
+                  className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${
+                    textDragging ? "border-primary bg-primary-soft" : "border-border bg-surface-2 hover:border-primary"
                   }`}
                 >
-                  <Upload className="mx-auto h-6 w-6 text-primary" />
+                  <Upload className="h-6 w-6 text-primary" />
                   <p className="mt-2 text-sm font-semibold text-fg">
-                    {active.multiple ? "Drop files here, or click to choose" : "Drop a file here, or click to choose"}
+                    Drop a text file here, or click to load it
                   </p>
-                  <p className="mt-1 text-xs text-fg-subtle">
-                    {active.accept ? active.accept.replace(/,/g, " · ") : "Any file"}
-                  </p>
+                  <p className="mt-1 text-xs text-fg-subtle">.txt · .md · .csv · .json · .srt — up to 2 MB</p>
+                  {textFileName && (
+                    <p className="mt-2 max-w-full truncate text-xs font-semibold text-primary">
+                      Loaded {textFileName}
+                    </p>
+                  )}
                   <input
-                    ref={inputRef}
+                    ref={textInputRef}
                     type="file"
-                    accept={active.accept || undefined}
-                    multiple={active.multiple}
+                    accept={TEXT_FILE_ACCEPT}
                     className="hidden"
                     onChange={(e) => {
-                      addFiles(e.target.files);
+                      void loadTextFile(e.target.files?.[0]);
                       e.target.value = "";
                     }}
                   />
                 </div>
 
-                {files.length > 0 && (
-                  <ul className="space-y-1.5">
-                    {files.map((f, i) => (
-                      <li
-                        key={`${f.name}-${i}`}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <FileText className="h-4 w-4 shrink-0 text-fg-subtle" />
-                          <span className="truncate text-fg">{f.name}</span>
-                          <span className="shrink-0 text-xs text-fg-subtle">{formatBytes(f.size)}</span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeFile(i)}
-                          className="rounded p-1 text-fg-subtle hover:bg-danger-soft hover:text-danger"
-                          aria-label={`Remove ${f.name}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {textPreview}
               </>
             )}
 
-            {/* options (select / number / short text) */}
-            {active.options.filter((o) => o.type !== "textarea").length > 0 && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {active.options
-                  .filter((o) => o.type !== "textarea")
-                  .map((o) => (
-                    <div key={o.id}>
-                      <label className="text-sm font-medium text-fg">{o.label}</label>
-                      {o.type === "select" ? (
-                        <select
-                          value={String(opts[o.id] ?? o.value)}
-                          onChange={(e) => setOption(o.id, e.target.value)}
-                          className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
-                        >
-                          {(o.options ?? []).map((v) => (
-                            <option key={v} value={v}>
-                              {v}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={o.type === "number" ? "number" : "text"}
-                          value={String(opts[o.id] ?? o.value)}
-                          min={o.min}
-                          max={o.max}
-                          step={o.step}
-                          placeholder={o.placeholder}
-                          onChange={(e) =>
-                            setOption(o.id, o.type === "number" ? Number(e.target.value) : e.target.value)
-                          }
-                          className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
-                        />
-                      )}
-                    </div>
-                  ))}
+            {/* video link */}
+            {urlOption && (
+              <div>
+                <label className="text-sm font-medium text-fg">Video link (optional)</label>
+                <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-border bg-surface px-3 focus-within:border-primary">
+                  <Link2 className="h-4 w-4 shrink-0 text-fg-subtle" />
+                  <input
+                    type="url"
+                    value={String(opts.url ?? "")}
+                    onChange={(e) => setOption("url", e.target.value)}
+                    placeholder="https://youtube.com/watch?v=…"
+                    className="w-full bg-transparent py-2 text-sm text-fg outline-none"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-fg-subtle">
+                  Paste a YouTube, TikTok, Instagram or Facebook link — or drop a file below.
+                </p>
               </div>
             )}
+
+            {/* file input */}
+            {fileDrop}
+
+            {/* options for non-text tools */}
+            {!isTextGroup && optionsGrid}
+
+            {/* text result for video → text / skill */}
+            {!textOption && textPreview}
+
+            {/* before / after media preview */}
+            {mediaPreview}
 
             {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -553,37 +873,6 @@ export default function ConverterClient({ types, groups }: Props) {
                 <p className="mt-2 text-xs text-fg-subtle">
                   Download it now — the engine keeps it for a short while and then deletes it.
                 </p>
-              </div>
-            )}
-
-            {result?.kind === "text" && (
-              <div className="space-y-2 rounded-lg border border-border bg-surface-2 p-4">
-                <p className="flex items-center gap-2 text-sm font-semibold text-fg">
-                  <Check className="h-4 w-4 text-success" /> Result ready
-                </p>
-                <textarea
-                  readOnly
-                  value={result.text}
-                  rows={10}
-                  className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg"
-                />
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={copyText}
-                    className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold text-fg hover:border-primary"
-                  >
-                    {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-                    {copied ? "Copied" : "Copy text"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={downloadText}
-                    className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-fg hover:bg-primary-hover"
-                  >
-                    <Download className="h-4 w-4" /> Download .txt
-                  </button>
-                </div>
               </div>
             )}
           </CardBody>
