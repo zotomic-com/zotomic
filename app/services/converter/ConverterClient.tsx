@@ -45,6 +45,42 @@ const IMAGE_EXT = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "a
 const VIDEO_EXT = ["mp4", "webm", "mov", "mkv", "avi", "flv", "wmv", "m4v"];
 const AUDIO_EXT = ["mp3", "wav", "ogg", "aac", "flac", "m4a", "opus"];
 
+/** One-click background colours for Add Background. */
+const COLOR_PRESETS = [
+  { name: "White", value: "#ffffff" },
+  { name: "Black", value: "#000000" },
+  { name: "Slate", value: "#0f172a" },
+  { name: "Gray", value: "#64748b" },
+  { name: "Red", value: "#ef4444" },
+  { name: "Orange", value: "#f97316" },
+  { name: "Amber", value: "#f59e0b" },
+  { name: "Yellow", value: "#facc15" },
+  { name: "Green", value: "#22c55e" },
+  { name: "Teal", value: "#14b8a6" },
+  { name: "Blue", value: "#3b82f6" },
+  { name: "Indigo", value: "#6366f1" },
+  { name: "Purple", value: "#a855f7" },
+  { name: "Pink", value: "#ec4899" },
+];
+
+function isHexColor(value: string): boolean {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value.trim());
+}
+
+/** <input type="color"> only accepts #rrggbb. */
+function hex6(value: string): string {
+  const v = value.trim();
+  if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(v)) {
+    return `#${v
+      .slice(1)
+      .split("")
+      .map((c) => c + c)
+      .join("")}`.toLowerCase();
+  }
+  return "#ffffff";
+}
+
 function extOf(name: string): string {
   return name.split(".").pop()?.toLowerCase() ?? "";
 }
@@ -102,11 +138,13 @@ function MediaPane({
   url,
   kind,
   checker,
+  bg,
 }: {
   label: string;
   url: string;
   kind: MediaKind;
   checker?: boolean;
+  bg?: string;
 }) {
   return (
     <div className="min-w-0 rounded-lg border border-border bg-surface-2 p-3">
@@ -114,7 +152,7 @@ function MediaPane({
       {kind === "image" && (
         <div
           className="flex items-center justify-center overflow-hidden rounded-md"
-          style={checker ? CHECKER_STYLE : undefined}
+          style={checker ? CHECKER_STYLE : bg ? { background: bg } : undefined}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt={label} className="max-h-72 w-full object-contain" />
@@ -517,35 +555,89 @@ export default function ConverterClient({ types, groups }: Props) {
 
   const optionsGrid = optionFields.length ? (
     <div className="grid gap-3 sm:grid-cols-2">
-      {optionFields.map((o) => (
-        <div key={o.id}>
-          <label className="text-sm font-medium text-fg">{o.label}</label>
-          {o.type === "select" ? (
-            <select
-              value={String(opts[o.id] ?? o.value)}
-              onChange={(e) => setOption(o.id, e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
-            >
-              {(o.options ?? []).map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type={o.type === "number" ? "number" : "text"}
-              value={String(opts[o.id] ?? o.value)}
-              min={o.min}
-              max={o.max}
-              step={o.step}
-              placeholder={o.placeholder}
-              onChange={(e) => setOption(o.id, o.type === "number" ? Number(e.target.value) : e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
-            />
-          )}
-        </div>
-      ))}
+      {optionFields.map((o) =>
+        o.id === "background" ? (
+          <div key={o.id} className="sm:col-span-2">
+            <label className="text-sm font-medium text-fg">{o.label}</label>
+            <div className="mt-1.5 flex items-center gap-2">
+              {/* Native colour picker — click the swatch to open it. */}
+              <label
+                className="relative h-10 w-14 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border-strong"
+                style={{ background: String(opts[o.id] ?? o.value) }}
+                title="Pick any colour"
+              >
+                <input
+                  type="color"
+                  value={hex6(String(opts[o.id] ?? o.value))}
+                  onChange={(e) => setOption(o.id, e.target.value)}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  aria-label="Pick a background colour"
+                />
+              </label>
+              <input
+                type="text"
+                value={String(opts[o.id] ?? o.value)}
+                placeholder={o.placeholder}
+                onChange={(e) => setOption(o.id, e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+                aria-label="Background colour code"
+              />
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {COLOR_PRESETS.map((c) => {
+                const on = String(opts[o.id] ?? "").trim().toLowerCase() === c.value;
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setOption(o.id, c.value)}
+                    title={c.name}
+                    aria-label={`Use ${c.name}`}
+                    aria-pressed={on}
+                    className={`h-7 w-7 rounded-md border border-border-strong transition-transform hover:scale-110 ${
+                      on ? "ring-2 ring-primary ring-offset-2 ring-offset-surface" : ""
+                    }`}
+                    style={{ background: c.value }}
+                  />
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-xs text-fg-subtle">
+              Click a swatch, pick any colour, or type a hex code. You can also add a second image to use as
+              the background.
+            </p>
+          </div>
+        ) : (
+          <div key={o.id}>
+            <label className="text-sm font-medium text-fg">{o.label}</label>
+            {o.type === "select" ? (
+              <select
+                value={String(opts[o.id] ?? o.value)}
+                onChange={(e) => setOption(o.id, e.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+              >
+                {(o.options ?? []).map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type={o.type === "number" ? "number" : "text"}
+                value={String(opts[o.id] ?? o.value)}
+                min={o.min}
+                max={o.max}
+                step={o.step}
+                placeholder={o.placeholder}
+                onChange={(e) => setOption(o.id, o.type === "number" ? Number(e.target.value) : e.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary"
+              />
+            )}
+          </div>
+        ),
+      )}
     </div>
   ) : null;
 
@@ -659,10 +751,23 @@ export default function ConverterClient({ types, groups }: Props) {
         ? `${result.url}${result.url.includes("?") ? "&" : "?"}preview=1`
         : result.url
       : "";
+  /* Add Background: show the chosen colour behind the uploaded image right
+     away, so the swatch/picker gives instant feedback before converting. */
+  const bgColor = String(opts.background ?? "").trim();
+  const liveBgUrl =
+    active?.slug === "add-background" && originalUrl && files.length < 2 && isHexColor(bgColor)
+      ? originalUrl
+      : "";
+  const showLiveBg = !!liveBgUrl && !showRes;
   const mediaPreview =
-    showOrig || showRes ? (
-      <div className={`grid gap-3 ${showOrig && showRes ? "sm:grid-cols-2" : ""}`}>
+    showOrig || showRes || showLiveBg ? (
+      <div
+        className={`grid gap-3 ${
+          (showOrig && showRes) || (showOrig && showLiveBg) ? "sm:grid-cols-2" : ""
+        }`}
+      >
         {showOrig && <MediaPane label="Original" url={originalUrl} kind={origKind} />}
+        {showLiveBg && <MediaPane label="Preview" url={liveBgUrl} kind="image" bg={bgColor} />}
         {showRes && result?.kind === "file" && (
           <MediaPane label="Result" url={resultPreviewUrl} kind={resKind} checker />
         )}
