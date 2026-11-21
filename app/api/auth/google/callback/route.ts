@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE } from "@/lib/auth-server";
+import { AUTH_ROLE_COOKIE, AUTH_ROLE_MAX_AGE } from "@/lib/auth-role";
 import { exchangeGoogleCode } from "@/lib/oauth/google";
 import { completeOAuthSignIn } from "@/lib/oauth/session";
 
@@ -37,6 +38,13 @@ export async function GET(req: NextRequest) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7,
+    path: "/",
+  });
+  res.cookies.set(AUTH_ROLE_COOKIE, result.role, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: AUTH_ROLE_MAX_AGE,
     path: "/",
   });
   return res;

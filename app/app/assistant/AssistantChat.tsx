@@ -108,7 +108,10 @@ export function AssistantChat({
   };
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] flex-col rounded border border-border bg-surface">
+    <div
+      className="flex h-[calc(100vh-9rem)] flex-col rounded border border-border bg-surface"
+      style={{ height: "calc(100dvh - 9rem)" }}
+    >
       <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
         <Sparkles className="h-4 w-4 text-primary" />
         <span className="text-sm font-bold text-fg">Zotomic Assistant</span>

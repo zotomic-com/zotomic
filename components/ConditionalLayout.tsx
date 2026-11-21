@@ -57,7 +57,6 @@ export default function ConditionalLayout({
   branding,
   headerNav,
   footerNav,
-  sessionUser,
   socialLinks,
   contactNumbers,
 }: {
@@ -66,7 +65,6 @@ export default function ConditionalLayout({
   branding?: { logoUrl: string; footerTagline: string; footerCopyright: string; footerTrust: { icon: string; title: string; text: string }[] };
   headerNav?: NavLink[];
   footerNav?: NavLink[];
-  sessionUser?: { role: string } | null;
   socialLinks?: SocialLink[];
   contactNumbers?: ContactNumber[];
 }) {
@@ -87,7 +85,6 @@ export default function ConditionalLayout({
         nav={headerNav ?? []}
         footerNav={footerNav ?? []}
         branding={branding}
-        sessionUser={sessionUser}
         socialLinks={socialLinks}
         contactNumbers={contactNumbers}
       >

@@ -53,7 +53,7 @@ export function StoreShell({
   h1,h2,h3,h4{color:inherit}`;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--sf-bg)] text-[var(--sf-fg)]" style={{ fontFamily: FONT_STACKS[brand.font] }}>
+    <div className="flex min-h-dvh flex-col bg-[var(--sf-bg)] text-[var(--sf-fg)]" style={{ fontFamily: FONT_STACKS[brand.font] }}>
       <style dangerouslySetInnerHTML={{ __html: rootCss }} />
       <MetaPixel id={config.tracking?.metaPixelId ?? ""} />
       <GA4 id={config.tracking?.ga4MeasurementId ?? ""} />

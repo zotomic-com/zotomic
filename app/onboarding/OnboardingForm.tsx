@@ -55,7 +55,7 @@ export function OnboardingForm({ categories, logoUrl }: { categories: string[]; 
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-app px-4 py-10">
+    <div className="flex min-h-dvh flex-col items-center bg-app px-4 py-10">
       <Logo src={logoUrl} />
       <div className="mt-8 w-full max-w-lg">
         <div className="mb-6 flex items-center gap-2">

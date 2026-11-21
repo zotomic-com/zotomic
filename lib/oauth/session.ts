@@ -21,7 +21,7 @@ export async function completeOAuthSignIn(params: {
   providerId: string;
   email: string;
   name: string;
-}): Promise<{ token: string; redirect: string; userId: string } | { error: string }> {
+}): Promise<{ token: string; redirect: string; userId: string; role: string } | { error: string }> {
   const db = getAdminSupabase();
   const idColumn = params.provider === "google" ? "google_id" : "facebook_id";
   const cleanEmail = params.email.toLowerCase().trim();
@@ -68,5 +68,5 @@ export async function completeOAuthSignIn(params: {
   const token = await signToken({ id: user.id, email: user.email, role: user.role, name: user.name });
   const redirect = user.role === "admin" ? "/admin" : "/app";
 
-  return { token, redirect, userId: user.id };
+  return { token, redirect, userId: user.id, role: user.role };
 }

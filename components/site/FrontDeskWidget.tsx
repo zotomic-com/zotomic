@@ -166,7 +166,7 @@ export function FrontDeskWidget() {
 
       {open && (
         <div
-          style={{ transform, maxHeight: "75vh", height: "60vh" }}
+          style={{ transform, maxHeight: "75dvh", height: "60dvh" }}
           className="fixed inset-x-3 bottom-[72px] z-[60] flex flex-col overflow-hidden rounded-lg border border-border bg-surface text-fg shadow-2xl sm:inset-x-auto sm:right-4 sm:h-[440px] sm:w-[340px]"
         >
           <div className="flex items-center gap-2 bg-primary px-3.5 py-2.5 text-primary-fg">

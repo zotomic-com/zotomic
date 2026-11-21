@@ -6,11 +6,15 @@ import { ToastProvider } from "@/components/ui/toast";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import { getPublicTracking, getSiteBranding } from "@/lib/platform-settings";
 import { getNavLinks } from "@/lib/site-nav";
-import { getSessionUser } from "@/lib/tenant-server";
 import { getSocialLinks } from "@/lib/social-links";
 import { getContactNumbers } from "@/lib/contact-numbers";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://zotomic.com";
+
+/* Marketing pages carry no per-request data (the header reads a tiny role
+   cookie on the client), so they can be statically rendered and refreshed in
+   the background. Pages that need live data opt out with force-dynamic. */
+export const revalidate = 300;
 
 export async function generateMetadata(): Promise<Metadata> {
   const branding = await getSiteBranding();
@@ -38,12 +42,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [tracking, branding, headerNav, footerNav, sessionUser, socialLinks, contactNumbers] = await Promise.all([
+  const [tracking, branding, headerNav, footerNav, socialLinks, contactNumbers] = await Promise.all([
     getPublicTracking(),
     getSiteBranding(),
     getNavLinks("header"),
     getNavLinks("footer"),
-    getSessionUser(),
     getSocialLinks(),
     getContactNumbers(),
   ]);
@@ -54,7 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#f1f5f9" />
       </head>
-      <body className="min-h-screen bg-app text-fg antialiased">
+      <body className="min-h-dvh bg-app text-fg antialiased">
         <ThemeProvider>
           <ToastProvider>
             <ConditionalLayout
@@ -62,7 +65,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               branding={branding}
               headerNav={headerNav}
               footerNav={footerNav}
-              sessionUser={sessionUser ? { role: sessionUser.role } : null}
               socialLinks={socialLinks}
               contactNumbers={contactNumbers}
             >

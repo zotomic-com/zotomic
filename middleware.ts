@@ -139,6 +139,7 @@ export async function middleware(req: NextRequest) {
     url.searchParams.set("next", pathname);
     const res = NextResponse.redirect(url);
     if (token) res.cookies.delete("auth_token");
+    res.cookies.delete("auth_role");
     return res;
   }
 

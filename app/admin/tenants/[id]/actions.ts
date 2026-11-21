@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/admin-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { signToken } from "@/lib/auth";
 import { AUTH_COOKIE } from "@/lib/auth-server";
+import { AUTH_ROLE_COOKIE } from "@/lib/auth-role";
 
 async function audit(businessId: string, adminId: string, action: string, summary: string) {
   const db = getAdminSupabase();
@@ -107,6 +108,13 @@ export async function adminImpersonate(businessId: string) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: 60 * 60 * 2, // short session
+    path: "/",
+  });
+  (await cookies()).set(AUTH_ROLE_COOKIE, owner.role, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 2,
     path: "/",
   });
 

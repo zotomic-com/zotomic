@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { hashPassword, signToken } from "@/lib/auth";
 import { AUTH_COOKIE } from "@/lib/auth-server";
+import { AUTH_ROLE_COOKIE, AUTH_ROLE_MAX_AGE } from "@/lib/auth-role";
 import { ga4ServerEvent } from "@/lib/platform-settings";
 import { enforceRateLimit, clientIp } from "@/lib/ratelimit";
 import { isIpBlocked, logLoginEvent } from "@/lib/admin/security";
@@ -98,6 +99,14 @@ export async function POST(req: NextRequest) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+
+    res.cookies.set(AUTH_ROLE_COOKIE, user.role, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: AUTH_ROLE_MAX_AGE,
       path: "/",
     });
 

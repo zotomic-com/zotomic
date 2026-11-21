@@ -4,8 +4,6 @@ import { PageHero } from "@/components/site/marketing";
 import { getServiceCards } from "@/lib/service-cards";
 import { siteIcon } from "@/lib/site-icons";
 
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "Services",
   description: "Domain, hosting, web design, web development and automation services from Zotomic.",

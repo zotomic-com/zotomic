@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { siteIcon } from "@/lib/site-icons";
+import { readAuthRole } from "@/lib/auth-role";
 import type { NavLink } from "@/lib/site-nav";
 import type { SocialLink } from "@/lib/social-links";
 import type { ContactNumber } from "@/lib/contact-numbers";
@@ -26,7 +27,6 @@ export function MarketingShell({
   nav,
   footerNav,
   branding,
-  sessionUser,
   socialLinks,
   contactNumbers,
 }: {
@@ -34,12 +34,16 @@ export function MarketingShell({
   nav: NavLink[];
   footerNav: NavLink[];
   branding?: Branding;
-  sessionUser?: { role: string } | null;
   socialLinks?: SocialLink[];
   contactNumbers?: ContactNumber[];
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  /* Role comes from a readable cookie so this shell never needs the httpOnly
+     session on the server — that keeps every marketing page static. */
+  const [role, setRole] = useState<string | null>(null);
+  useEffect(() => setRole(readAuthRole()), []);
+  const sessionUser = role ? { role } : null;
   const home = sessionUser ? (sessionUser.role === "admin" ? "/admin" : "/app") : "/";
 
   // close on navigation, and always close on Escape
@@ -82,7 +86,7 @@ export function MarketingShell({
   );
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-dvh flex-col">
       {/* Top bar — same on every breakpoint; the drawer is the nav */}
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-surface px-4 sm:px-6">
         <div className="flex items-center gap-1.5">
@@ -118,7 +122,7 @@ export function MarketingShell({
 
       {/* Side drawer — click the icon, the backdrop, a link or Escape to close */}
       {open && (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-x-0 top-0 z-50 h-screen" style={{ height: "100dvh" }}>
           <div onClick={() => setOpen(false)} className="absolute inset-0 bg-black/40 animate-fade-in-plain" />
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[82vw] animate-slide-in-left flex-col border-r border-border bg-surface p-4 shadow-xl">
             <div className="mb-5 flex items-center justify-between px-2">

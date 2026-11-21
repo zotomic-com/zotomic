@@ -34,7 +34,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         mobileOpen={menuOpen}
         onClose={() => setMenuOpen(false)}
       />
-      <div className="min-h-screen bg-app lg:pl-64">
+      <div className="min-h-dvh bg-app lg:pl-64">
         <Topbar
           onMenuClick={() => setMenuOpen(true)}
           searchPlaceholder="Search users, businesses, orders…"

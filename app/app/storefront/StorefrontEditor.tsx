@@ -566,6 +566,7 @@ export function StorefrontEditor({
           key={previewKey}
           src="/storefront-preview"
           className="h-[calc(100vh-13rem)] w-full"
+          style={{ height: "calc(100dvh - 13rem)" }}
           title="Storefront preview"
         />
       </div>

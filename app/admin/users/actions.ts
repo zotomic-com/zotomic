@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/admin-server";
 import { getAdminSupabase } from "@/lib/supabase";
 import { hashPassword, signToken } from "@/lib/auth";
 import { AUTH_COOKIE } from "@/lib/auth-server";
+import { AUTH_ROLE_COOKIE } from "@/lib/auth-role";
 import { invalidateBlockedIpCache } from "@/lib/admin/security";
 
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -190,6 +191,13 @@ export async function impersonateUser(id: string): Promise<{ ok: true; redirect:
   const token = await signToken({ id: u.id as string, email: u.email as string, role: u.role as string, name: u.name as string });
   (await cookies()).set(AUTH_COOKIE, token, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 2,
+    path: "/",
+  });
+  (await cookies()).set(AUTH_ROLE_COOKIE, u.role as string, {
+    httpOnly: false,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: 60 * 60 * 2,

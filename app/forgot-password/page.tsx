@@ -9,7 +9,7 @@ export default async function ForgotPasswordPage() {
   const branding = await getSiteBranding();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-app px-4">
+    <div className="flex min-h-dvh items-center justify-center bg-app px-4">
       <div className="w-full max-w-sm">
         <Link href="/" className="mb-8 flex justify-center">
           <Logo src={branding.logoUrl} />
