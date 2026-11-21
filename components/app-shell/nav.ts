@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Coins,
   CreditCard,
+  Download,
   Film,
   Globe,
   Image as ImageIcon,
@@ -16,9 +17,11 @@ import {
   ListChecks,
   Megaphone,
   MessageSquareText,
+  MonitorSmartphone,
   Network,
   Plug,
   ReceiptText,
+  Repeat,
   Server,
   Settings,
   ShieldAlert,
@@ -28,6 +31,7 @@ import {
   Star,
   Store,
   Users,
+  Volume2,
   Wrench,
   Wallet,
   Warehouse,
@@ -38,7 +42,19 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Optional heading — consecutive items with the same group share one label. */
+  group?: string;
 }
+
+/** Service tools, mirrored from the public "Services" section of the site nav. */
+const SERVICE_NAV: NavItem[] = [
+  { href: "/services", label: "All services", icon: Wrench, group: "Services" },
+  { href: "/services/converter", label: "Converter", icon: Repeat, group: "Services" },
+  { href: "/services/online-downloader", label: "Online Downloader", icon: Download, group: "Services" },
+  { href: "/services/screenshot-organizer", label: "Screenshot Organizer", icon: MonitorSmartphone, group: "Services" },
+  { href: "/services/text-to-audio", label: "Text to Audio", icon: Volume2, group: "Services" },
+  { href: "/services/video-generator", label: "Video Generator", icon: Film, group: "Services" },
+];
 
 /** Tenant app sidebar — order matches the approved dashboard mockup. */
 export const APP_NAV: NavItem[] = [
@@ -64,6 +80,7 @@ export const APP_NAV: NavItem[] = [
   { href: "/app/integrations", label: "Integrations", icon: Plug },
   { href: "/app/billing", label: "Billing", icon: CreditCard },
   { href: "/app/settings", label: "Settings", icon: Settings },
+  ...SERVICE_NAV,
 ];
 
 /**
@@ -79,6 +96,7 @@ export const STORELESS_APP_NAV: NavItem[] = [
   { href: "/app/custom-website", label: "Custom Website", icon: LayoutTemplate },
   { href: "/app/automation", label: "Automation", icon: Zap },
   { href: "/app/settings", label: "Settings", icon: Settings },
+  ...SERVICE_NAV,
 ];
 
 /** Admin console sidebar — order matches the approved admin mockup. */

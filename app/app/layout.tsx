@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Lock, LogOut, TriangleAlert } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { APP_NAV, STORELESS_APP_NAV } from "@/components/app-shell/nav";
 import { FrontDeskWidget } from "@/components/site/FrontDeskWidget";
 import { AppContext, type AppBusiness, type AppUser } from "./context";
+
+const SIDEBAR_KEY = "zotomic:sidebar-collapsed";
 
 interface Billing {
   status: string;
@@ -25,6 +28,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [billing, setBilling] = useState<Billing | null>(null);
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
+    } catch {
+      /* storage blocked — keep the default */
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    setCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(SIDEBAR_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   const onBilling = pathname === "/app/billing";
   // Every route in STORELESS_APP_NAV must work before a business exists — derive the
@@ -75,6 +99,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         variant="app"
         mobileOpen={menuOpen}
         onClose={() => setMenuOpen(false)}
+        collapsed={collapsed}
         bottom={
           billing && billing.status !== "active" ? (
             <Link href="/app/billing" className="block rounded-sm border border-danger/30 bg-danger-soft p-3 text-xs">
@@ -92,12 +117,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
       />
 
-      <div className="lg:pl-64">
+      <div className={cn("transition-[padding]", collapsed ? "lg:pl-16" : "lg:pl-64")}>
         <Topbar
           onMenuClick={() => setMenuOpen(true)}
           searchPlaceholder="Search anything…"
           notificationsHref="/app/notifications"
           unread={unread}
+          collapsed={collapsed}
+          onToggleSidebar={toggleSidebar}
           right={
             <div className="flex items-center gap-2">
               <div className="hidden text-right sm:block">

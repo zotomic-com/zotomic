@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { MarketingShell } from "./site/MarketingShell";
+import { SiteBrandingProvider } from "./SiteBranding";
 import { GA4, MetaPixel } from "./tracking/Pixel";
 import type { NavLink } from "@/lib/site-nav";
 import type { SocialLink } from "@/lib/social-links";
@@ -75,10 +76,18 @@ export default function ConditionalLayout({
   // a non-root, non-marketing single segment → storefront path (zotomic.com/<slug>)
   const isStorefrontPath = seg !== "" && !MARKETING_SEGMENTS.has(seg) && !bareByPrefix;
 
-  if (bareByPrefix || isStorefrontPath) return <>{children}</>;
+  // Bare routes (dashboard, admin, auth) still need the site logo for their
+  // sidebars, so the branding provider wraps every branch.
+  if (bareByPrefix || isStorefrontPath) {
+    return (
+      <SiteBrandingProvider logoUrl={branding?.logoUrl}>
+        {children}
+      </SiteBrandingProvider>
+    );
+  }
 
   return (
-    <>
+    <SiteBrandingProvider logoUrl={branding?.logoUrl}>
       {tracking?.metaPixelId ? <MetaPixel id={tracking.metaPixelId} /> : null}
       {tracking?.ga4Id ? <GA4 id={tracking.ga4Id} /> : null}
       <MarketingShell
@@ -90,6 +99,6 @@ export default function ConditionalLayout({
       >
         {children}
       </MarketingShell>
-    </>
+    </SiteBrandingProvider>
   );
 }

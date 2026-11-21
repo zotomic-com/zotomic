@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Menu, Search } from "lucide-react";
+import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 
 interface Props {
   onMenuClick: () => void;
@@ -9,9 +9,20 @@ interface Props {
   right?: React.ReactNode;
   notificationsHref?: string;
   unread?: number;
+  /** Desktop sidebar state + toggle (same icon as the public site header). */
+  collapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-export function Topbar({ onMenuClick, searchPlaceholder = "Search…", right, notificationsHref, unread = 0 }: Props) {
+export function Topbar({
+  onMenuClick,
+  searchPlaceholder = "Search…",
+  right,
+  notificationsHref,
+  unread = 0,
+  collapsed = false,
+  onToggleSidebar,
+}: Props) {
   const bell = (
     <span className="relative block rounded-sm p-2 text-fg-muted hover:bg-surface-2">
       <Bell className="h-5 w-5" />
@@ -32,6 +43,18 @@ export function Topbar({ onMenuClick, searchPlaceholder = "Search…", right, no
       >
         <Menu className="h-5 w-5" />
       </button>
+
+      {onToggleSidebar && (
+        <button
+          onClick={onToggleSidebar}
+          className="hidden rounded-sm p-2 text-fg-muted hover:bg-surface-2 lg:inline-flex"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+        </button>
+      )}
 
       <div className="relative hidden max-w-sm flex-1 sm:block">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
